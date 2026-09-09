@@ -1295,12 +1295,12 @@ function drawMatch(s) {
     const c = CHARS[s.p[w].ch];
     ctx.fillStyle = rgba("#08070F", 0.72); ctx.fillRect(0, 0, STAGE_W, STAGE_H);
     drawAxie(s.p[w], c, {
-      portrait: true, px: STAGE_W / 2, py: 208, scale: 1.5,
+      portrait: true, px: STAGE_W / 2, py: 226, scale: 1.28,
       anim: c.anim.win, animT: (s.pt - 1) / 60
     });
-    txt("WINNER", STAGE_W / 2, 244, 16, rgba("#E7E3FB", 0.6), "center", FM, 8);
-    txt(c.name, STAGE_W / 2, 312, 74, c.col, "center", FD, 6);
-    txt(s.score[0] + " — " + s.score[1], STAGE_W / 2, 354, 26, "#E7E3FB", "center", FM, 4);
+    txt("WINNER", STAGE_W / 2, 258, 16, rgba("#E7E3FB", 0.6), "center", FM, 8);
+    txt(c.name, STAGE_W / 2, 322, 74, c.col, "center", FD, 6);
+    txt(s.score[0] + " — " + s.score[1], STAGE_W / 2, 362, 26, "#E7E3FB", "center", FM, 4);
     txt("KICK  REMATCH        DIVE  CHANGE FIGHT", STAGE_W / 2, 410, 13, rgba("#E7E3FB", 0.75), "center", FM, 3);
   }
 }
@@ -1485,6 +1485,8 @@ function selectTick(inp) {
 
 function endTick(inp) {
   const s = app.m;
+  /* step() is not running on this screen, so the phase timer is ours to keep */
+  s.pt++;
   const kick = (inp[0] & IN_KICK) || (inp[1] & IN_KICK);
   const dive = (inp[0] & IN_DIVE) || (inp[1] & IN_DIVE);
   if (s.pt < 50) return;
@@ -1502,7 +1504,8 @@ let acc = 0, last = performance.now(), fps = 60, simMs = 0;
 function frame(now) {
   requestAnimationFrame(frame);
   let dt = (now - last) / 1000; last = now;
-  if (dt > 0.25) dt = 0.25;
+  if (dt > 0.25) dt = 0.25;      /* long tab-out: drop the backlog, don't chase it */
+  if (dt < 0) dt = 0;            /* a clock that goes backwards must not stall the loop */
   acc += dt;
   fps += ((1 / Math.max(dt, 0.0001)) - fps) * 0.08;
 
