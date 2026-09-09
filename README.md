@@ -25,6 +25,7 @@ Then open `http://localhost:8080/game/`.
 | **P2** | <kbd>K</kbd> | <kbd>L</kbd> |
 | **Gamepad** | A / ✕ | B / ○ |
 
+<kbd>Esc</kbd> opens the menu — resume, restart the match, or quit to the title.
 Gamepads auto-assign to the first free player slot on their first button press.
 <kbd>F1</kbd> hitboxes · <kbd>F3</kbd> perf · <kbd>M</kbd> mute.
 
@@ -39,7 +40,7 @@ From the title screen: **local versus**, or **vs CPU** at three difficulties.
 |---|---|---|---|
 | **Rookie** | 15 frames | ±84 units | 20% |
 | **Veteran** | 8 frames | ±46 units | 60% |
-| **Lunacian** | 3 frames | ±22 units | 95% |
+| **Lunacian** | 3 frames | ±38 units | 95% |
 
 The CPU is not special-cased anywhere in the simulation — it reads state and returns
 the same 2-bit input mask a player does, so a CPU match steps through exactly the same
@@ -53,7 +54,8 @@ horizontal gap. Difficulty is how tight that window is, how stale its picture of
 opponent is, and how often it takes the fight to you.
 
 Against a reference bot using the same geometry with a fixed ±44 window, over 8 matches:
-Rookie wins 1 and loses rounds 10–38, Veteran wins 4 at 24–27, Lunacian wins 5 at 28–23.
+Rookie wins 1 and loses rounds 15–39, Veteran wins 4 at 26–27, Lunacian wins 5 at 26–20.
+A match runs 38–50 seconds, which is the number that matters for the demo queue.
 
 ## The art
 
@@ -86,17 +88,50 @@ data URI so the build stays one file:
 python3 tools/pack_spines.py
 ```
 
+## The arena and the noise
+
+Every match is fought in one of nine Origins class arenas, picked at random, from
+[axie-origins-asset-kit](https://github.com/axieinfinity/axie-origins-asset-kit)
+(`Assets/OriginsKit/PvE/Backgrounds/class`). The art is zoomed so its fighting plane
+lands on our floor line and dimmed under a gradient so a white HUD still reads over it.
+
+Sound is the kit's too, and it is class-specific, so each Axie hits with the noise its
+own class makes in Origins:
+
+| | Olek (plant) | Buba (beast) | Puffy (aqua) |
+|---|---|---|---|
+| Dive | `plant_fly` | `beast_fly` | `aquatic_fly` |
+| Kick | `plant_smash_attack` | `beast_gore_attack` | `aquatic_throw_attack` |
+| KO | `plant_cast_hit` | `beast_cast_hit` | `aquatic_cast_hit` |
+
+Plus `stunned` on a trade, `feather` on a kickback, `death_mark` when Hold the Line
+appears, and `pvp` / `pve_1` as the battle and menu loops. These are battle-card sounds
+with long tails — a 3.5-second whoosh on a jump you take twice a second turns to mud —
+so `SFX_LEN` gives each event a length and the voice is faded out at it.
+
+```bash
+python3 tools/pack_kit.py
+```
+
+Backgrounds are resampled to 1440px wide and audio re-encoded to mono AAC, which is what
+keeps 2.2 MB of media out of a 22 MB one.
+
 ## The roster
 
 | Axie | Class | Weapon | Plays like |
 |---|---|---|---|
-| **Olek** | Plant | Leaf tail | Shallow 32° arc, longest reach on the stage, whiffs over anyone who is already underneath him |
+| **Olek** | Plant | Leaf tail | Shallow 32° arc, longest reach on the stage; to catch someone already underneath him he has to kick late |
 | **Buba** | Beast | Horn drill | Steep 55° dive at 14 u/f, smallest hitbox, 27 frames of recovery when he misses |
 | **Puffy** | Aqua | Inflate | Hold DIVE at the apex to hover up to 14 frames; biggest hurtbox in the game while she does it |
 
-Effective kick ranges, measured from the sim: Olek 200–420 units, Buba 140–260, Puffy
-140–260. Round-start distance is 460, so nobody can win from the opening bell — someone
-has to approach.
+Effective kick ranges, measured from the sim across kick timings: Olek 120–460 units,
+Buba 80–280, Puffy 80–320. Round-start distance is 520, and no character can cover that
+at any timing, so somebody has to approach.
+
+Hurtboxes are ellipses fitted to each Axie's **body** attachment, measured off the rig at
+load — so the box is whatever the art is, and horns, leaves, fins and tails are all
+outside it. `BODY_FIT` trims them to 94% of the drawn body for the transparent margin the
+packed region carries. Press <kbd>F1</kbd> to see them.
 
 ## How it is built
 
@@ -112,7 +147,8 @@ The simulation is deliberately separable from everything else:
 - No `Math.random` and no wall-clock reads inside the sim. The CPU's LCG lives in state
   and is seeded when a match is created; starfields and trails are render-side only and
   never feed back into state.
-- Swept segment-vs-circle hit tests, so Buba's 14 u/f dive cannot tunnel through anyone.
+- Swept segment-vs-ellipse hit tests (the world is squashed so the hurtbox is a unit
+  circle), so Buba's 14 u/f dive cannot tunnel through anyone.
 
 That is the groundwork for WebRTC lockstep and, later, rollback — see §08 of the PRD.
 
@@ -120,8 +156,9 @@ That is the groundwork for WebRTC lockstep and, later, rollback — see §08 of 
 
 Everything in the v1 scope is in: two buttons, one-hit rounds, FT5, 20-second timer,
 Hold the Line, trades, three Axies on their official Origins rigs, character select with
-lore flavour text, HUD, impact VFX, procedural audio, gamepads, one-button rematch — plus
-a CPU opponent at three difficulties, which the PRD did not ask for.
+lore flavour text, HUD, impact VFX, gamepads, one-button rematch — plus first-party
+arenas and audio, an Esc menu, and a CPU opponent at three difficulties, which the PRD
+did not ask for.
 
 Deviations worth naming:
 
@@ -131,10 +168,9 @@ Deviations worth naming:
   ones, but nothing about the Unity + Spine 3.8 pipeline runs in a browser, so the game
   plays the skeletons directly. The procedural canvas Axies from the first build are still
   in `drawAxieShapes()` as the fallback for the frames before the atlas image decodes.
-- **Audio is synthesized** with WebAudio rather than pulled from the Origins asset kit's
-  152 SFX files — that kit ships the sounds but not the starter bodies, and one asset
-  pipeline was enough for a weekend.
+- **Synth voices are still in there**, but only as the fallback for events the kit has no
+  obvious clip for, and for the whole game if the packed asset block is stripped out.
 - **No F2 tuning overlay.** Character values live in the `CHARS` table at the top of the
-  file and CPU difficulty in `DIFFS`; edit and reload.
+  file, CPU difficulty in `DIFFS`, sound lengths in `SFX_LEN`; edit and reload.
 - **Local versus only** for human-vs-human, as scoped. Online P2P is the fast-follow —
   the CPU fills the gap at the demo station when only one person is standing there.
