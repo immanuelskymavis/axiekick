@@ -1,0 +1,523 @@
+<title>Divekick Lunacia</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+:root{
+  --paper:#EEF0F6;
+  --surface:#FAFBFE;
+  --surface-2:#E4E7F1;
+  --ink:#14172A;
+  --ink-2:#43496A;
+  --ink-3:#6D7392;
+  --rule:#CDD2E2;
+  --rule-soft:#DFE3EE;
+  --accent:#2F4FD8;
+  --accent-soft:#DDE3FA;
+  --gold:#B57614;
+  --gold-soft:#F6E7C6;
+  --beast:#C2761A;
+  --plant:#3C8A46;
+  --aqua:#1B7FA8;
+  --shadow:0 1px 0 rgba(20,23,42,.05);
+  --maxw:800px;
+  --wide:1080px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0D0F1A;
+    --surface:#151929;
+    --surface-2:#1D2235;
+    --ink:#E8EAF4;
+    --ink-2:#AFB6D0;
+    --ink-3:#828AA8;
+    --rule:#2B3149;
+    --rule-soft:#232841;
+    --accent:#8AA0FF;
+    --accent-soft:#222A4C;
+    --gold:#E3B25C;
+    --gold-soft:#33290F;
+    --beast:#E0A159;
+    --plant:#6FC57C;
+    --aqua:#59BEE0;
+    --shadow:0 1px 0 rgba(0,0,0,.35);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0D0F1A;
+  --surface:#151929;
+  --surface-2:#1D2235;
+  --ink:#E8EAF4;
+  --ink-2:#AFB6D0;
+  --ink-3:#828AA8;
+  --rule:#2B3149;
+  --rule-soft:#232841;
+  --accent:#8AA0FF;
+  --accent-soft:#222A4C;
+  --gold:#E3B25C;
+  --gold-soft:#33290F;
+  --beast:#E0A159;
+  --plant:#6FC57C;
+  --aqua:#59BEE0;
+  --shadow:0 1px 0 rgba(0,0,0,.35);
+}
+*{box-sizing:border-box}
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:"IBM Plex Sans",system-ui,-apple-system,Segoe UI,sans-serif;
+  font-size:16px;
+  line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:var(--wide);margin:0 auto;padding:0 24px 96px}
+.col{max-width:var(--maxw)}
+h1,h2,h3,.label,.eyebrow{font-family:"Chakra Petch","IBM Plex Sans",system-ui,sans-serif}
+h1{font-size:clamp(34px,5.2vw,56px);line-height:1.02;margin:0;font-weight:700;letter-spacing:-.015em;text-wrap:balance}
+h2{font-size:26px;line-height:1.18;margin:0;font-weight:600;letter-spacing:-.01em;text-wrap:balance}
+h3{font-size:16px;margin:0 0 6px;font-weight:600;letter-spacing:.02em}
+p{margin:0 0 14px}
+a{color:var(--accent)}
+.eyebrow,.label{
+  font-size:11.5px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);
+}
+
+/* masthead */
+header.top{padding:56px 0 30px;display:flex;flex-direction:column;gap:18px}
+.kicker{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.tag{
+  font-family:"IBM Plex Mono",monospace;font-size:11.5px;letter-spacing:.06em;
+  border:1px solid var(--rule);border-radius:2px;padding:3px 8px;color:var(--ink-2);background:var(--surface);
+}
+.tag.hot{border-color:var(--gold);color:var(--gold);background:var(--gold-soft)}
+.deck{font-size:19px;line-height:1.5;color:var(--ink-2);max-width:60ch;margin:0}
+.meta{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1px;
+  background:var(--rule-soft);border:1px solid var(--rule-soft);margin-top:8px;
+}
+.meta div{background:var(--surface);padding:11px 14px}
+.meta dt{margin:0 0 2px}
+.meta dd{margin:0;font-family:"IBM Plex Mono",monospace;font-size:13px;color:var(--ink)}
+
+/* sections */
+section{
+  border-top:1px solid var(--rule);
+  padding:30px 0 6px;
+  display:grid;grid-template-columns:64px minmax(0,1fr);gap:0 24px;align-items:start;
+}
+section > .num{
+  font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--ink-3);
+  padding-top:7px;letter-spacing:.04em;
+}
+section > .body{min-width:0}
+@media (max-width:720px){
+  section{grid-template-columns:1fr}
+  section > .num{padding-top:0;margin-bottom:6px}
+}
+.body > * + *{margin-top:14px}
+.body h2 + p{margin-top:10px}
+
+ul,ol{margin:0;padding-left:20px}
+li{margin:0 0 7px}
+li::marker{color:var(--ink-3)}
+strong{font-weight:600}
+em{color:var(--ink-2)}
+
+/* callouts */
+.note{
+  border-left:2px solid var(--accent);background:var(--accent-soft);
+  padding:12px 16px;font-size:14.5px;color:var(--ink);
+}
+.note.warn{border-left-color:var(--gold);background:var(--gold-soft)}
+.note p:last-child{margin-bottom:0}
+
+/* tables */
+.scroll{overflow-x:auto;border:1px solid var(--rule);background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:560px}
+th,td{padding:9px 13px;text-align:left;border-bottom:1px solid var(--rule-soft);vertical-align:top}
+thead th{
+  font-family:"Chakra Petch",sans-serif;font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-3);background:var(--surface-2);border-bottom:1px solid var(--rule);white-space:nowrap;
+}
+tbody tr:last-child td{border-bottom:0}
+td.n,th.n{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;white-space:nowrap}
+caption{caption-side:bottom;text-align:left;font-size:12.5px;color:var(--ink-3);padding:8px 2px}
+
+/* roster */
+.roster{display:grid;grid-template-columns:repeat(auto-fit,minmax(238px,1fr));gap:14px}
+.axie{border:1px solid var(--rule);background:var(--surface);padding:0;display:flex;flex-direction:column}
+.axie .hd{padding:12px 15px 10px;border-bottom:1px solid var(--rule-soft);display:flex;flex-direction:column;gap:2px}
+.axie .name{font-family:"Chakra Petch",sans-serif;font-size:20px;font-weight:700;line-height:1.1}
+.axie .cls{font-family:"IBM Plex Mono",monospace;font-size:11.5px;letter-spacing:.05em}
+.axie[data-c="beast"] .cls{color:var(--beast)} .axie[data-c="beast"] .hd{box-shadow:inset 3px 0 0 var(--beast)}
+.axie[data-c="plant"] .cls{color:var(--plant)} .axie[data-c="plant"] .hd{box-shadow:inset 3px 0 0 var(--plant)}
+.axie[data-c="aqua"]  .cls{color:var(--aqua)}  .axie[data-c="aqua"]  .hd{box-shadow:inset 3px 0 0 var(--aqua)}
+.axie .bd{padding:12px 15px 14px;font-size:14px;color:var(--ink-2);display:flex;flex-direction:column;gap:9px}
+.axie .bd b{color:var(--ink);font-weight:600}
+.axie dl{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;margin:0;font-size:13px}
+.axie dt{color:var(--ink-3)}
+.axie dd{margin:0;font-family:"IBM Plex Mono",monospace;color:var(--ink)}
+
+/* schedule */
+.days{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1px;background:var(--rule-soft);border:1px solid var(--rule-soft)}
+.day{background:var(--surface);padding:14px 15px}
+.day h3{color:var(--accent)}
+.day ul{padding-left:17px;font-size:14px;color:var(--ink-2)}
+.day li{margin-bottom:5px}
+
+/* two-up */
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:22px}
+.two h3{color:var(--ink)}
+.two ul{font-size:14.5px}
+
+.stack{display:flex;flex-direction:column;gap:14px}
+code{font-family:"IBM Plex Mono",monospace;font-size:13px;background:var(--surface-2);padding:1px 5px;border-radius:2px}
+footer{border-top:1px solid var(--rule);margin-top:34px;padding-top:16px;font-size:13px;color:var(--ink-3);max-width:var(--maxw)}
+footer a{color:var(--ink-2)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+</style>
+
+<div class="wrap">
+
+<header class="top col">
+  <div class="kicker">
+    <span class="tag">PRD · v0.2 · demo built</span>
+    <span class="tag">Sky Mavis internal gamejam</span>
+    <span class="tag hot">Weekend build</span>
+  </div>
+  <h1>Divekick Lunacia</h1>
+  <p class="deck">A two-button fighting game where three starter Axies settle it in the air. One hit ends a round. No walking, no combos, no blocking — just a jump, a kick, and the fifteen frames where you find out who guessed right.</p>
+  <dl class="meta">
+    <div><dt class="label">Owner</dt><dd>immanuel.cruz</dd></div>
+    <div><dt class="label">Build window</dt><dd>2–3 days</dd></div>
+    <div><dt class="label">Team</dt><dd>1–3 people</dd></div>
+    <div><dt class="label">Target</dt><dd>Web · TS + Canvas</dd></div>
+    <div><dt class="label">Ship bar</dt><dd>Playable URL</dd></div>
+  </dl>
+  <p class="deck" style="font-size:15px"><strong>Playable build:</strong> <a href="https://claude.ai/code/artifact/b030b5d3-a16b-4056-899c-81ffe1606237">Divekick Lunacia demo</a> — everything in §03–§06 is in it.</p>
+</header>
+
+<section>
+  <div class="num">§ 01</div>
+  <div class="body">
+    <h2>Why this game</h2>
+    <p>Divekick strips a fighting game down to the single decision every fighting game is actually about: <em>when do I commit to the air?</em> Two buttons, one-hit rounds, and a match that resolves in under two minutes. That is exactly the shape of a game a small team can finish in a weekend and a room full of colleagues can learn in ten seconds.</p>
+    <p>The Axies bring the other half. Starter Axies are potatoes — no arms, no legs, no anthropomorphic silhouette to animate. That is a constraint, not a problem: an Axie <strong>is</strong> its body parts, and this game turns those parts into the weapon. Buba does not kick, he drills with his horn. Puffy does not kick, she inflates and cannonballs. The thing that reads as "which Axie is this" at 60&nbsp;fps is the same thing that reads as "what is this matchup".</p>
+    <div class="note">
+      <p><strong>One-line pitch:</strong> Olek, Buba and Puffy fight over who gets to be the protagonist of the Origins tutorial. Best of five. First one to touch the other wins the round.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="num">§ 02</div>
+  <div class="body">
+    <h2>Goals, non-goals, and how we know it worked</h2>
+    <div class="two">
+      <div>
+        <h3>Goals</h3>
+        <ul>
+          <li>A game that is <strong>fun in the first 20 seconds</strong>, with no tutorial.</li>
+          <li>Three Axies who feel genuinely different to fight <em>and</em> to fight against.</li>
+          <li>Deterministic simulation from day one, so networking is a port and not a rewrite.</li>
+          <li>Anyone in the office can open a URL and be in a match in under 30 seconds.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Non-goals for v1</h3>
+        <ul>
+          <li>Meter, specials, Kick Factor, gems — all cut. The stripped core is the product.</li>
+          <li>Headshot slowdown, dizzy states, or any second hit state.</li>
+          <li>Wallet, NFT ownership, gene-accurate Axies, or any on-chain hook.</li>
+          <li>Progression, unlocks, matchmaking service, accounts.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="scroll">
+      <table>
+        <caption>Success criteria, measured on demo day.</caption>
+        <thead><tr><th>Signal</th><th>Target</th><th>How we check</th></tr></thead>
+        <tbody>
+          <tr><td>People voluntarily play a second match</td><td class="n">≥ 70%</td><td>Watch the queue at the demo station</td></tr>
+          <tr><td>Distinct players over the jam demo</td><td class="n">≥ 16</td><td>Tally sheet next to the laptop</td></tr>
+          <tr><td>Time from URL open to first round start</td><td class="n">&lt; 30 s</td><td>Stopwatch on three cold users</td></tr>
+          <tr><td>Frame budget on an office MacBook</td><td class="n">16.6 ms</td><td>In-build frame graph, hold F3</td></tr>
+          <tr><td>Character pick spread across the three</td><td class="n">no pick &lt; 20%</td><td>Local match log</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="num">§ 03</div>
+  <div class="body">
+    <h2>Rules of play</h2>
+    <p>Two buttons. That is the whole input space, and every rule below exists to make those two buttons carry a full match.</p>
+    <div class="scroll">
+      <table>
+        <caption>Universal ruleset. All timings at a fixed 60&nbsp;Hz simulation tick.</caption>
+        <thead><tr><th>Rule</th><th>Behaviour</th><th class="n">Value</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Dive</strong></td><td>Jump. Direction is always toward the opponent; there is no left/right input.</td><td class="n">per-Axie</td></tr>
+          <tr><td><strong>Kick</strong> (airborne)</td><td>Commit to the divekick. Angle and speed are locked at the moment of press — no steering.</td><td class="n">per-Axie</td></tr>
+          <tr><td><strong>Kick</strong> (grounded)</td><td>Kickback: a short backward hop. Your only retreat, and it leaves you grounded and vulnerable on landing.</td><td class="n">per-Axie</td></tr>
+          <tr><td>Both buttons</td><td>Nothing. Reserved for v2 specials so muscle memory survives the update.</td><td class="n">—</td></tr>
+          <tr><td>Round win</td><td>Any contact between your active hitbox and their hurtbox. One hit, round over.</td><td class="n">1 hit</td></tr>
+          <tr><td>Match</td><td>First to five round wins.</td><td class="n">FT5</td></tr>
+          <tr><td>Round timer</td><td>Short enough that stalling is not a strategy.</td><td class="n">20 s</td></tr>
+          <tr><td><strong>Hold the Line</strong></td><td>At 5 s remaining a centre line appears; when time expires, whoever is on their own side of it wins. Both on the same side: the invader loses.</td><td class="n">t ≤ 5 s</td></tr>
+          <tr><td>Trade</td><td>If both hitboxes connect on the same tick, both players lose the round. Score is unchanged and the round restarts.</td><td class="n">double KO</td></tr>
+          <tr><td>Round reset</td><td>KO freeze, then reset to opening positions.</td><td class="n">45 f + 60 f</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>There is no walking, no blocking, no health bar, and no crouch. A player who never presses a button loses to a player who presses one, and a player who mashes loses to a player who waits — that tension is the entire game and we protect it by adding nothing else.</p>
+  </div>
+</section>
+
+<section>
+  <div class="num">§ 04</div>
+  <div class="body">
+    <h2>Controls</h2>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Device</th><th>Dive</th><th>Kick</th><th>Confirm / Back</th></tr></thead>
+        <tbody>
+          <tr><td>Keyboard P1 (left side)</td><td class="n">A</td><td class="n">S</td><td class="n">A / S</td></tr>
+          <tr><td>Keyboard P2 (right side)</td><td class="n">K</td><td class="n">L</td><td class="n">K / L</td></tr>
+          <tr><td>Gamepad (either slot)</td><td class="n">A / ✕</td><td class="n">B / ○</td><td class="n">A / B</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Both players share one keyboard by default, which is the point — this is a game you play next to someone. Gamepads are auto-assigned to the first free player slot on their first button press. Key rebinding is a settings screen we do not build.</p>
+  </div>
+</section>
+
+<section>
+  <div class="num">§ 05</div>
+  <div class="body">
+    <h2>The roster</h2>
+    <p>Three Axies, chosen because they are the three protagonists of the Origins tutorial and every Lunacian already knows them. Each one's hitbox is a real body part, so silhouette, animation and matchup are the same design decision.</p>
+    <div class="roster">
+      <article class="axie" data-c="plant">
+        <div class="hd"><span class="name">Olek</span><span class="cls">Plant · the teacher</span></div>
+        <div class="bd">
+          <p><b>Weapon: leaf tail.</b> A long, flat, shallow arc that covers ground rather than height. Olek is the veteran who fights by holding space — his kick is the hardest to jump over and the easiest to walk under, if this game had walking.</p>
+          <dl>
+            <dt>Jump apex</dt><dd>26 f</dd>
+            <dt>Kick angle</dt><dd>32°</dd>
+            <dt>Kick speed</dt><dd>9.0 u/f</dd>
+            <dt>Hitbox</dt><dd>wide, thin</dd>
+            <dt>Kickback</dt><dd>far, 22 f</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="axie" data-c="beast">
+        <div class="hd"><span class="name">Buba</span><span class="cls">Beast · the hothead</span></div>
+        <div class="bd">
+          <p><b>Weapon: horn drill.</b> The steepest, fastest dive in the game and the smallest hitbox on it. Buba wins by being on top of you before the decision finishes rendering, and loses by whiffing into the floor with a long recovery.</p>
+          <dl>
+            <dt>Jump apex</dt><dd>18 f</dd>
+            <dt>Kick angle</dt><dd>62°</dd>
+            <dt>Kick speed</dt><dd>14.0 u/f</dd>
+            <dt>Hitbox</dt><dd>small, deep</dd>
+            <dt>Kickback</dt><dd>short, 14 f</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="axie" data-c="aqua">
+        <div class="hd"><span class="name">Puffy</span><span class="cls">Aqua · the cannonball</span></div>
+        <div class="bd">
+          <p><b>Weapon: inflate.</b> Hold Dive at the apex and Puffy puffs up, hanging in the air for a beat — the only timing-manipulation tool in the game. The trade is a fat hurtbox and a slow, floaty descent that anyone can read once they know it is coming.</p>
+          <dl>
+            <dt>Jump apex</dt><dd>22 f</dd>
+            <dt>Float</dt><dd>up to 14 f</dd>
+            <dt>Kick angle</dt><dd>46°</dd>
+            <dt>Kick speed</dt><dd>8.5 u/f</dd>
+            <dt>Hurtbox</dt><dd>+30% radius</dd>
+          </dl>
+        </div>
+      </article>
+    </div>
+    <p>All numbers above are first-pass and expected to change on day two — they are written down so that "Buba feels wrong" becomes a conversation about two integers instead of a vibe. Every value lives in a single <code>characters.ts</code> table with an in-build tuning overlay bound to F2.</p>
+    <div class="note warn">
+      <p><strong>To confirm before art starts:</strong> class assignments here are Olek&nbsp;=&nbsp;Plant, Buba&nbsp;=&nbsp;Beast, Puffy&nbsp;=&nbsp;Aqua, taken from Origins starter-team material rather than a first-party spec sheet. Worth a 30-second check with anyone on the Origins team, because class colour drives the whole UI palette.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="num">§ 06</div>
+  <div class="body">
+    <h2>Screens and match flow</h2>
+    <ol>
+      <li><strong>Title.</strong> Two lines: the logo and "press any button". No menu.</li>
+      <li><strong>Character select.</strong> Three portraits side by side. Dive moves the cursor, Kick locks in. Both players pick on the same screen; mirror matches allowed. Auto-advances 60&nbsp;f after the second lock.</li>
+      <li><strong>Match.</strong> Round counter as five pips per side, timer centred, Hold-the-Line marker at 5&nbsp;s. Names and class colour under each pip row. Nothing else on screen.</li>
+      <li><strong>Round end.</strong> Freeze on the connecting frame, class-coloured impact flash, winner's pip fills, reset.</li>
+      <li><strong>Match end.</strong> Winner card, then a rematch prompt: Kick to rematch with the same picks, Dive to return to select. The rematch path must be one button, because on demo day the queue is the bottleneck.</li>
+    </ol>
+    <p>UI language follows the Origins battle kit: heavy angular frames, class-tinted accents, uppercase display type. We are borrowing the vocabulary, not rebuilding the HUD.</p>
+  </div>
+</section>
+
+<section>
+  <div class="num">§ 07</div>
+  <div class="body">
+    <h2>Art and audio pipeline</h2>
+    <p>Source of record is the first-party kit: <a href="https://github.com/axieinfinity/axie-origins-asset-kit">axie-origins-asset-kit</a> for VFX, UI frames, icons and SFX, and <a href="https://github.com/axieinfinity/unity-axie-gtk2d">unity-axie-gtk2d</a> for the Axies themselves.</p>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Asset</th><th>Source</th><th>Treatment for web</th></tr></thead>
+        <tbody>
+          <tr><td>Axie bodies + parts</td><td>gtk2d (Spine 3.8 rigs, part JSON)</td><td>Bake 6–8 poses per Axie to a single PNG atlas. No runtime rig.</td></tr>
+          <tr><td>Poses needed</td><td>—</td><td class="n">idle · rise · apex · commit · strike · land · lose</td></tr>
+          <tr><td>Impact + trail VFX</td><td>Asset kit <code>web-vfx</code> (PixiJS, additive atlases)</td><td>Reuse directly — it is already a browser runtime.</td></tr>
+          <tr><td>HUD frames, icons</td><td>Asset kit battle textures / 131 status icons</td><td>Export as PNG, 9-slice the frames in CSS.</td></tr>
+          <tr><td>SFX</td><td>Asset kit (152 files)</td><td>Pick ~8: dive, kick, whiff, hit, KO, pip, select, timer.</td></tr>
+          <tr><td>Music</td><td>Asset kit PvE tracks</td><td>One loop. Ducked on KO freeze.</td></tr>
+          <tr><td>Stage</td><td>Asset kit PvE background</td><td>One stage, static, no parallax.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note warn">
+      <p><strong>Known gap:</strong> the asset kit's README states starter Axie <em>bodies</em> are not shipped in the kit — they come from the 2D mixer, which is Unity + Spine 3.8. That is the one asset dependency that can eat a day. Mitigation in §10.</p>
+    </div>
+    <p>Read <code>LICENSE.md</code> in the asset kit before anything leaves the office network, even for an internal jam.</p>
+  </div>
+</section>
+
+<section>
+  <div class="num">§ 08</div>
+  <div class="body">
+    <h2>Multiplayer</h2>
+    <p>Online P2P is a headline feature of this game and it is <strong>not</strong> in the v1 weekend build. What v1 owes v2 is an engine that makes it a two-day job rather than a rewrite.</p>
+    <div class="two">
+      <div>
+        <h3>v1 — shipped this weekend</h3>
+        <ul>
+          <li>Local versus, shared keyboard or two gamepads.</li>
+          <li>Simulation is a pure function: <code>step(state, {p1,p2}) → state</code>.</li>
+          <li>Fixed 60&nbsp;Hz tick, fixed-point or integer math only. No <code>Math.random</code>, no <code>Date.now</code>, no float accumulation in the sim.</li>
+          <li>Inputs are a 2-bit mask per player per tick, recorded to a ring buffer.</li>
+          <li>Rendering reads state, never writes it.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>v2 — the fast follow</h3>
+        <ul>
+          <li>WebRTC DataChannel, unreliable + unordered, with a room code the host reads out loud.</li>
+          <li>Signalling: one tiny broker, or manual SDP paste for the first test.</li>
+          <li>Start on 3-frame input delay lockstep; it is honest on office LAN.</li>
+          <li>Rollback afterwards if the game survives the jam — the input ring buffer and pure step function are the only two prerequisites, and both ship in v1.</li>
+          <li>Desync canary: hash the state every 30 ticks and compare.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="note">
+      <p>If day 3 comes in ahead of schedule, the correct use of the spare time is delay-based lockstep over WebRTC, not more characters.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="num">§ 09</div>
+  <div class="body">
+    <h2>Technical shape</h2>
+    <ul>
+      <li><strong>Stack:</strong> TypeScript, Vite, Canvas 2D. PixiJS only if the <code>web-vfx</code> overlay comes along, and if so it stays a separate layer above the game canvas.</li>
+      <li><strong>Loop:</strong> accumulator-driven fixed timestep at 60&nbsp;Hz with a render interpolation pass; spiral-of-death clamp at 5 ticks per frame.</li>
+      <li><strong>Collision:</strong> circle-vs-circle for hurtboxes, swept segment for the active kick hitbox so nothing tunnels at 14&nbsp;u/f.</li>
+      <li><strong>Data:</strong> one <code>characters.ts</code> table, hot-editable in-build via the F2 overlay, exportable as JSON so tuning survives a reload.</li>
+      <li><strong>Assets:</strong> one atlas per Axie plus one shared UI atlas. Total budget under 6&nbsp;MB so the URL opens fast on office wifi.</li>
+      <li><strong>Deploy:</strong> static build, internal host, no backend in v1.</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <div class="num">§ 10</div>
+  <div class="body">
+    <h2>Three days</h2>
+    <div class="days">
+      <div class="day">
+        <h3>Day 1 — the feel</h3>
+        <ul>
+          <li>Fixed-timestep loop, deterministic step function, input ring buffer.</li>
+          <li>Capsules and debug hitboxes. No art.</li>
+          <li>One character, tuned until a whiffed dive feels genuinely bad.</li>
+          <li>Full round + match state machine, including Hold the Line and trades.</li>
+          <li><em>Gate:</em> two people play FT5 with capsules and want a rematch.</li>
+        </ul>
+      </div>
+      <div class="day">
+        <h3>Day 2 — the Axies</h3>
+        <ul>
+          <li>Export Olek, Buba, Puffy poses out of gtk2d into atlases.</li>
+          <li>Three movesets in the data table; first balance pass.</li>
+          <li>Character select, HUD, stage, impact VFX, core SFX.</li>
+          <li><em>Gate:</em> a stranger can tell the three apart without reading the names.</li>
+        </ul>
+      </div>
+      <div class="day">
+        <h3>Day 3 — the room</h3>
+        <ul>
+          <li>Gamepad support, one-button rematch, big-screen scaling.</li>
+          <li>Second balance pass with actual playtesters, not the team.</li>
+          <li>Deploy the URL, then playtest from the URL — not from localhost.</li>
+          <li>Spare capacity goes to WebRTC lockstep. Nothing else.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="num">§ 11</div>
+  <div class="body">
+    <h2>Risks</h2>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Risk</th><th>Impact</th><th>Mitigation</th></tr></thead>
+        <tbody>
+          <tr><td>Starter Axie bodies are locked behind a Unity + Spine 3.8 pipeline</td><td>High</td><td>Timebox export to 3 hours on day 2. Fallback: hand-authored flat sprites traced from official key art, which is enough at 60&nbsp;fps and 400&nbsp;px tall.</td></tr>
+          <tr><td>Potato silhouettes read identically in motion</td><td>High</td><td>Class-coloured motion trails shaped to the weapon part, plus distinct dive angles — angle is the strongest readability cue in the original game.</td></tr>
+          <tr><td>Asset licence terms restrict where the build can be hosted</td><td>Medium</td><td>Read <code>LICENSE.md</code> on day 0. Internal-only host regardless.</td></tr>
+          <tr><td>Balance collapses to one dominant Axie</td><td>Medium</td><td>Tuning overlay + a 20-minute balance block at the end of days 2 and 3.</td></tr>
+          <tr><td>Scope creep toward meter and specials</td><td>Medium</td><td>They are written into §02 as non-goals. The both-buttons input is deliberately reserved and deliberately empty.</td></tr>
+          <tr><td>Network work started too early</td><td>Low</td><td>Nothing networked before the day-2 gate passes.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="num">§ 12</div>
+  <div class="body">
+    <h2>Decisions — resolved before the build</h2>
+    <div class="scroll">
+      <table>
+        <caption>Answered by the product owner at kickoff. The build follows these.</caption>
+        <thead><tr><th>Question</th><th>Answer</th></tr></thead>
+        <tbody>
+          <tr><td>Is the roster Olek / Buba / Puffy?</td><td>Yes. The Season&nbsp;5 trio stays out of v1.</td></tr>
+          <tr><td>Asset licence for an internally hosted build</td><td>Confirmed by the owner — we hold the licence.</td></tr>
+          <tr><td>Do we need the full 2D mixer?</td><td>No. Only the Origins animations of the three starters are needed, so the Unity + Spine pipeline is out of the critical path.</td></tr>
+          <tr><td>Is a written pitch expected?</td><td>Yes — one page, shipped alongside the build as <code>PITCH.md</code>.</td></tr>
+          <tr><td>Lunalog flavour text on character select?</td><td>In scope. One lore line plus a weapon line per Axie.</td></tr>
+          <tr><td>Demo station</td><td>A single laptop. HUD and select screen are sized for one shared screen and one shared keyboard.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note">
+      <p><strong>Consequence of answer 3:</strong> with the Spine pipeline off the critical path, v1 draws the three Axies procedurally on canvas — same silhouettes, same weapon parts, no export step. Baked Origins pose atlases drop into the same draw call whenever they are ready.</p>
+    </div>
+  </div>
+</section>
+
+<footer class="col">
+  <p>Sources for mechanics and assets: <a href="https://en.wikipedia.org/wiki/Divekick">Divekick (Wikipedia)</a> · <a href="http://www.divekick.com/">divekick.com</a> · <a href="https://github.com/axieinfinity/axie-origins-asset-kit">axie-origins-asset-kit</a> · <a href="https://github.com/axieinfinity/unity-axie-gtk2d">unity-axie-gtk2d</a> · <a href="https://axieinfinity.com/lore">Axie lore</a> · <a href="https://app.axieinfinity.com/lunalog/catalog/">Lunalog catalogue</a>.</p>
+</footer>
+
+</div>
