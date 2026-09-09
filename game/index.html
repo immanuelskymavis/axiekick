@@ -1,0 +1,994 @@
+<title>Divekick Lunacia</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  --void:#08070F;
+  --dusk:#141026;
+  --edge:#2A2447;
+  --dim:#7E78A8;
+  --pale:#E7E3FB;
+  --moon:#F2D492;
+}
+*{box-sizing:border-box}
+body{
+  background:var(--void);
+  color:var(--pale);
+  font-family:"Chakra Petch","Trebuchet MS",system-ui,sans-serif;
+  min-height:100vh;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:10px;padding:14px;overflow:hidden;
+}
+#shell{
+  position:relative;width:100%;max-width:1000px;
+  border:1px solid var(--edge);
+  box-shadow:0 0 0 1px #0B0916, 0 24px 60px -20px #000;
+  background:var(--dusk);
+}
+#shell::before{
+  content:"";position:absolute;inset:0;pointer-events:none;z-index:3;
+  background:repeating-linear-gradient(to bottom,rgba(255,255,255,.028) 0 1px,transparent 1px 3px);
+}
+canvas{display:block;width:100%;height:auto;image-rendering:auto;background:#0B0916}
+#legend{
+  display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;justify-content:center;
+  font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.06em;
+  color:var(--dim);max-width:1000px;text-align:center;
+}
+#legend b{color:var(--pale);font-weight:600}
+kbd{
+  font-family:"IBM Plex Mono",monospace;font-size:10.5px;
+  border:1px solid var(--edge);border-bottom-width:2px;border-radius:3px;
+  padding:1px 5px;color:var(--pale);background:#191434;
+}
+#focusnag{
+  position:absolute;inset:0;z-index:4;display:none;
+  align-items:center;justify-content:center;background:rgba(8,7,15,.82);
+  font-size:15px;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;
+}
+#focusnag.on{display:flex}
+</style>
+
+<div id="shell">
+  <canvas id="cv" width="1000" height="580"></canvas>
+  <div id="focusnag">Click to play</div>
+</div>
+<div id="legend">
+  <span><b>P1</b> <kbd>A</kbd> dive <kbd>S</kbd> kick</span>
+  <span><b>P2</b> <kbd>K</kbd> dive <kbd>L</kbd> kick</span>
+  <span>Gamepads auto-assign on first press</span>
+  <span><kbd>F1</kbd> hitboxes <kbd>F3</kbd> perf <kbd>M</kbd> mute</span>
+</div>
+
+<script>
+"use strict";
+/* =========================================================================
+   DIVEKICK LUNACIA — internal gamejam demo
+   Sim: fixed 60Hz, pure step(state, in0, in1) -> state. No RNG, no wall clock.
+   Render reads state and never writes it. Inputs are a 2-bit mask per player.
+   ========================================================================= */
+
+const TICK = 1 / 60;
+const STAGE_W = 1000, STAGE_H = 580;
+const FLOOR_Y = 476;          // screen y of the ground plane
+const WALL = 52;              // stage edge clamp, sim units
+const ROUND_TICKS = 20 * 60;
+const LINE_TICKS = 5 * 60;    // Hold the Line window
+const KO_FREEZE = 45, KO_RESET = 60, INTRO_TICKS = 72;
+const WIN_ROUNDS = 5;
+
+const IN_DIVE = 1, IN_KICK = 2;
+
+/* ---- roster ------------------------------------------------------------ */
+/* jumpV / g derived from apex frames T and height h:  v0 = 2h/T,  g = v0/T  */
+function arc(T, h) { const v0 = (2 * h) / T; return { jumpV: v0, g: v0 / T, apex: T }; }
+
+const CHARS = [
+  {
+    id: "olek", name: "OLEK", cls: "PLANT", role: "THE TEACHER",
+    col: "#4FBF6B", col2: "#2E7F45", trim: "#BFE86C", eye: "#12351D",
+    flavour: "Fought in wars the other two have only heard about. Holds the whole stage with one leaf and a lot of patience.",
+    weapon: "LEAF TAIL — wide, shallow, hardest arc in the game to jump over.",
+    ...arc(26, 218), jumpVX: 0,
+    kickAng: 32, kickSpd: 9.0, kickRec: 18,
+    hurtR: 41, hitR: 37, reach: 57,
+    kbSpd: 6.6, kbUp: 7.2, floatMax: 0,
+    bars: [3, 2, 5]
+  },
+  {
+    id: "buba", name: "BUBA", cls: "BEAST", role: "THE HOTHEAD",
+    col: "#F0A03C", col2: "#B0631B", trim: "#FFD98A", eye: "#3A1D06",
+    flavour: "Has never landed where he aimed. Has never once slowed down to think about it.",
+    weapon: "HORN DRILL — steepest, fastest dive; smallest hitbox on it.",
+    ...arc(18, 200), jumpVX: 3.2,
+    kickAng: 55, kickSpd: 14.0, kickRec: 27,
+    hurtR: 37, hitR: 24, reach: 50,
+    kbSpd: 4.2, kbUp: 5.4, floatMax: 0,
+    bars: [5, 5, 1]
+  },
+  {
+    id: "puffy", name: "PUFFY", cls: "AQUA", role: "THE CANNONBALL",
+    col: "#48B6E8", col2: "#1E6FA8", trim: "#BDEBFF", eye: "#0B2E44",
+    flavour: "Learned to hang in the air from a Puffbird. Nobody ever taught her the landing.",
+    weapon: "INFLATE — hold DIVE at the apex to hover. The only clock in the game you control.",
+    ...arc(22, 190), jumpVX: 1.2,
+    kickAng: 46, kickSpd: 8.5, kickRec: 21,
+    hurtR: 49, hitR: 34, reach: 42,
+    kbSpd: 5.4, kbUp: 6.6, floatMax: 14,
+    bars: [2, 3, 3]
+  }
+];
+const BARSTAT = ["SPEED", "ANGLE", "REACH"];
+
+/* ---- state ------------------------------------------------------------- */
+function mkPlayer(chIdx, x, facing) {
+  return {
+    ch: chIdx, x, y: 0, vx: 0, vy: 0,
+    st: "stand", t: 0, facing,
+    prevIn: 0, floatUsed: 0, inflate: 0,
+    wx: x, wy: 0, pwx: x, pwy: 0,   // weapon point, current + previous tick
+    spin: 0, hit: false, dead: false
+  };
+}
+
+function newMatch(c0, c1) {
+  return {
+    tick: 0,
+    phase: "intro",            // intro | fight | ko | matchend
+    pt: 0,                     // phase timer
+    round: 1,
+    score: [0, 0],
+    timer: ROUND_TICKS,
+    result: null,              // {winner:-1|0|1, kind:"ko"|"trade"|"time"|"line"}
+    p: [mkPlayer(c0, 270, 1), mkPlayer(c1, 730, -1)],
+    shake: 0, flash: 0
+  };
+}
+
+function resetRound(s) {
+  s.p[0] = mkPlayer(s.p[0].ch, 270, 1);
+  s.p[1] = mkPlayer(s.p[1].ch, 730, -1);
+  s.timer = ROUND_TICKS;
+  s.result = null;
+  s.phase = "intro";
+  s.pt = 0;
+}
+
+function startKick(p, c, opp) {
+  p.facing = opp.x >= p.x ? 1 : -1;
+  const a = (c.kickAng * Math.PI) / 180;
+  p.vx = c.kickSpd * Math.cos(a) * p.facing;
+  p.vy = -c.kickSpd * Math.sin(a);
+  p.st = "kick";
+  p.t = 0;
+  p.spin = 0;
+  p.inflate = 0;
+}
+
+/* weapon point: sits ahead of the body along the facing/travel direction */
+function weaponPoint(p, c) {
+  if (p.st === "kick") {
+    const m = Math.hypot(p.vx, p.vy) || 1;
+    return [p.x + (p.vx / m) * c.reach, p.y + (p.vy / m) * c.reach + 26];
+  }
+  return [p.x + p.facing * c.reach * 0.5, p.y + 26];
+}
+
+/* distance from point q to segment ab — used for swept hit tests */
+function segDist(ax, ay, bx, by, qx, qy) {
+  const dx = bx - ax, dy = by - ay;
+  const l2 = dx * dx + dy * dy;
+  let t = l2 === 0 ? 0 : ((qx - ax) * dx + (qy - ay) * dy) / l2;
+  t = t < 0 ? 0 : t > 1 ? 1 : t;
+  const px = ax + t * dx, py = ay + t * dy;
+  return Math.hypot(qx - px, qy - py);
+}
+
+function hurtCircle(p, c) {
+  const r = c.hurtR * (1 + p.inflate * 0.32);
+  return [p.x, p.y + 30, r];
+}
+
+/* ---- one player, one tick ---------------------------------------------- */
+function stepPlayer(p, opp, inp) {
+  const c = CHARS[p.ch];
+  const dive = (inp & IN_DIVE) && !(p.prevIn & IN_DIVE);
+  const kick = (inp & IN_KICK) && !(p.prevIn & IN_KICK);
+  const held = inp & IN_DIVE;
+  p.t++;
+  p.pwx = p.wx; p.pwy = p.wy;
+  p.hit = false;
+  let sound = null;
+
+  switch (p.st) {
+    case "stand":
+      p.facing = opp.x >= p.x ? 1 : -1;
+      if (dive) { p.vy = c.jumpV; p.vx = c.jumpVX * p.facing; p.st = "rise"; p.t = 0; p.floatUsed = 0; sound = "dive"; }
+      else if (kick) { p.vx = -c.kbSpd * p.facing; p.vy = c.kbUp; p.st = "kb"; p.t = 0; sound = "kb"; }
+      break;
+
+    case "rise":
+    case "fall":
+      if (kick) { startKick(p, c, opp); sound = "kick"; break; }
+      if (c.floatMax && held && p.vy <= 0 && p.floatUsed < c.floatMax) {
+        p.floatUsed++; p.vy = 0; p.inflate = Math.min(1, p.inflate + 0.18);
+        if (p.floatUsed === 1) sound = "float";
+      } else {
+        p.inflate = Math.max(0, p.inflate - 0.12);
+        p.vy -= c.g;
+      }
+      p.y += p.vy; p.x += p.vx;
+      p.st = p.vy > 0 ? "rise" : "fall";
+      if (p.y <= 0) { p.y = 0; p.vy = 0; p.st = "land"; p.t = 0; p.inflate = 0; sound = "land"; p.rec = 6; }
+      break;
+
+    case "kick":
+      p.x += p.vx; p.y += p.vy;
+      p.spin += 0.34;
+      p.hit = true;
+      if (p.y <= 0) {
+        p.y = 0; p.vx = 0; p.vy = 0; p.st = "land"; p.t = 0; p.rec = c.kickRec; sound = "whiff";
+      }
+      break;
+
+    case "kb":
+      p.vy -= c.g * 0.9;
+      p.y += p.vy; p.x += p.vx;
+      if (p.y <= 0) { p.y = 0; p.vy = 0; p.vx = 0; p.st = "land"; p.t = 0; p.rec = 8; }
+      break;
+
+    case "land":
+      if (p.t >= (p.rec || 6)) { p.st = "stand"; p.t = 0; }
+      break;
+  }
+
+  if (p.x < WALL) { p.x = WALL; if (p.st === "kick") p.vx = 0; }
+  if (p.x > STAGE_W - WALL) { p.x = STAGE_W - WALL; if (p.st === "kick") p.vx = 0; }
+
+  const w = weaponPoint(p, c);
+  p.wx = w[0]; p.wy = w[1];
+  if (p.t === 0 && p.st === "kick") { p.pwx = p.wx; p.pwy = p.wy; }
+  p.prevIn = inp;
+  return sound;
+}
+
+/* ---- match tick -------------------------------------------------------- */
+/* Pure w.r.t. the sim: same (state, in0, in1) always yields the same state.
+   Returned sound events are advisory only and never feed back into state.   */
+function step(s, in0, in1) {
+  const ev = [];
+  s.tick++;
+  s.pt++;
+  if (s.shake > 0) s.shake--;
+  if (s.flash > 0) s.flash--;
+
+  if (s.phase === "intro") {
+    stepPlayer(s.p[0], s.p[1], 0);
+    stepPlayer(s.p[1], s.p[0], 0);
+    if (s.pt >= INTRO_TICKS) { s.phase = "fight"; s.pt = 0; ev.push("fight"); }
+    return ev;
+  }
+
+  if (s.phase === "ko") {
+    if (s.pt === KO_FREEZE) ev.push("settle");
+    if (s.pt > KO_FREEZE) {
+      stepPlayer(s.p[0], s.p[1], 0);
+      stepPlayer(s.p[1], s.p[0], 0);
+    }
+    if (s.pt >= KO_FREEZE + KO_RESET) {
+      if (s.score[0] >= WIN_ROUNDS || s.score[1] >= WIN_ROUNDS) { s.phase = "matchend"; s.pt = 0; }
+      else { s.round++; resetRound(s); }
+    }
+    return ev;
+  }
+
+  if (s.phase === "matchend") return ev;
+
+  /* --- fight --- */
+  const a = stepPlayer(s.p[0], s.p[1], in0);
+  const b = stepPlayer(s.p[1], s.p[0], in1);
+  if (a) ev.push(a + ":0");
+  if (b) ev.push(b + ":1");
+
+  const c0 = CHARS[s.p[0].ch], c1 = CHARS[s.p[1].ch];
+  const h0 = hurtCircle(s.p[0], c0), h1 = hurtCircle(s.p[1], c1);
+  const p0hits = s.p[0].hit && segDist(s.p[0].pwx, s.p[0].pwy, s.p[0].wx, s.p[0].wy, h1[0], h1[1]) <= h1[2] + c0.hitR;
+  const p1hits = s.p[1].hit && segDist(s.p[1].pwx, s.p[1].pwy, s.p[1].wx, s.p[1].wy, h0[0], h0[1]) <= h0[2] + c1.hitR;
+
+  if (p0hits && p1hits) { endRound(s, -1, "trade", ev); return ev; }
+  if (p0hits) { endRound(s, 0, "ko", ev); return ev; }
+  if (p1hits) { endRound(s, 1, "ko", ev); return ev; }
+
+  s.timer--;
+  if (s.timer <= 0) {
+    /* Hold the Line: your own side is the half you started on.
+       Both on one side -> the invader loses. Dead centre -> trade. */
+    const mid = STAGE_W / 2;
+    const l = s.p[0].x < mid, r = s.p[1].x > mid;
+    if (l && r) endRound(s, -1, "trade", ev);
+    else if (l && !r) endRound(s, 0, "line", ev);
+    else if (!l && r) endRound(s, 1, "line", ev);
+    else endRound(s, -1, "trade", ev);
+  }
+  return ev;
+}
+
+function endRound(s, winner, kind, ev) {
+  s.result = { winner, kind };
+  s.phase = "ko"; s.pt = 0;
+  s.shake = kind === "ko" ? 22 : 10;
+  s.flash = 10;
+  if (winner >= 0) { s.score[winner]++; s.p[1 - winner].dead = true; }
+  else { s.p[0].dead = true; s.p[1].dead = true; }
+  ev.push(kind === "ko" ? "hit" : kind === "trade" ? "trade" : "time");
+}
+
+/* =========================== INPUT ====================================== */
+const keys = Object.create(null);
+const KEYMAP = { KeyA: [0, IN_DIVE], KeyS: [0, IN_KICK], KeyK: [1, IN_DIVE], KeyL: [1, IN_KICK] };
+let anyPressEdge = false;
+let showBoxes = false, showPerf = false, muted = false;
+
+addEventListener("keydown", e => {
+  if (e.repeat) return;
+  if (e.code === "F1") { showBoxes = !showBoxes; e.preventDefault(); return; }
+  if (e.code === "F3") { showPerf = !showPerf; e.preventDefault(); return; }
+  if (e.code === "KeyM") { muted = !muted; return; }
+  if (KEYMAP[e.code]) { keys[e.code] = true; anyPressEdge = true; audioWake(); e.preventDefault(); }
+  if (e.code === "Space") e.preventDefault();
+});
+addEventListener("keyup", e => { if (KEYMAP[e.code]) keys[e.code] = false; });
+addEventListener("blur", () => { for (const k in keys) keys[k] = false; nag.classList.add("on"); });
+addEventListener("focus", () => nag.classList.remove("on"));
+const nag = document.getElementById("focusnag");
+nag.addEventListener("click", () => { window.focus(); nag.classList.remove("on"); audioWake(); });
+
+const padPrev = [0, 0];
+function readInputs() {
+  const m = [0, 0];
+  for (const code in KEYMAP) if (keys[code]) { const [p, bit] = KEYMAP[code]; m[p] |= bit; }
+  const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+  let slot = 0;
+  for (let i = 0; i < pads.length && slot < 2; i++) {
+    const g = pads[i];
+    if (!g || !g.connected) continue;
+    const b = g.buttons;
+    let v = 0;
+    if (b[0] && b[0].pressed) v |= IN_DIVE;
+    if (b[1] && b[1].pressed) v |= IN_KICK;
+    if (b[2] && b[2].pressed) v |= IN_DIVE;
+    if (b[3] && b[3].pressed) v |= IN_KICK;
+    if (v && !padPrev[slot]) { anyPressEdge = true; audioWake(); }
+    padPrev[slot] = v;
+    m[slot] |= v;
+    slot++;
+  }
+  return m;
+}
+
+/* =========================== AUDIO ====================================== */
+let ac = null, master = null, noiseBuf = null;
+function audioWake() {
+  if (ac) { if (ac.state === "suspended") ac.resume(); return; }
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return;
+  ac = new AC();
+  master = ac.createGain(); master.gain.value = 0.5; master.connect(ac.destination);
+  noiseBuf = ac.createBuffer(1, ac.sampleRate * 0.4, ac.sampleRate);
+  const d = noiseBuf.getChannelData(0);
+  let seed = 12345;
+  for (let i = 0; i < d.length; i++) { seed = (seed * 1103515245 + 12345) & 0x7fffffff; d[i] = (seed / 0x3fffffff) - 1; }
+}
+function tone(f0, f1, dur, type, gain) {
+  if (!ac || muted) return;
+  const o = ac.createOscillator(), g = ac.createGain();
+  o.type = type || "square";
+  o.frequency.setValueAtTime(f0, ac.currentTime);
+  o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), ac.currentTime + dur);
+  g.gain.setValueAtTime(gain || 0.16, ac.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.0008, ac.currentTime + dur);
+  o.connect(g); g.connect(master); o.start(); o.stop(ac.currentTime + dur + 0.02);
+}
+function noise(dur, cut0, cut1, gain) {
+  if (!ac || muted) return;
+  const s = ac.createBufferSource(); s.buffer = noiseBuf;
+  const f = ac.createBiquadFilter(); f.type = "lowpass";
+  f.frequency.setValueAtTime(cut0, ac.currentTime);
+  f.frequency.exponentialRampToValueAtTime(Math.max(60, cut1), ac.currentTime + dur);
+  const g = ac.createGain();
+  g.gain.setValueAtTime(gain || 0.2, ac.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.0008, ac.currentTime + dur);
+  s.connect(f); f.connect(g); g.connect(master); s.start(); s.stop(ac.currentTime + dur);
+}
+const SFX = {
+  dive: () => tone(300, 720, 0.13, "square", 0.10),
+  kick: () => { tone(820, 180, 0.14, "sawtooth", 0.13); noise(0.09, 5000, 900, 0.10); },
+  float: () => tone(420, 640, 0.22, "sine", 0.09),
+  land: () => tone(150, 70, 0.09, "sine", 0.12),
+  whiff: () => noise(0.16, 2600, 300, 0.13),
+  kb: () => tone(220, 420, 0.09, "triangle", 0.09),
+  hit: () => { noise(0.42, 9000, 200, 0.34); tone(180, 44, 0.5, "sawtooth", 0.26); },
+  trade: () => { noise(0.3, 4000, 300, 0.24); tone(300, 120, 0.34, "square", 0.16); },
+  time: () => { tone(660, 660, 0.1, "square", 0.14); setTimeout(() => tone(440, 440, 0.26, "square", 0.14), 120); },
+  fight: () => { tone(520, 520, 0.09, "square", 0.15); setTimeout(() => tone(780, 780, 0.18, "square", 0.15), 110); },
+  move: () => tone(560, 560, 0.05, "square", 0.09),
+  lock: () => { tone(660, 990, 0.1, "square", 0.13); },
+  settle: () => tone(120, 90, 0.2, "sine", 0.1)
+};
+function playEv(name) { const f = SFX[name.split(":")[0]]; if (f) f(); }
+
+/* =========================== RENDER ===================================== */
+const cv = document.getElementById("cv");
+const ctx = cv.getContext("2d");
+const DPR = Math.min(2, window.devicePixelRatio || 1);
+cv.width = STAGE_W * DPR; cv.height = STAGE_H * DPR;
+
+const FD = '"Chakra Petch","Trebuchet MS",sans-serif';
+const FM = '"IBM Plex Mono",monospace';
+
+function rgba(hex, a) {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+}
+function sy(y) { return FLOOR_Y - y; }
+function txt(s, x, y, size, col, align, font, spacing) {
+  ctx.save();
+  ctx.font = `${size < 0 ? "" : "600 "}${Math.abs(size)}px ${font || FD}`;
+  ctx.fillStyle = col; ctx.textAlign = align || "left"; ctx.textBaseline = "alphabetic";
+  if (spacing) ctx.letterSpacing = spacing + "px";
+  ctx.fillText(s, x, y);
+  ctx.restore();
+}
+function wrapText(s, max, size, font) {
+  ctx.save(); ctx.font = `500 ${size}px ${font || FD}`;
+  const words = s.split(" "); const lines = []; let cur = "";
+  for (const w of words) {
+    const t = cur ? cur + " " + w : w;
+    if (ctx.measureText(t).width > max && cur) { lines.push(cur); cur = w; } else cur = t;
+  }
+  if (cur) lines.push(cur);
+  ctx.restore(); return lines;
+}
+
+/* --- stage --- */
+let starCache = null;
+function drawStage(s) {
+  const g = ctx.createLinearGradient(0, 0, 0, FLOOR_Y);
+  g.addColorStop(0, "#0B0918"); g.addColorStop(0.55, "#1B1338"); g.addColorStop(1, "#3E2050");
+  ctx.fillStyle = g; ctx.fillRect(0, 0, STAGE_W, FLOOR_Y);
+
+  if (!starCache) {
+    starCache = []; let seed = 7;
+    for (let i = 0; i < 70; i++) {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      const x = (seed % 1000);
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      const y = (seed % 300);
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      starCache.push([x, y, 0.25 + (seed % 60) / 100]);
+    }
+  }
+  for (const st of starCache) { ctx.fillStyle = rgba("#FFFFFF", st[2] * 0.5); ctx.fillRect(st[0], st[1], 1.6, 1.6); }
+
+  /* Lunacia's moon */
+  ctx.save();
+  const mg = ctx.createRadialGradient(818, 118, 10, 818, 118, 120);
+  mg.addColorStop(0, rgba("#F2D492", 0.35)); mg.addColorStop(1, rgba("#F2D492", 0));
+  ctx.fillStyle = mg; ctx.fillRect(688, -12, 260, 260);
+  ctx.fillStyle = "#F2D492"; ctx.beginPath(); ctx.arc(818, 118, 44, 0, 7); ctx.fill();
+  ctx.fillStyle = rgba("#C9AB6C", 0.5);
+  ctx.beginPath(); ctx.arc(806, 106, 9, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.arc(834, 132, 6, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.arc(824, 96, 4, 0, 7); ctx.fill();
+  ctx.restore();
+
+  /* far ridges */
+  ctx.fillStyle = "#1A1233";
+  ctx.beginPath(); ctx.moveTo(0, FLOOR_Y);
+  ctx.lineTo(0, 340); ctx.quadraticCurveTo(150, 250, 300, 330);
+  ctx.quadraticCurveTo(430, 388, 560, 316); ctx.quadraticCurveTo(700, 240, 860, 330);
+  ctx.quadraticCurveTo(940, 372, 1000, 336); ctx.lineTo(1000, FLOOR_Y); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = "#120E28";
+  ctx.beginPath(); ctx.moveTo(0, FLOOR_Y);
+  ctx.lineTo(0, 404); ctx.quadraticCurveTo(220, 356, 420, 410);
+  ctx.quadraticCurveTo(640, 464, 810, 400); ctx.quadraticCurveTo(920, 362, 1000, 406);
+  ctx.lineTo(1000, FLOOR_Y); ctx.closePath(); ctx.fill();
+
+  /* ground */
+  const gg = ctx.createLinearGradient(0, FLOOR_Y, 0, STAGE_H);
+  gg.addColorStop(0, "#241A3E"); gg.addColorStop(1, "#0C0918");
+  ctx.fillStyle = gg; ctx.fillRect(0, FLOOR_Y, STAGE_W, STAGE_H - FLOOR_Y);
+  ctx.strokeStyle = rgba("#8E7BD8", 0.55); ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(0, FLOOR_Y + 1); ctx.lineTo(STAGE_W, FLOOR_Y + 1); ctx.stroke();
+  ctx.strokeStyle = rgba("#8E7BD8", 0.13); ctx.lineWidth = 1;
+  for (let i = -6; i <= 6; i++) {
+    ctx.beginPath(); ctx.moveTo(500 + i * 70, FLOOR_Y + 2);
+    ctx.lineTo(500 + i * 240, STAGE_H); ctx.stroke();
+  }
+  for (let i = 1; i < 5; i++) {
+    const yy = FLOOR_Y + i * i * 5.2;
+    ctx.beginPath(); ctx.moveTo(0, yy); ctx.lineTo(STAGE_W, yy); ctx.stroke();
+  }
+}
+
+/* --- axies --- */
+function leaf(len, wid, col, vein) {
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.quadraticCurveTo(len * 0.5, -wid, len, 0);
+  ctx.quadraticCurveTo(len * 0.5, wid, 0, 0);
+  ctx.closePath(); ctx.fillStyle = col; ctx.fill();
+  ctx.strokeStyle = vein; ctx.lineWidth = 1.6;
+  ctx.beginPath(); ctx.moveTo(len * 0.08, 0); ctx.lineTo(len * 0.9, 0); ctx.stroke();
+}
+
+function drawAxie(p, c, opt) {
+  opt = opt || {};
+  const kicking = p.st === "kick";
+  const R = c.hurtR * (opt.scale || 1);
+  const inf = 1 + p.inflate * 0.3;
+  const x = opt.px !== undefined ? opt.px : p.x;
+  const y = opt.py !== undefined ? opt.py : sy(p.y) - 30;
+
+  /* shadow */
+  if (!opt.portrait) {
+    const h = Math.max(0, p.y);
+    const k = Math.max(0.28, 1 - h / 420);
+    ctx.fillStyle = rgba("#000000", 0.42 * k);
+    ctx.beginPath(); ctx.ellipse(p.x, FLOOR_Y + 4, R * 1.15 * k, R * 0.3 * k, 0, 0, 7); ctx.fill();
+  }
+
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(p.facing, 1);
+
+  let rot = 0;
+  if (kicking) rot = Math.atan2(-p.vy, Math.abs(p.vx) || 0.001);
+  else if (p.st === "rise") rot = -0.12;
+  else if (p.st === "fall") rot = 0.1;
+  else if (p.st === "kb") rot = -0.2;
+  if (c.id === "puffy" && kicking) rot += p.spin;
+  ctx.rotate(rot);
+
+  let sqx = 1, sqy = 1;
+  if (p.st === "land" && p.t < 7) { sqx = 1.22; sqy = 0.8; }
+  if (p.st === "rise" && p.t < 6) { sqx = 0.85; sqy = 1.2; }
+  if (p.dead) { sqx = 1.16; sqy = 0.86; }
+  ctx.scale(sqx * inf, sqy * inf);
+
+  /* ---- per-character back parts ---- */
+  if (c.id === "olek" && !kicking) {
+    ctx.save(); ctx.translate(-R * 0.85, R * 0.15); ctx.rotate(2.5);
+    leaf(R * 1.5, R * 0.42, c.trim, rgba(c.col2, 0.9)); ctx.restore();
+  }
+  if (c.id === "puffy") {
+    ctx.save(); ctx.translate(-R * 0.8, R * 0.1);
+    ctx.fillStyle = c.trim;
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-R * 0.62, -R * 0.5);
+    ctx.lineTo(-R * 0.5, 0); ctx.lineTo(-R * 0.66, R * 0.46); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+  if (c.id === "buba") {
+    ctx.fillStyle = c.col2;
+    for (const sx2 of [-0.45, 0.15]) {
+      ctx.beginPath(); ctx.moveTo(R * sx2, -R * 0.72);
+      ctx.lineTo(R * (sx2 + 0.1), -R * 1.32); ctx.lineTo(R * (sx2 + 0.4), -R * 0.66);
+      ctx.closePath(); ctx.fill();
+    }
+  }
+  if (c.id === "olek") {
+    for (const e of [[-0.3, -1.0, -0.7], [0.22, -1.05, -0.3]]) {
+      ctx.save(); ctx.translate(R * e[0], R * e[1]); ctx.rotate(e[2]);
+      leaf(R * 0.72, R * 0.26, c.trim, rgba(c.col2, 0.8)); ctx.restore();
+    }
+  }
+  if (c.id === "puffy") {
+    ctx.fillStyle = c.trim;
+    for (const e of [[-0.28, -0.92], [0.2, -0.98]]) {
+      ctx.save(); ctx.translate(R * e[0], R * e[1]);
+      ctx.beginPath(); ctx.ellipse(0, 0, R * 0.3, R * 0.14, -0.6, 0, 7); ctx.fill(); ctx.restore();
+    }
+    if (p.inflate > 0.12) {
+      ctx.fillStyle = rgba(c.trim, 0.9);
+      for (let i = 0; i < 10; i++) {
+        const a = (i / 10) * Math.PI * 2;
+        ctx.save(); ctx.translate(Math.cos(a) * R * 0.96, Math.sin(a) * R * 0.96); ctx.rotate(a);
+        ctx.beginPath(); ctx.moveTo(0, -R * 0.1); ctx.lineTo(R * 0.26 * p.inflate + R * 0.06, 0);
+        ctx.lineTo(0, R * 0.1); ctx.closePath(); ctx.fill(); ctx.restore();
+      }
+    }
+  }
+
+  /* ---- body ---- */
+  const bg = ctx.createLinearGradient(0, -R, 0, R);
+  bg.addColorStop(0, c.col); bg.addColorStop(1, c.col2);
+  ctx.fillStyle = bg;
+  ctx.beginPath(); ctx.ellipse(0, 0, R, R * 0.94, 0, 0, 7); ctx.fill();
+  ctx.fillStyle = rgba("#FFFFFF", 0.17);
+  ctx.beginPath(); ctx.ellipse(R * 0.05, R * 0.3, R * 0.66, R * 0.5, 0, 0, 7); ctx.fill();
+  ctx.strokeStyle = rgba("#000000", 0.35); ctx.lineWidth = 2.4;
+  ctx.beginPath(); ctx.ellipse(0, 0, R, R * 0.94, 0, 0, 7); ctx.stroke();
+
+  /* ---- eyes ---- */
+  const eyes = [[R * 0.1, -R * 0.16], [R * 0.56, -R * 0.2]];
+  if (p.dead) {
+    ctx.strokeStyle = c.eye; ctx.lineWidth = 3.4; ctx.lineCap = "round";
+    for (const e of eyes) {
+      ctx.beginPath();
+      ctx.moveTo(e[0] - 6, e[1] - 6); ctx.lineTo(e[0] + 6, e[1] + 6);
+      ctx.moveTo(e[0] + 6, e[1] - 6); ctx.lineTo(e[0] - 6, e[1] + 6); ctx.stroke();
+    }
+  } else {
+    const narrow = kicking ? 0.5 : p.st === "land" ? 1.15 : 1;
+    for (const e of eyes) {
+      ctx.fillStyle = "#F8F5FF";
+      ctx.beginPath(); ctx.ellipse(e[0], e[1], R * 0.2, R * 0.24 * narrow, 0, 0, 7); ctx.fill();
+      ctx.fillStyle = c.eye;
+      ctx.beginPath(); ctx.ellipse(e[0] + R * 0.07, e[1] + R * 0.02, R * 0.11, R * 0.13 * narrow, 0, 0, 7); ctx.fill();
+      ctx.fillStyle = rgba("#FFFFFF", 0.9);
+      ctx.beginPath(); ctx.arc(e[0] + R * 0.11, e[1] - R * 0.06, R * 0.045, 0, 7); ctx.fill();
+    }
+    ctx.strokeStyle = rgba("#000000", 0.5); ctx.lineWidth = 2; ctx.lineCap = "round";
+    ctx.beginPath();
+    if (kicking) { ctx.moveTo(R * 0.2, R * 0.3); ctx.lineTo(R * 0.62, R * 0.24); }
+    else { ctx.arc(R * 0.4, R * 0.22, R * 0.2, 0.15, Math.PI - 0.15); }
+    ctx.stroke();
+  }
+
+  /* ---- weapon (front parts) ---- */
+  if (c.id === "buba") {
+    ctx.save();
+    ctx.translate(R * 0.72, kicking ? R * 0.02 : -R * 0.3);
+    ctx.rotate(kicking ? 0 : -0.5);
+    const L = c.reach * (kicking ? 1.1 : 0.8);
+    const hg = ctx.createLinearGradient(0, 0, L, 0);
+    hg.addColorStop(0, c.trim); hg.addColorStop(1, "#FFF3D6");
+    ctx.fillStyle = hg;
+    ctx.beginPath(); ctx.moveTo(0, -R * 0.3); ctx.lineTo(L, 0); ctx.lineTo(0, R * 0.3); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = rgba("#7A4A0E", 0.75); ctx.lineWidth = 1.4;
+    for (let i = 1; i <= 3; i++) {
+      const t = i / 4;
+      ctx.beginPath(); ctx.moveTo(L * t, -R * 0.3 * (1 - t)); ctx.lineTo(L * t + 5, R * 0.3 * (1 - t)); ctx.stroke();
+    }
+    ctx.strokeStyle = rgba("#000000", 0.3); ctx.lineWidth = 1.8;
+    ctx.beginPath(); ctx.moveTo(0, -R * 0.3); ctx.lineTo(L, 0); ctx.lineTo(0, R * 0.3); ctx.stroke();
+    ctx.restore();
+  }
+  if (c.id === "olek" && kicking) {
+    ctx.save(); ctx.translate(R * 0.55, R * 0.1);
+    leaf(c.reach * 1.25, R * 0.6, c.trim, rgba(c.col2, 0.9));
+    ctx.restore();
+  }
+  if (c.id === "puffy" && kicking) {
+    ctx.strokeStyle = rgba(c.trim, 0.85); ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(0, 0, R * 1.25, -0.7, 1.5); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/* trails are render-side only; the sim never sees them */
+const trails = [[], []];
+function pushTrail(i, p) {
+  if (p.st === "kick") { trails[i].push([p.wx, sy(p.wy)]); if (trails[i].length > 12) trails[i].shift(); }
+  else if (trails[i].length) trails[i].shift();
+}
+function drawTrail(i, c) {
+  const t = trails[i]; if (t.length < 2) return;
+  ctx.lineCap = "round";
+  for (let k = 1; k < t.length; k++) {
+    const a = k / t.length;
+    ctx.strokeStyle = rgba(c.trim, a * 0.5);
+    ctx.lineWidth = 2 + a * 9;
+    ctx.beginPath(); ctx.moveTo(t[k - 1][0], t[k - 1][1]); ctx.lineTo(t[k][0], t[k][1]); ctx.stroke();
+  }
+}
+
+/* --- HUD --- */
+function pip(x, y, r, filled, col) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(Math.PI / 4);
+  if (filled) { ctx.fillStyle = col; ctx.fillRect(-r, -r, r * 2, r * 2); }
+  ctx.strokeStyle = filled ? rgba("#FFFFFF", 0.7) : rgba("#8E7BD8", 0.5);
+  ctx.lineWidth = 1.6; ctx.strokeRect(-r, -r, r * 2, r * 2);
+  ctx.restore();
+}
+
+function drawHUD(s) {
+  const c0 = CHARS[s.p[0].ch], c1 = CHARS[s.p[1].ch];
+  ctx.fillStyle = rgba("#08070F", 0.55); ctx.fillRect(0, 0, STAGE_W, 74);
+  ctx.strokeStyle = rgba("#8E7BD8", 0.25); ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, 74.5); ctx.lineTo(STAGE_W, 74.5); ctx.stroke();
+
+  txt(c0.name, 26, 36, 26, c0.col, "left", FD, 1);
+  txt("P1 · " + c0.cls, 26, 56, 11, rgba("#E7E3FB", 0.55), "left", FM, 1.2);
+  txt(c1.name, STAGE_W - 26, 36, 26, c1.col, "right", FD, 1);
+  txt(c1.cls + " · P2", STAGE_W - 26, 56, 11, rgba("#E7E3FB", 0.55), "right", FM, 1.2);
+
+  for (let i = 0; i < WIN_ROUNDS; i++) {
+    pip(226 + i * 26, 34, 7, i < s.score[0], c0.col);
+    pip(STAGE_W - 226 - i * 26, 34, 7, i < s.score[1], c1.col);
+  }
+
+  const secs = Math.max(0, Math.ceil(s.timer / 60));
+  const urgent = s.timer <= LINE_TICKS;
+  txt(String(secs).padStart(2, "0"), STAGE_W / 2, 46, 40, urgent ? "#FF6B6B" : "#E7E3FB", "center", FM, 2);
+  txt("ROUND " + s.round, STAGE_W / 2, 64, 10, rgba("#E7E3FB", 0.5), "center", FM, 3);
+}
+
+function drawLine(s) {
+  if (s.phase !== "fight" || s.timer > LINE_TICKS) return;
+  const pulse = 0.45 + 0.35 * Math.sin(s.tick * 0.22);
+  ctx.save();
+  ctx.strokeStyle = rgba("#FF4D4D", pulse); ctx.lineWidth = 3; ctx.setLineDash([12, 10]);
+  ctx.beginPath(); ctx.moveTo(500, 82); ctx.lineTo(500, FLOOR_Y); ctx.stroke();
+  ctx.restore();
+  txt("HOLD THE LINE", 500, FLOOR_Y + 26, 12, rgba("#FF6B6B", 0.85), "center", FM, 4);
+}
+
+function banner(s, main, sub, col) {
+  const k = Math.min(1, s.pt / 8);
+  ctx.save();
+  ctx.translate(STAGE_W / 2, 250);
+  ctx.scale(1.6 - 0.6 * k, 1.6 - 0.6 * k);
+  ctx.globalAlpha = k;
+  txt(main, 0, 0, 60, col, "center", FD, 4);
+  if (sub) txt(sub, 0, 30, 14, rgba("#E7E3FB", 0.7), "center", FM, 5);
+  ctx.restore();
+}
+
+function drawImpact(s) {
+  if (!s.result || s.result.kind === "time" || s.result.kind === "line") return;
+  const w = s.result.winner;
+  const src = w >= 0 ? s.p[w] : s.p[0];
+  const col = w >= 0 ? CHARS[src.ch].trim : "#FFFFFF";
+  const t = Math.min(1, s.pt / 26);
+  if (t >= 1) return;
+  const x = src.wx, y = sy(src.wy);
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
+  ctx.strokeStyle = rgba(col, (1 - t) * 0.9); ctx.lineWidth = 6 * (1 - t) + 1;
+  ctx.beginPath(); ctx.arc(x, y, 20 + t * 130, 0, 7); ctx.stroke();
+  ctx.lineWidth = 3 * (1 - t) + 1;
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2 + 0.3;
+    const r0 = 16 + t * 60, r1 = r0 + 46 * (1 - t);
+    ctx.beginPath();
+    ctx.moveTo(x + Math.cos(a) * r0, y + Math.sin(a) * r0);
+    ctx.lineTo(x + Math.cos(a) * r1, y + Math.sin(a) * r1);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawBoxes(s) {
+  if (!showBoxes) return;
+  for (let i = 0; i < 2; i++) {
+    const p = s.p[i], c = CHARS[p.ch], h = hurtCircle(p, c);
+    ctx.strokeStyle = rgba("#66E0FF", 0.85); ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(h[0], sy(h[1]), h[2], 0, 7); ctx.stroke();
+    if (p.hit) {
+      ctx.strokeStyle = rgba("#FF5470", 0.95);
+      ctx.beginPath(); ctx.arc(p.wx, sy(p.wy), c.hitR, 0, 7); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(p.pwx, sy(p.pwy)); ctx.lineTo(p.wx, sy(p.wy)); ctx.stroke();
+    }
+    txt(`${p.st} t=${p.t} x=${p.x.toFixed(0)} y=${p.y.toFixed(0)}`,
+      i ? STAGE_W - 12 : 12, STAGE_H - 12 - i * 0, 11, rgba("#66E0FF", 0.8), i ? "right" : "left", FM);
+  }
+}
+
+/* --- match scene --- */
+function drawMatch(s) {
+  ctx.save();
+  if (s.shake > 0) {
+    const k = s.shake / 22;
+    ctx.translate(Math.sin(s.tick * 2.7) * 9 * k, Math.cos(s.tick * 3.1) * 6 * k);
+  }
+  drawStage(s);
+  drawLine(s);
+  for (let i = 0; i < 2; i++) drawTrail(i, CHARS[s.p[i].ch]);
+  for (let i = 0; i < 2; i++) drawAxie(s.p[i], CHARS[s.p[i].ch], {});
+  drawImpact(s);
+  drawBoxes(s);
+  ctx.restore();
+
+  drawHUD(s);
+
+  if (s.flash > 0) {
+    ctx.fillStyle = rgba("#FFFFFF", (s.flash / 10) * 0.35);
+    ctx.fillRect(0, 0, STAGE_W, STAGE_H);
+  }
+
+  if (s.phase === "intro") {
+    if (s.pt < 44) banner(s, "ROUND " + s.round, (s.score[0] === WIN_ROUNDS - 1 || s.score[1] === WIN_ROUNDS - 1) ? "MATCH POINT" : "", "#E7E3FB");
+    else banner({ pt: s.pt - 44 }, "FIGHT!", "", "#FFD98A");
+  }
+  if (s.phase === "ko" && s.result) {
+    const r = s.result;
+    const col = r.winner >= 0 ? CHARS[s.p[r.winner].ch].col : "#FF8A8A";
+    const main = r.kind === "ko" ? "K.O." : r.kind === "trade" ? "TRADE" : "TIME";
+    const sub = r.kind === "trade" ? "NOBODY SCORES" :
+      r.kind === "line" ? CHARS[s.p[r.winner].ch].name + " HELD THE LINE" :
+        r.winner >= 0 ? CHARS[s.p[r.winner].ch].name : "";
+    banner(s, main, sub, col);
+  }
+  if (s.phase === "matchend") {
+    const w = s.score[0] >= WIN_ROUNDS ? 0 : 1;
+    const c = CHARS[s.p[w].ch];
+    ctx.fillStyle = rgba("#08070F", 0.72); ctx.fillRect(0, 0, STAGE_W, STAGE_H);
+    txt("WINNER", STAGE_W / 2, 220, 16, rgba("#E7E3FB", 0.6), "center", FM, 8);
+    txt(c.name, STAGE_W / 2, 292, 74, c.col, "center", FD, 6);
+    txt(s.score[0] + " — " + s.score[1], STAGE_W / 2, 336, 26, "#E7E3FB", "center", FM, 4);
+    txt("KICK  REMATCH        DIVE  CHARACTER SELECT", STAGE_W / 2, 400, 13, rgba("#E7E3FB", 0.75), "center", FM, 3);
+  }
+}
+
+/* --- title --- */
+function drawTitle(t) {
+  drawStage(null);
+  ctx.fillStyle = rgba("#08070F", 0.55); ctx.fillRect(0, 0, STAGE_W, STAGE_H);
+  const demo = [
+    { ch: 0, x: 250, y: 0, st: "stand", t: 30, facing: 1, inflate: 0, spin: 0, vx: 0, vy: 0, dead: false },
+    { ch: 1, x: 500, y: 0, st: "stand", t: 30, facing: 1, inflate: 0, spin: 0, vx: 0, vy: 0, dead: false },
+    { ch: 2, x: 750, y: 0, st: "stand", t: 30, facing: -1, inflate: 0, spin: 0, vx: 0, vy: 0, dead: false }
+  ];
+  demo.forEach((d, i) => {
+    d.y = Math.max(0, Math.sin(t * 0.045 + i * 1.7) * 16);
+    drawAxie(d, CHARS[d.ch], {});
+  });
+  txt("DIVEKICK", STAGE_W / 2, 190, 96, "#E7E3FB", "center", FD, 10);
+  const glow = 0.5 + 0.5 * Math.sin(t * 0.05);
+  txt("LUNACIA", STAGE_W / 2, 246, 44, rgba("#F2D492", 0.6 + glow * 0.4), "center", FD, 26);
+  txt("TWO BUTTONS · ONE HIT · FIRST TO FIVE", STAGE_W / 2, 288, 13, rgba("#E7E3FB", 0.55), "center", FM, 5);
+  if ((t >> 5) % 2 === 0) txt("PRESS ANY BUTTON", STAGE_W / 2, FLOOR_Y + 60, 18, "#E7E3FB", "center", FD, 8);
+  txt("SKY MAVIS INTERNAL GAMEJAM DEMO", STAGE_W / 2, STAGE_H - 16, 10, rgba("#E7E3FB", 0.35), "center", FM, 4);
+}
+
+/* --- character select --- */
+function drawSelect(sel, t) {
+  drawStage(null);
+  ctx.fillStyle = rgba("#08070F", 0.7); ctx.fillRect(0, 0, STAGE_W, STAGE_H);
+  txt("CHOOSE YOUR AXIE", STAGE_W / 2, 56, 30, "#E7E3FB", "center", FD, 8);
+  txt("DIVE  MOVE        KICK  LOCK IN", STAGE_W / 2, 78, 11, rgba("#E7E3FB", 0.5), "center", FM, 4);
+
+  const CW = 292, GAP = 20, X0 = (STAGE_W - (CW * 3 + GAP * 2)) / 2;
+  for (let i = 0; i < 3; i++) {
+    const c = CHARS[i], x = X0 + i * (CW + GAP), y = 102, H = 400;
+    const sel1 = sel.cur[0] === i, sel2 = sel.cur[1] === i;
+    ctx.fillStyle = rgba("#150F2C", 0.92); ctx.fillRect(x, y, CW, H);
+    ctx.strokeStyle = rgba(c.col, sel1 || sel2 ? 0.95 : 0.3);
+    ctx.lineWidth = sel1 || sel2 ? 2 : 1;
+    ctx.strokeRect(x + 0.5, y + 0.5, CW - 1, H - 1);
+    ctx.fillStyle = rgba(c.col, 0.16); ctx.fillRect(x, y, CW, 4);
+
+    const bob = Math.sin(t * 0.05 + i) * 5;
+    drawAxie(
+      { ch: i, x: 0, y: 0, st: "stand", t: 30, facing: 1, inflate: 0, spin: 0, vx: 0, vy: 0, dead: false },
+      c, { portrait: true, px: x + CW / 2, py: y + 108 + bob, scale: 1.45 }
+    );
+
+    txt(c.name, x + CW / 2, y + 196, 34, c.col, "center", FD, 3);
+    txt(c.cls + " · " + c.role, x + CW / 2, y + 216, 10.5, rgba("#E7E3FB", 0.55), "center", FM, 2.4);
+
+    let ly = y + 250;
+    for (const line of wrapText(c.flavour, CW - 44, 13)) {
+      txt(line, x + CW / 2, ly, -13, rgba("#E7E3FB", 0.78), "center", FD);
+      ly += 18;
+    }
+    ly += 6;
+    for (const line of wrapText(c.weapon, CW - 44, 11, FM)) {
+      txt(line, x + CW / 2, ly, -11, rgba(c.trim, 0.85), "center", FM);
+      ly += 15;
+    }
+
+    for (let b = 0; b < 3; b++) {
+      const by = y + H - 54 + b * 15;
+      txt(BARSTAT[b], x + 22, by + 4, -9, rgba("#E7E3FB", 0.45), "left", FM, 1.5);
+      for (let k = 0; k < 5; k++) {
+        ctx.fillStyle = k < c.bars[b] ? c.col : rgba("#E7E3FB", 0.14);
+        ctx.fillRect(x + 86 + k * 38, by, 32, 5);
+      }
+    }
+
+    for (let pl = 0; pl < 2; pl++) {
+      if (sel.cur[pl] !== i) continue;
+      const locked = sel.lock[pl];
+      const tag = "P" + (pl + 1) + (locked ? " READY" : "");
+      const tw = 78, tx = pl === 0 ? x + 8 : x + CW - tw - 8;
+      ctx.fillStyle = locked ? c.col : rgba("#E7E3FB", 0.22);
+      ctx.fillRect(tx, y + 10, tw, 20);
+      txt(tag, tx + tw / 2, y + 24, -11, locked ? "#0B0916" : "#E7E3FB", "center", FM, 1.5);
+    }
+  }
+
+  if (sel.lock[0] && sel.lock[1]) {
+    txt("GET READY", STAGE_W / 2, STAGE_H - 24, 20, "#FFD98A", "center", FD, 8);
+  }
+}
+
+/* =========================== APP LOOP =================================== */
+const app = {
+  screen: "title", t: 0,
+  sel: { cur: [0, 1], lock: [false, false], t: 0, prev: [0, 0] },
+  m: null
+};
+
+function selectTick(inp) {
+  const sel = app.sel;
+  for (let i = 0; i < 2; i++) {
+    const dive = (inp[i] & IN_DIVE) && !(sel.prev[i] & IN_DIVE);
+    const kick = (inp[i] & IN_KICK) && !(sel.prev[i] & IN_KICK);
+    if (dive) {
+      if (sel.lock[i]) { sel.lock[i] = false; SFX.move(); }
+      else { sel.cur[i] = (sel.cur[i] + 1) % 3; SFX.move(); }
+      sel.t = 0;
+    } else if (kick && !sel.lock[i]) { sel.lock[i] = true; SFX.lock(); sel.t = 0; }
+    sel.prev[i] = inp[i];
+  }
+  if (sel.lock[0] && sel.lock[1]) {
+    sel.t++;
+    if (sel.t > 36) {
+      app.m = newMatch(sel.cur[0], sel.cur[1]);
+      trails[0].length = 0; trails[1].length = 0;
+      app.screen = "match";
+    }
+  }
+}
+
+function endTick(inp) {
+  const s = app.m;
+  const kick = (inp[0] & IN_KICK) || (inp[1] & IN_KICK);
+  const dive = (inp[0] & IN_DIVE) || (inp[1] & IN_DIVE);
+  if (s.pt < 50) return;
+  if (kick) {
+    app.m = newMatch(s.p[0].ch, s.p[1].ch);
+    trails[0].length = 0; trails[1].length = 0;
+    SFX.lock();
+  } else if (dive) {
+    app.sel.lock = [false, false]; app.sel.t = 0; app.sel.prev = [0, 0];
+    app.screen = "select"; SFX.move();
+  }
+}
+
+let acc = 0, last = performance.now(), fps = 60, simMs = 0;
+function frame(now) {
+  requestAnimationFrame(frame);
+  let dt = (now - last) / 1000; last = now;
+  if (dt > 0.25) dt = 0.25;
+  acc += dt;
+  fps += ((1 / Math.max(dt, 0.0001)) - fps) * 0.08;
+
+  let steps = 0;
+  const t0 = performance.now();
+  while (acc >= TICK && steps < 5) {
+    acc -= TICK; steps++; app.t++;
+    const inp = readInputs();
+
+    if (app.screen === "title") {
+      if (anyPressEdge) { anyPressEdge = false; app.screen = "select"; app.sel.prev = inp.slice(); SFX.lock(); }
+    } else if (app.screen === "select") {
+      selectTick(inp);
+    } else if (app.screen === "match") {
+      const s = app.m;
+      if (s.phase === "matchend") endTick(inp);
+      else for (const e of step(s, inp[0], inp[1])) playEv(e);
+      pushTrail(0, s.p[0]); pushTrail(1, s.p[1]);
+    }
+    anyPressEdge = false;
+  }
+  simMs = performance.now() - t0;
+
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.clearRect(0, 0, STAGE_W, STAGE_H);
+  if (app.screen === "title") drawTitle(app.t);
+  else if (app.screen === "select") drawSelect(app.sel, app.t);
+  else drawMatch(app.m);
+
+  if (showPerf) {
+    ctx.fillStyle = rgba("#08070F", 0.7); ctx.fillRect(8, STAGE_H - 58, 176, 50);
+    txt("fps  " + fps.toFixed(1), 16, STAGE_H - 42, -11, "#7CF0B4", "left", FM);
+    txt("sim  " + simMs.toFixed(2) + " ms", 16, STAGE_H - 28, -11, "#7CF0B4", "left", FM);
+    txt("tick " + (app.m ? app.m.tick : app.t), 16, STAGE_H - 14, -11, "#7CF0B4", "left", FM);
+  }
+}
+requestAnimationFrame(frame);
+if (!document.hasFocus()) nag.classList.add("on");
+</script>
