@@ -118,8 +118,8 @@ A match runs 39–47 seconds, which is the number that matters for the demo queu
 
 ## Meter, specials and Kick Factor
 
-Committing a divekick fills the **Kick Meter** — three of them buys one special,
-spent with **DIVE + KICK together** (either order; the special cancels whatever that
+Committing a divekick fills the **Kick Meter** — the three-cell bar in your bottom
+corner. Three kicks buys one special, spent with **DIVE + KICK together** (either order; the special cancels whatever that
 first press started). One per Axie, and each one is that character's idea taken too far:
 
 | Axie | Special | |

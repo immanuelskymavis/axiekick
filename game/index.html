@@ -2132,6 +2132,101 @@ function pip(x, y, r, filled, col) {
   ctx.restore();
 }
 
+
+/* --- kick meter -----------------------------------------------------------
+   Bottom corners, leaning into the middle of the screen, three cells for the
+   three divekicks it takes to fill. Sits over the floor rather than crowding
+   the name plates. */
+function skewPath(x, y, w, h, lean) {
+  ctx.beginPath();
+  ctx.moveTo(x + lean, y);
+  ctx.lineTo(x + w + lean, y);
+  ctx.lineTo(x + w, y + h);
+  ctx.lineTo(x, y + h);
+  ctx.closePath();
+}
+
+function drawMeter(p, c, side, tick) {
+  const W = 300, H = 22, LEAN = 14, PAD = 5;
+  const y = STAGE_H - 58;
+  const x = side === 0 ? 26 : STAGE_W - 26 - W;
+  const lean = side === 0 ? LEAN : -LEAN;
+  const col = side && p.tint ? "#7CE0C8" : c.col;
+  const full = p.meter >= METER_MAX;
+  const pulse = 0.72 + 0.28 * Math.sin(tick * 0.22);
+
+  ctx.save();
+  const shade = ctx.createLinearGradient(0, y - 28, 0, y + H + 22);
+  shade.addColorStop(0, rgba("#08070F", 0));
+  shade.addColorStop(0.45, rgba("#08070F", 0.5));
+  shade.addColorStop(1, rgba("#08070F", 0));
+  ctx.fillStyle = shade;
+  ctx.fillRect(side === 0 ? 0 : STAGE_W - W - 60, y - 28, W + 60, H + 50);
+  ctx.restore();
+
+  const cells = 3, cw = (W - PAD * (cells - 1)) / cells;
+  for (let i = 0; i < cells; i++) {
+    const at = side === 0 ? x + i * (cw + PAD) : x + W - (i + 1) * cw - i * PAD;
+    const lo = (i / cells) * METER_MAX, k = Math.max(0, Math.min(1, (p.meter - lo) / (METER_MAX / cells)));
+
+    ctx.save();
+    skewPath(at, y, cw, H, lean);
+    ctx.fillStyle = rgba("#08070F", 0.72);
+    ctx.fill();
+    if (k > 0) {
+      ctx.save();
+      ctx.clip();
+      const g = ctx.createLinearGradient(0, y, 0, y + H);
+      const hot = full ? "#FFE9AE" : col;
+      g.addColorStop(0, rgba(hot, full ? pulse : 0.95));
+      g.addColorStop(0.55, rgba(hot, full ? pulse * 0.8 : 0.7));
+      g.addColorStop(1, rgba(hot, full ? pulse : 0.95));
+      ctx.fillStyle = g;
+      const fw = cw * k + Math.abs(lean);
+      ctx.fillRect(side === 0 ? at - Math.abs(lean) : at + cw - fw, y, fw, H);
+      /* a moving sheen, so a full cell reads as charged rather than painted */
+      if (full) {
+        const sx = at + ((tick * 3 + i * 90) % (cw + 90)) - 45;
+        const sg = ctx.createLinearGradient(sx, 0, sx + 46, 0);
+        sg.addColorStop(0, rgba("#FFFFFF", 0));
+        sg.addColorStop(0.5, rgba("#FFFFFF", 0.35));
+        sg.addColorStop(1, rgba("#FFFFFF", 0));
+        ctx.fillStyle = sg;
+        ctx.fillRect(sx, y, 46, H);
+      }
+      ctx.restore();
+    }
+    ctx.strokeStyle = rgba(full ? "#FFD98A" : col, k >= 1 ? 0.95 : 0.4);
+    ctx.lineWidth = k >= 1 ? 2 : 1;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  /* the tab above the bar: what it is, or what it buys */
+  const lx = side === 0 ? x + 4 : x + W - 4;
+  const align = side === 0 ? "left" : "right";
+  if (full && c.spec) {
+    const label = c.spec.name + "  ·  DIVE+KICK";
+    ctx.save();
+    ctx.font = '600 11px ' + FM;
+    ctx.letterSpacing = "1.4px";
+    const tw = Math.ceil(ctx.measureText(label).width) + 26;
+    const tx = side === 0 ? x : x + W - tw;
+    ctx.globalAlpha = pulse;
+    skewPath(tx, y - 24, tw, 19, lean * 0.55);
+    ctx.fillStyle = "#FFD98A"; ctx.fill();
+    ctx.restore();
+    txt(label, tx + tw / 2 + lean * 0.25, y - 10, -11, "#17110A", "center", FM, 1.4);
+  } else {
+    txt("KICK METER", lx, y - 10, -10, rgba("#E7E3FB", 0.45), align, FM, 3);
+  }
+
+  if (p.kf) {
+    txt("KICK FACTOR x" + p.kf, lx, y + H + 15, -11,
+      "#FF8A5C", align, FM, 2);
+  }
+}
+
 function drawHUD(s) {
   const c0 = s.p[0].c, c1 = s.p[1].c;
   ctx.fillStyle = rgba("#08070F", 0.55); ctx.fillRect(0, 0, STAGE_W, 74);
@@ -2144,27 +2239,6 @@ function drawHUD(s) {
   txt(c1.name, STAGE_W - 26, 36, 26, col1, "right", FD, 1);
   txt(c1.cls + " · " + (s.cpu ? "CPU " + DIFFS[s.cpu.diff].name : "P2"),
     STAGE_W - 26, 56, 11, rgba("#E7E3FB", 0.55), "right", FM, 1.2);
-
-  /* kick meter, and the comeback tag if the score has handed one out */
-  for (let i = 0; i < 2; i++) {
-    const p = s.p[i], c = p.c, col = i && p.tint ? "#7CE0C8" : c.col;
-    const w = 150, x = i === 0 ? 26 : STAGE_W - 26 - w, y = 62;
-    ctx.fillStyle = rgba("#08070F", 0.6); ctx.fillRect(x, y, w, 6);
-    const full = p.meter >= METER_MAX;
-    const pulse = full ? 0.7 + 0.3 * Math.sin(s.tick * 0.25) : 1;
-    ctx.fillStyle = rgba(full ? "#FFD98A" : col, pulse);
-    ctx.fillRect(x, y, w * (p.meter / METER_MAX), 6);
-    ctx.strokeStyle = rgba("#E7E3FB", 0.25); ctx.lineWidth = 1;
-    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, 5);
-    if (full && c.spec) {
-      txt("DIVE+KICK  " + c.spec.name, i === 0 ? x : x + w, y + 20, -10,
-        rgba("#FFD98A", pulse), i === 0 ? "left" : "right", FM, 1.5);
-    }
-    if (p.kf) {
-      txt("KICK FACTOR x" + p.kf, i === 0 ? x : x + w, y - 16, -10.5,
-        "#FF8A5C", i === 0 ? "left" : "right", FM, 1.5);
-    }
-  }
 
   for (let i = 0; i < 2; i++) {
     const augs = s.p[i].augs;
@@ -2266,6 +2340,7 @@ function drawMatch(s) {
   ctx.restore();
 
   drawHUD(s);
+  for (let i = 0; i < 2; i++) drawMeter(s.p[i], s.p[i].c, i, s.tick);
 
   /* announcer callouts that belong to a fighter rather than the round */
   for (let i = 0; i < 2; i++) {
