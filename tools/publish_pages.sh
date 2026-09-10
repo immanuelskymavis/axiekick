@@ -20,13 +20,15 @@ touch "$WORK/.nojekyll"         # Jekyll would otherwise eat files starting with
 git worktree add --detach "$WORK/repo" >/dev/null
 (
   cd "$WORK/repo"
-  git checkout --orphan gh-pages >/dev/null 2>&1
+  # a fresh throwaway branch every time: --orphan gh-pages fails the moment a
+  # local gh-pages exists, which silently broke the second deploy
+  git checkout --orphan "pages-$$" >/dev/null 2>&1
   git rm -rq --cached . 2>/dev/null || true
   find . -maxdepth 1 ! -name . ! -name .git -exec rm -rf {} +
   cp "$WORK/index.html" "$WORK/game.html" "$WORK/.nojekyll" .
   git add -A
   git commit -qm "Publish $(cd .. && git -C "$OLDPWD" rev-parse --short HEAD 2>/dev/null || echo build)"
-  git push -qf origin gh-pages
+  git push -qf origin "HEAD:gh-pages"
 )
 git worktree remove --force "$WORK/repo"
-echo "pushed gh-pages ($(du -h "$SRC" | cut -f1))"
+echo "pushed gh-pages: $(wc -c < "$SRC" | tr -d " ") bytes -> https://immanuelskymavis.github.io/axiekick/"
