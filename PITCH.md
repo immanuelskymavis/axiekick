@@ -1,4 +1,4 @@
-# Divekick Lunacia — jam pitch
+# AxieKick — jam pitch
 
 **Two buttons. One hit. First to five.**
 

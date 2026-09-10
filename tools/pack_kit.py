@@ -28,12 +28,21 @@ SFX = {
     "kick_plant": "plant_smash_attack.wav",      # Olek's tail smash
     "kick_beast": "beast_gore_attack.wav",       # Buba's horn gore
     "kick_aqua": "aquatic_throw_attack.wav",     # Puffy's roll
+    "kick_bug": "bug_gore_attack.wav",           # Pomodoro's horn
+    "kick_reptile": "reptile_slash_attack.wav",  # Venoki's tail
+    "kick_bird": "bird_bite_attack.wav",         # Momo's beak
     "dive_plant": "plant_fly.wav",
     "dive_beast": "beast_fly.wav",
     "dive_aqua": "aquatic_fly.wav",
+    "dive_bug": "bug_fly.wav",
+    "dive_reptile": "reptile_fly.wav",
+    "dive_bird": "bird_fly.wav",
     "hit_plant": "plant_cast_hit.wav",
     "hit_beast": "beast_cast_hit.wav",
     "hit_aqua": "aquatic_cast_hit.wav",
+    "hit_bug": "bug_cast_hit.wav",
+    "hit_reptile": "reptile_cast_hit.wav",
+    "hit_bird": "bird_cast_hit.wav",
     "trade": "stunned.wav",
     "whiff": "weak.wav",
     "kb": "feather.wav",

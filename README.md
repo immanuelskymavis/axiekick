@@ -1,4 +1,4 @@
-# Divekick Lunacia
+# AxieKick
 
 A two-button fighting game starring the three Origins starter Axies, built for a Sky Mavis
 internal gamejam. One hit ends a round. First to five wins the match.
@@ -42,6 +42,9 @@ From the title screen: **local versus**, or **vs CPU** at three difficulties.
 | **Veteran** | 8 frames | ±46 units | 60% |
 | **Lunacian** | 3 frames | ±38 units | 95% |
 
+Over 12 matches across the six-Axie roster the CPU takes 3, 4 and 6 of them; all 36
+character pairings finish without stalling.
+
 The CPU is not special-cased anywhere in the simulation — it reads state and returns
 the same 2-bit input mask a player does, so a CPU match steps through exactly the same
 code as a human one. Its randomness comes from an LCG seeded per match and stored in
@@ -53,9 +56,8 @@ chest. The CPU jumps, watches that number fall, and presses Kick when it matches
 horizontal gap. Difficulty is how tight that window is, how stale its picture of the
 opponent is, and how often it takes the fight to you.
 
-Against a reference bot using the same geometry with a fixed ±44 window, over 8 matches:
-Rookie wins 1 and loses rounds 15–39, Veteran wins 4 at 26–27, Lunacian wins 5 at 26–20.
-A match runs 38–50 seconds, which is the number that matters for the demo queue.
+The reference bot for those numbers uses the same geometry with a fixed ±44 window.
+A match runs 39–47 seconds, which is the number that matters for the demo queue.
 
 ## The art
 
@@ -104,6 +106,8 @@ own class makes in Origins:
 | Kick | `plant_smash_attack` | `beast_gore_attack` | `aquatic_throw_attack` |
 | KO | `plant_cast_hit` | `beast_cast_hit` | `aquatic_cast_hit` |
 
+…and the same three rows again for Pomodoro (bug), Venoki (reptile) and Momo (bird).
+
 Plus `stunned` on a trade, `feather` on a kickback, `death_mark` when Hold the Line
 appears, and `pvp` / `pve_1` as the battle and menu loops. These are battle-card sounds
 with long tails — a 3.5-second whoosh on a jump you take twice a second turns to mud —
@@ -123,10 +127,14 @@ keeps 2.2 MB of media out of a 22 MB one.
 | **Olek** | Plant | Leaf tail | Shallow 32° arc, longest reach on the stage; to catch someone already underneath him he has to kick late |
 | **Buba** | Beast | Horn drill | Steep 55° dive at 14 u/f, smallest hitbox, 27 frames of recovery when he misses |
 | **Puffy** | Aqua | Inflate | Hold DIVE at the apex to hover up to 14 frames; biggest hurtbox in the game while she does it |
+| **Pomodoro** | Bug | Hang | The dive stalls 9 frames before it launches — a commit you can watch that still isn't moving |
+| **Venoki** | Reptile | Armed retreat | His kickback swings on the way out, so crowding him is its own mistake |
+| **Momo** | Bird | Second wind | One extra jump, any time she's airborne — bait the whiff, then take the air back |
 
 Effective kick ranges, measured from the sim across kick timings: Olek 120–460 units,
-Buba 80–280, Puffy 80–320. Round-start distance is 520, and no character can cover that
-at any timing, so somebody has to approach.
+Momo 140–360, Puffy 60–320, Buba 60–280, Venoki 60–280, Pomodoro 60–240. Round-start
+distance is 520, and no character can cover that at any timing, so somebody has to
+approach.
 
 Hurtboxes are ellipses fitted to each Axie's **body** attachment, measured off the rig at
 load — so the box is whatever the art is, and horns, leaves, fins and tails are all

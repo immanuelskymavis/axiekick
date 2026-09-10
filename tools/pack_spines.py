@@ -16,9 +16,12 @@ import base64, json, os, re, sys, urllib.request
 RAW = ("https://raw.githubusercontent.com/axieinfinity/unity-axie-gtk2d/main/"
        "Assets/AxieInfinity/AxieStandardAssets/Spines/starter-axies")
 AXIES = {
-    "buba":  ("01-buba-beast", "buba"),
-    "olek":  ("02-olek-plant", "olek"),
-    "puffy": ("03-puffy-aquatic", "03-puffy-aquatic"),
+    "buba":     ("01-buba-beast", "buba"),
+    "olek":     ("02-olek-plant", "olek"),
+    "puffy":    ("03-puffy-aquatic", "03-puffy-aquatic"),
+    "pomodoro": ("06-pomodoro-bug", "06-pomodoro-bug"),
+    "venoki":   ("07-venoki-reptile", "07-dps-reptile"),
+    "momo":     ("12-momo-bird", "12-momo-bird"),
 }
 # Everything the game can play. Anything not listed here is stripped.
 KEEP = [
@@ -35,6 +38,7 @@ KEEP = [
     "attack/melee/tail-smash",
     "attack/melee/tail-roll",
     "attack/melee/tail-thrash",
+    "attack/melee/mouth-bite",
 ]
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CACHE = os.path.join(HERE, ".cache", "spines")
