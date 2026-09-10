@@ -46,10 +46,17 @@ difficulties.
 |---|---|---|---|
 | **Rookie** | 15 frames | ±84 units | 20% |
 | **Veteran** | 8 frames | ±46 units | 60% |
-| **Lunacian** | 3 frames | ±38 units | 95% |
+| **Lunacian** | 1 frame | leads the target | always |
 
-Over 12 matches across the six-Axie roster the CPU takes 3, 4 and 6 of them; all 36
-character pairings finish without stalling.
+Rookie and Veteran fire whenever the gap is roughly right. Lunacian plays a different
+game: it solves for where you will be when its weapon arrives rather than where you are
+now, it only jumps when you are already committed or out of its reach, it swings Venoki's
+kickback as an attack and floats Puffy's inflate to make you whiff, and if the clock
+would hand it the round on Hold the Line it simply stands still and lets it.
+
+Measured against a sparring bot with a human-shaped 12-frame reaction delay, over 24
+matches: Rookie wins 3, Veteran 8, Lunacian 16. All 36 character pairings finish without
+stalling, and two Lunacians against each other still resolve.
 
 The CPU is not special-cased anywhere in the simulation — it reads state and returns
 the same 2-bit input mask a player does, so a CPU match steps through exactly the same

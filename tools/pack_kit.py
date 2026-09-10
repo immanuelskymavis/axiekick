@@ -53,6 +53,30 @@ SFX = {
 }
 MUSIC = {"battle": "pvp.wav", "menu": "pve_1.wav"}
 
+# Origins interface pieces. Everything here is drawn straight onto the canvas,
+# so it is cropped to what the game actually uses and nothing else.
+UI = {
+    "star": "PvE/UI/Frames/star.png",              # round-win pips
+    "frame": "PvE/UI/Frames/frame_border.png",     # 9-sliced panel border
+    "avatar": "PvE/UI/InBattle/avatar_frame.png",  # augment medallions
+    "node_now": "PvE/UI/Nodes/node_current.png",   # arcade ladder
+    "node_next": "PvE/UI/Nodes/node_default.png",
+    "node_win": "PvE/UI/Nodes/node_win.png",
+    "node_lost": "PvE/UI/Nodes/node_lose.png",
+}
+
+# Land items, by (row, col) on the 16x64px grid of gtk2d's images/land-item.png.
+# Each one is an augment's face in Arcade mode.
+LAND_SHEET = ("https://raw.githubusercontent.com/axieinfinity/unity-axie-gtk2d/"
+              "main/images/land-item.png")
+ITEMS = {
+    "blade": (1, 8),      "maul": (1, 12),     "wings": (6, 4),
+    "ward": (4, 13),      "elixir": (8, 12),   "duel": (5, 10),
+    "bramble": (5, 6),    "tide": (8, 10),     "crown": (6, 8),
+    "moonshard": (5, 7),  "haste": (7, 9),     "plume": (6, 14),
+    "helm": (4, 14),      "band": (5, 11),     "bloom": (8, 13),
+}
+
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CACHE = os.path.join(HERE, ".cache", "kit")
 TARGET = os.path.join(HERE, "game", "index.html")
@@ -95,9 +119,37 @@ def uri(mime, blob):
     return f"data:{mime};base64," + base64.b64encode(blob).decode()
 
 
+def grab_url(url, name, offline):
+    dest = os.path.join(CACHE, name)
+    if not os.path.exists(dest):
+        if offline:
+            sys.exit("missing cache file: " + dest)
+        os.makedirs(CACHE, exist_ok=True)
+        with urllib.request.urlopen(url) as r, open(dest, "wb") as f:
+            f.write(r.read())
+    return dest
+
+
+def as_png(path, box=None, cap=None):
+    """Trim to the artwork, optionally cap the long side, keep the alpha."""
+    from PIL import Image
+    im = Image.open(path).convert("RGBA")
+    if box:
+        im = im.crop(box)
+    bb = im.getbbox()
+    if bb:
+        im = im.crop(bb)
+    if cap and max(im.size) > cap:
+        k = cap / max(im.size)
+        im = im.resize((max(1, round(im.size[0] * k)), max(1, round(im.size[1] * k))), Image.LANCZOS)
+    buf = io.BytesIO()
+    im.save(buf, "PNG", optimize=True)
+    return buf.getvalue()
+
+
 def main():
     offline = "--offline" in sys.argv
-    out = {"bg": [], "sfx": {}, "music": {}}
+    out = {"bg": [], "sfx": {}, "music": {}, "ui": {}, "items": {}}
     total = 0
 
     print("backgrounds")
@@ -120,6 +172,21 @@ def main():
         out["music"][key] = uri("audio/mp4", blob)
         total += len(blob)
         print(f"  {key:<12} {fn:<26} {len(blob)//1024:>4} KB")
+
+    print("ui")
+    for key, rel in UI.items():
+        blob = as_png(grab(rel, offline), cap=192)
+        out["ui"][key] = uri("image/png", blob)
+        total += len(blob)
+        print(f"  {key:<12} {len(blob) // 1024:>4} KB")
+
+    print("land items")
+    sheet = grab_url(LAND_SHEET, "land-item.png", offline)
+    for key, (r, c) in ITEMS.items():
+        blob = as_png(sheet, box=(c * 64, r * 64, c * 64 + 64, r * 64 + 64), cap=64)
+        out["items"][key] = uri("image/png", blob)
+        total += len(blob)
+    print(f"  {len(ITEMS)} icons, {sum(len(v) for v in out['items'].values()) // 1024} KB")
 
     block = "const KIT_ASSETS = " + json.dumps(out, separators=(",", ":")) + ";"
     html = open(TARGET).read()
