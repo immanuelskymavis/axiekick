@@ -1,4 +1,4 @@
-# Divekick Lunacia — jam pitch
+# AxieKick — jam pitch
 
 **Two buttons. One hit. First to five.**
 
@@ -34,8 +34,10 @@ because a match is over in ninety seconds.
 ## Where it goes
 
 The simulation is a pure function of `(state, p1 input, p2 input)` running at a fixed
-60Hz with a 2-bit input log. That is not tidiness for its own sake — it is the entire
-prerequisite for rollback netcode. Online P2P is a WebRTC data channel and a room code
-away, and nothing in the game has to change to get there.
+60Hz with a 2-bit input log. That is not tidiness for its own sake — it is what made
+online a transport problem rather than a rewrite. It already plays peer to peer over a
+WebRTC data channel with no server anywhere: one of you hosts, the other joins, you
+paste two codes at each other, and a state hash every 30 frames tells you if the two
+simulations ever disagree. Rollback is the next step and needs nothing new from it.
 
 **Play it:** open the URL, press a button, argue about whether that last one was a trade.

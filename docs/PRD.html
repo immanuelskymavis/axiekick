@@ -1,4 +1,4 @@
-<title>Divekick Lunacia</title>
+<title>AxieKick</title>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
 <style>
@@ -180,11 +180,11 @@ footer a{color:var(--ink-2)}
 
 <header class="top col">
   <div class="kicker">
-    <span class="tag">PRD · v0.2 · demo built</span>
+    <span class="tag">PRD · v0.3 · online shipped</span>
     <span class="tag">Sky Mavis internal gamejam</span>
     <span class="tag hot">Weekend build</span>
   </div>
-  <h1>Divekick Lunacia</h1>
+  <h1>AxieKick</h1>
   <p class="deck">A two-button fighting game where three starter Axies settle it in the air. One hit ends a round. No walking, no combos, no blocking — just a jump, a kick, and the fifteen frames where you find out who guessed right.</p>
   <dl class="meta">
     <div><dt class="label">Owner</dt><dd>immanuel.cruz</dd></div>
@@ -193,7 +193,7 @@ footer a{color:var(--ink-2)}
     <div><dt class="label">Target</dt><dd>Web · TS + Canvas</dd></div>
     <div><dt class="label">Ship bar</dt><dd>Playable URL</dd></div>
   </dl>
-  <p class="deck" style="font-size:15px"><strong>Playable build:</strong> <a href="https://claude.ai/code/artifact/b030b5d3-a16b-4056-899c-81ffe1606237">Divekick Lunacia demo</a> — everything in §03–§06 is in it.</p>
+  <p class="deck" style="font-size:15px"><strong>Playable build:</strong> <a href="https://claude.ai/code/artifact/b030b5d3-a16b-4056-899c-81ffe1606237">AxieKick demo</a> — everything in §03–§06 is in it.</p>
 </header>
 
 <section>
@@ -391,32 +391,31 @@ footer a{color:var(--ink-2)}
   <div class="num">§ 08</div>
   <div class="body">
     <h2>Multiplayer</h2>
-    <p>Online P2P is a headline feature of this game and it is <strong>not</strong> in the v1 weekend build. What v1 owes v2 is an engine that makes it a two-day job rather than a rewrite.</p>
+    <p><strong>Shipped, and it works over a real data channel.</strong> Online P2P was a headline feature and it is now in the build: delay-based lockstep over WebRTC, with the offer and answer passed by hand so there is no signalling server to stand up, no lobby, and nothing left running after a test.</p>
     <div class="two">
       <div>
-        <h3>v1 — shipped this weekend</h3>
+        <h3>What v1 gave it</h3>
         <ul>
-          <li>Local versus, shared keyboard or two gamepads.</li>
+          <li>Local versus, shared keyboard or two gamepads, plus a CPU at three difficulties.</li>
           <li>Simulation is a pure function: <code>step(state, {p1,p2}) → state</code>.</li>
-          <li>Fixed 60&nbsp;Hz tick, fixed-point or integer math only. No <code>Math.random</code>, no <code>Date.now</code>, no float accumulation in the sim.</li>
-          <li>Inputs are a 2-bit mask per player per tick, recorded to a ring buffer.</li>
-          <li>Rendering reads state, never writes it.</li>
+          <li>Fixed 60&nbsp;Hz tick, no <code>Math.random</code> and no wall-clock reads in the sim.</li>
+          <li>Inputs are a 2-bit mask per player per tick, kept in a ring buffer.</li>
         </ul>
       </div>
       <div>
-        <h3>v2 — the fast follow</h3>
+        <h3>What online added</h3>
         <ul>
-          <li>WebRTC DataChannel, unreliable + unordered, with a room code the host reads out loud.</li>
-          <li>Signalling: one tiny broker, or manual SDP paste for the first test.</li>
-          <li>Start on 3-frame input delay lockstep; it is honest on office LAN.</li>
-          <li>Rollback afterwards if the game survives the jam — the input ring buffer and pure step function are the only two prerequisites, and both ship in v1.</li>
-          <li>Desync canary: hash the state every 30 ticks and compare.</li>
+          <li>WebRTC DataChannel, unordered and unreliable, every packet re-sending the last 24 frames of input — 12 bytes a tick, and a dropped datagram heals on the next one.</li>
+          <li>Manual offer/answer codes, ~730 characters, compressed and pasted over Slack.</li>
+          <li>Host-chosen input delay from measured RTT: <code>round(rtt/2 / 16.7ms) + 2</code>, clamped to 3–14 frames.</li>
+          <li>A state hash every 30 frames, so a disagreement shows as <code>DESYNC</code> instead of quiet drift.</li>
         </ul>
       </div>
     </div>
-    <div class="note">
-      <p>If day 3 comes in ahead of schedule, the correct use of the spare time is delay-based lockstep over WebRTC, not more characters.</p>
+    <div class="note warn">
+      <p><strong>The cost, stated plainly:</strong> Toronto to Ho Chi Minh City is around 250&nbsp;ms, which puts the delay at about 10 frames — <strong>170&nbsp;ms of input lag on a reaction game</strong>. That is what delay-based lockstep costs at that distance. Rollback is the fix and needs nothing new from this transport, which already carries a full input history.</p>
     </div>
+    <p>Verified between two browsers over a real data channel: a full FT5 match plus a rematch, 2,228 frames, 73 hash checkpoints, zero desyncs. The cross-continent test needs two people and has not been run yet. If a connection fails outright the cause is NAT, and the fix is a TURN relay in the ICE list.</p>
   </div>
 </section>
 
