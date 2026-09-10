@@ -1,0 +1,370 @@
+<meta charset="utf-8">
+<title>Ten fights, three choices</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+:root{
+  --paper:#EEF0F6;
+  --surface:#FAFBFE;
+  --surface-2:#E4E7F1;
+  --ink:#14172A;
+  --ink-2:#43496A;
+  --ink-3:#6D7392;
+  --rule:#CDD2E2;
+  --rule-soft:#DFE3EE;
+  --accent:#2F4FD8;
+  --accent-soft:#DDE3FA;
+  --gold:#B57614;
+  --gold-soft:#F6E7C6;
+  --beast:#C2761A;
+  --plant:#3C8A46;
+  --aqua:#1B7FA8;
+  --shadow:0 1px 0 rgba(20,23,42,.05);
+  --maxw:800px;
+  --wide:1080px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0D0F1A;
+    --surface:#151929;
+    --surface-2:#1D2235;
+    --ink:#E8EAF4;
+    --ink-2:#AFB6D0;
+    --ink-3:#828AA8;
+    --rule:#2B3149;
+    --rule-soft:#232841;
+    --accent:#8AA0FF;
+    --accent-soft:#222A4C;
+    --gold:#E3B25C;
+    --gold-soft:#33290F;
+    --beast:#E0A159;
+    --plant:#6FC57C;
+    --aqua:#59BEE0;
+    --shadow:0 1px 0 rgba(0,0,0,.35);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0D0F1A;
+  --surface:#151929;
+  --surface-2:#1D2235;
+  --ink:#E8EAF4;
+  --ink-2:#AFB6D0;
+  --ink-3:#828AA8;
+  --rule:#2B3149;
+  --rule-soft:#232841;
+  --accent:#8AA0FF;
+  --accent-soft:#222A4C;
+  --gold:#E3B25C;
+  --gold-soft:#33290F;
+  --beast:#E0A159;
+  --plant:#6FC57C;
+  --aqua:#59BEE0;
+  --shadow:0 1px 0 rgba(0,0,0,.35);
+}
+*{box-sizing:border-box}
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:"IBM Plex Sans",system-ui,-apple-system,Segoe UI,sans-serif;
+  font-size:16px;
+  line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:var(--wide);margin:0 auto;padding:0 24px 96px}
+.col{max-width:var(--maxw)}
+h1,h2,h3,.label,.eyebrow{font-family:"Chakra Petch","IBM Plex Sans",system-ui,sans-serif}
+h1{font-size:clamp(34px,5.2vw,56px);line-height:1.02;margin:0;font-weight:700;letter-spacing:-.015em;text-wrap:balance}
+h2{font-size:26px;line-height:1.18;margin:0;font-weight:600;letter-spacing:-.01em;text-wrap:balance}
+h3{font-size:16px;margin:0 0 6px;font-weight:600;letter-spacing:.02em}
+p{margin:0 0 14px}
+a{color:var(--accent)}
+.eyebrow,.label{
+  font-size:11.5px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);
+}
+
+/* masthead */
+header.top{padding:56px 0 30px;display:flex;flex-direction:column;gap:18px}
+.kicker{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.tag{
+  font-family:"IBM Plex Mono",monospace;font-size:11.5px;letter-spacing:.06em;
+  border:1px solid var(--rule);border-radius:2px;padding:3px 8px;color:var(--ink-2);background:var(--surface);
+}
+.tag.hot{border-color:var(--gold);color:var(--gold);background:var(--gold-soft)}
+.deck{font-size:19px;line-height:1.5;color:var(--ink-2);max-width:60ch;margin:0}
+.meta{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1px;
+  background:var(--rule-soft);border:1px solid var(--rule-soft);margin-top:8px;
+}
+.meta div{background:var(--surface);padding:11px 14px}
+.meta dt{margin:0 0 2px}
+.meta dd{margin:0;font-family:"IBM Plex Mono",monospace;font-size:13px;color:var(--ink)}
+
+/* sections */
+section{
+  border-top:1px solid var(--rule);
+  padding:30px 0 6px;
+  display:grid;grid-template-columns:64px minmax(0,1fr);gap:0 24px;align-items:start;
+}
+section > .num{
+  font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--ink-3);
+  padding-top:7px;letter-spacing:.04em;
+}
+section > .body{min-width:0}
+@media (max-width:720px){
+  section{grid-template-columns:1fr}
+  section > .num{padding-top:0;margin-bottom:6px}
+}
+.body > * + *{margin-top:14px}
+.body h2 + p{margin-top:10px}
+
+ul,ol{margin:0;padding-left:20px}
+li{margin:0 0 7px}
+li::marker{color:var(--ink-3)}
+strong{font-weight:600}
+em{color:var(--ink-2)}
+
+/* callouts */
+.note{
+  border-left:2px solid var(--accent);background:var(--accent-soft);
+  padding:12px 16px;font-size:14.5px;color:var(--ink);
+}
+.note.warn{border-left-color:var(--gold);background:var(--gold-soft)}
+.note p:last-child{margin-bottom:0}
+
+/* tables */
+.scroll{overflow-x:auto;border:1px solid var(--rule);background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:560px}
+th,td{padding:9px 13px;text-align:left;border-bottom:1px solid var(--rule-soft);vertical-align:top}
+thead th{
+  font-family:"Chakra Petch",sans-serif;font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-3);background:var(--surface-2);border-bottom:1px solid var(--rule);white-space:nowrap;
+}
+tbody tr:last-child td{border-bottom:0}
+td.n,th.n{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;white-space:nowrap}
+caption{caption-side:bottom;text-align:left;font-size:12.5px;color:var(--ink-3);padding:8px 2px}
+
+/* roster */
+.roster{display:grid;grid-template-columns:repeat(auto-fit,minmax(238px,1fr));gap:14px}
+.axie{border:1px solid var(--rule);background:var(--surface);padding:0;display:flex;flex-direction:column}
+.axie .hd{padding:12px 15px 10px;border-bottom:1px solid var(--rule-soft);display:flex;flex-direction:column;gap:2px}
+.axie .name{font-family:"Chakra Petch",sans-serif;font-size:20px;font-weight:700;line-height:1.1}
+.axie .cls{font-family:"IBM Plex Mono",monospace;font-size:11.5px;letter-spacing:.05em}
+.axie[data-c="beast"] .cls{color:var(--beast)} .axie[data-c="beast"] .hd{box-shadow:inset 3px 0 0 var(--beast)}
+.axie[data-c="plant"] .cls{color:var(--plant)} .axie[data-c="plant"] .hd{box-shadow:inset 3px 0 0 var(--plant)}
+.axie[data-c="aqua"]  .cls{color:var(--aqua)}  .axie[data-c="aqua"]  .hd{box-shadow:inset 3px 0 0 var(--aqua)}
+.axie .bd{padding:12px 15px 14px;font-size:14px;color:var(--ink-2);display:flex;flex-direction:column;gap:9px}
+.axie .bd b{color:var(--ink);font-weight:600}
+.axie dl{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;margin:0;font-size:13px}
+.axie dt{color:var(--ink-3)}
+.axie dd{margin:0;font-family:"IBM Plex Mono",monospace;color:var(--ink)}
+
+/* schedule */
+.days{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1px;background:var(--rule-soft);border:1px solid var(--rule-soft)}
+.day{background:var(--surface);padding:14px 15px}
+.day h3{color:var(--accent)}
+.day ul{padding-left:17px;font-size:14px;color:var(--ink-2)}
+.day li{margin-bottom:5px}
+
+/* two-up */
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:22px}
+.two h3{color:var(--ink)}
+.two ul{font-size:14.5px}
+
+.stack{display:flex;flex-direction:column;gap:14px}
+code{font-family:"IBM Plex Mono",monospace;font-size:13px;background:var(--surface-2);padding:1px 5px;border-radius:2px}
+footer{border-top:1px solid var(--rule);margin-top:34px;padding-top:16px;font-size:13px;color:var(--ink-3);max-width:var(--maxw)}
+footer a{color:var(--ink-2)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+</style>
+<div class="wrap">
+
+<header class="top col">
+  <div class="kicker">
+    <span class="tag">PRD · Arcade mode</span>
+    <span class="tag">AxieKick</span>
+    <span class="tag hot">Built</span>
+  </div>
+  <h1>Ten fights, three choices</h1>
+  <p class="deck">A single-player run through ten opponents who get better as you do — except you get better by picking things up off the floor of Lunacia, and they get better by drafting the same things you did.</p>
+  <dl class="meta">
+    <div><dt class="label">Run length</dt><dd>~12 min</dd></div>
+    <div><dt class="label">Levels</dt><dd>10</dd></div>
+    <div><dt class="label">Lives</dt><dd>3</dd></div>
+    <div><dt class="label">Augments</dt><dd>3 per run</dd></div>
+    <div><dt class="label">Pool</dt><dd>15 Land items</dd></div>
+  </dl>
+  <p class="deck" style="font-size:15px"><strong>Play it:</strong> <a href="https://immanuelskymavis.github.io/axiekick/">immanuelskymavis.github.io/axiekick</a> · <a href="https://github.com/immanuelskymavis/axiekick">repo</a></p>
+</header>
+
+<section>
+  <div class="num">§ 01</div>
+  <div class="body">
+    <h2>Why a run mode</h2>
+    <p>Versus is two people arguing. The CPU ladder is one person practising. Neither gives a single player a reason to keep going after the match ends, and at a demo station most people arrive alone.</p>
+    <p>Arcade gives the same two buttons a spine: ten fights, three decisions, and a reason to care about the third one. It also solves the demo-floor problem — a run is a story someone can watch over your shoulder, and dying on level 8 makes people want the machine.</p>
+    <div class="note">
+      <p><strong>The pitch in one line:</strong> ten Axies, three things you find, and by level ten they are carrying your build back at you.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="num">§ 02</div>
+  <div class="body">
+    <h2>The run</h2>
+    <div class="scroll">
+      <table>
+        <caption>Ten levels. Format escalates, the CPU sharpens, and from level 4 the opponent is drafting too. Tuned against a sparring bot with a human-shaped reaction delay: median run ends at level 6, one in three clears.</caption>
+        <thead><tr><th class="n">Lv</th><th>Opponent</th><th>Format</th><th>CPU</th><th class="n">Their augments</th><th>After</th></tr></thead>
+        <tbody>
+          <tr><td class="n">1</td><td>Buba</td><td>First to 1</td><td>Rookie</td><td class="n">—</td><td></td></tr>
+          <tr><td class="n">2</td><td>Puffy</td><td>First to 1</td><td>Rookie</td><td class="n">—</td><td></td></tr>
+          <tr><td class="n">3</td><td>Olek</td><td>First to 3</td><td>Rookie</td><td class="n">—</td><td><strong>Pick 1 of 3</strong></td></tr>
+          <tr><td class="n">4</td><td>Pomodoro</td><td>First to 3</td><td>Veteran</td><td class="n">1</td><td></td></tr>
+          <tr><td class="n">5</td><td>Venoki</td><td>First to 3</td><td>Veteran</td><td class="n">1</td><td></td></tr>
+          <tr><td class="n">6</td><td>Momo</td><td>First to 3</td><td>Veteran</td><td class="n">2</td><td><strong>Pick 1 of 3</strong></td></tr>
+          <tr><td class="n">7</td><td>Rematch · random</td><td>First to 3</td><td>Lunacian</td><td class="n">2</td><td></td></tr>
+          <tr><td class="n">8</td><td>Rematch · random</td><td>First to 5</td><td>Lunacian</td><td class="n">3</td><td></td></tr>
+          <tr><td class="n">9</td><td>Rematch · random</td><td>First to 5</td><td>Lunacian</td><td class="n">3</td><td><strong>Pick 1 of 3</strong> (legendary offered)</td></tr>
+          <tr><td class="n">10</td><td><strong>Your Reflection</strong></td><td>First to 5</td><td>Lunacian</td><td class="n">your 3</td><td>Run complete</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p><strong>Level 10 is the run's punchline.</strong> The final opponent is the Axie you beat on level 1, carrying the exact three augments you drafted. Whatever you decided was strong, you now have to beat. It costs almost nothing to build — the augment system already applies to either fighter — and it is the only boss that is different every run.</p>
+    <div class="two">
+      <div>
+        <h3>Lives</h3>
+        <ul>
+          <li>Three per run, shown as Origins star badges in the corner.</li>
+          <li>Losing a fight costs a life and you replay that level; the opponent's augments are re-rolled, so it is not the same fight twice.</li>
+          <li>Third loss ends the run on a summary card: level reached, augments taken, rounds won.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Pacing</h3>
+        <ul>
+          <li>Levels 1–3 are single rounds: about 40 seconds each, so a run gets going before anyone can lose interest.</li>
+          <li>Levels 4–7 are first to 3, 7–10 first to 5. A clean run is about 12 minutes; a bad one ends sooner, which is the point.</li>
+          <li>No menu between fights except the three draft screens.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="num">§ 03</div>
+  <div class="body">
+    <h2>Augments</h2>
+    <p>Three choices in a run, each one of three cards drawn from a pool of fifteen. Every augment is a <strong>Land item</strong> from the Origins asset kit, and the item is the thing you picked up — the sprite, the name and the line of lore all belong to it.</p>
+    <p>Two thirds of the pool bends a rule rather than nudging a number, because a run you can describe afterwards ("the one where I had wings and a shield") is worth more than one you can only measure.</p>
+    <div class="scroll">
+      <table>
+        <caption>The pool. Legendaries only appear in the level 9 draft.</caption>
+        <thead><tr><th>Item</th><th>Augment</th><th>What it does</th><th>Tier</th></tr></thead>
+        <tbody>
+          <tr><td>Ronin Blade</td><td><strong>Longer reach</strong></td><td>Your weapon sits 14% further out</td><td>Common</td></tr>
+          <tr><td>Duelist's Mark</td><td><strong>Faster dive</strong></td><td>Kick speed +12%</td><td>Common</td></tr>
+          <tr><td>Stone Maul</td><td><strong>Heavier hit</strong></td><td>Hit radius +20%, kick speed −5%</td><td>Common</td></tr>
+          <tr><td>Moonshard</td><td><strong>Smaller target</strong></td><td>Your hurtbox shrinks 12%</td><td>Common</td></tr>
+          <tr><td>Hastening Draught</td><td><strong>Quick feet</strong></td><td>Landing recovery −6 frames</td><td>Common</td></tr>
+          <tr><td>Nightbloom</td><td><strong>Flatter arc</strong></td><td>Kick angle 6° shallower — more ground covered, worse up close</td><td>Common</td></tr>
+          <tr><td>Puffbird Wings</td><td><strong>Second wind</strong></td><td>One extra jump in mid-air, every round</td><td>Rare</td></tr>
+          <tr><td>Bramble Ring</td><td><strong>Armed retreat</strong></td><td>Your kickback swings on the way out</td><td>Rare</td></tr>
+          <tr><td>Featherfall Plume</td><td><strong>Hang</strong></td><td>Hold DIVE at the apex to hover 8 frames</td><td>Rare</td></tr>
+          <tr><td>Tidecaller's Draught</td><td><strong>Slow water</strong></td><td>Their dive is 8% slower. Yours is not</td><td>Rare</td></tr>
+          <tr><td>Ironroot Helm</td><td><strong>Stubborn</strong></td><td>A trade scores for you instead of nobody</td><td>Rare</td></tr>
+          <tr><td>Bandit's Band</td><td><strong>Second thought</strong></td><td>Once per round, your first whiff recovers in half the time</td><td>Rare</td></tr>
+          <tr><td>Ward of the Ruins</td><td><strong>One free hit</strong></td><td>Survive the first hit of each fight; the ward visibly breaks</td><td>Legendary</td></tr>
+          <tr><td>Sunburst Elixir</td><td><strong>Another life</strong></td><td>+1 life, immediately</td><td>Legendary</td></tr>
+          <tr><td>Lunacian Crown</td><td><strong>All of it</strong></td><td>+8% reach, +8% speed, −4 frames recovery</td><td>Legendary</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note warn">
+      <p><strong>The one that needs watching:</strong> Ward of the Ruins turns a one-hit game into a two-hit game for a fight. That is a bigger change than anything else in the pool and it is deliberately legendary and late — but if it makes level 10 trivial, it becomes "survive the first hit of the <em>run</em>" instead.</p>
+    </div>
+    <p>Draft rules: three cards, no rerolls, no skipping. Duplicates are removed from the pool once taken. At level 9 the pool is legendary-weighted so the last pick feels like a decision about how you want to win.</p>
+  </div>
+</section>
+
+<section>
+  <div class="num">§ 04</div>
+  <div class="body">
+    <h2>What the player sees</h2>
+    <ol>
+      <li><strong>The ladder.</strong> Ten Origins map nodes across the screen — cleared ones carry the green trophy, the current one the orange crossed swords, losses the red flag. Your three augment medallions sit under it in avatar rings, and your lives are star badges. This is the only screen between fights.</li>
+      <li><strong>The fight.</strong> Exactly the game that already exists, plus a small augment strip under each name plate so both fighters can see what the other is carrying.</li>
+      <li><strong>The draft.</strong> Three item cards, big art, name, effect line, lore line. DIVE moves, KICK takes. No timer — this is the one moment in the game where thinking is allowed.</li>
+      <li><strong>The end card.</strong> Level reached, the three items you took, rounds won and lost, and the one stat worth bragging about: how many rounds your Reflection took off you.</li>
+    </ol>
+    <p>All of it uses the interface pieces already packed from the kit — the node icons, the avatar ring, the star badge — so Arcade looks like Origins rather than like a menu bolted onto a jam game.</p>
+  </div>
+</section>
+
+<section>
+  <div class="num">§ 05</div>
+  <div class="body">
+    <h2>How it fits the code</h2>
+    <p>Arcade should not become a second game. It is a wrapper around the match that already exists.</p>
+    <ul>
+      <li><strong>Augments are a modifier table applied at match creation</strong>, not special cases in the simulation. Each one is a function from a character's stat block to a modified copy; the sim never learns what an augment is. Two exceptions earn their keep: Ward (one absorbed hit) and Ironroot (trade scoring), which need a flag each in the round-end path.</li>
+      <li><strong>The CPU already reads stats rather than constants</strong>, so an opponent with augments is handled by the existing code — its <code>rangeMax</code> and kick solution move with the modified numbers.</li>
+      <li><strong>Run state is a plain object</strong>: level, lives, the three augment ids, and an RNG seed. That makes a run replayable and, later, shareable as a seed.</li>
+      <li><strong>Nothing here touches the netcode.</strong> Arcade is single-player; the online path is untouched.</li>
+    </ul>
+    <div class="scroll">
+      <table>
+        <caption>Rough shape of the work.</caption>
+        <thead><tr><th>Piece</th><th>Est.</th><th>Risk</th></tr></thead>
+        <tbody>
+          <tr><td>Run state machine, ladder screen, lives</td><td class="n">3 h</td><td>Low</td></tr>
+          <tr><td>Augment table + application at match creation</td><td class="n">2 h</td><td>Low</td></tr>
+          <tr><td>Ward and Ironroot round-end flags</td><td class="n">1 h</td><td>Medium — touches the sim</td></tr>
+          <tr><td>Draft screen with item art</td><td class="n">2 h</td><td>Low</td></tr>
+          <tr><td>Opponent drafting + Reflection at level 10</td><td class="n">1 h</td><td>Low</td></tr>
+          <tr><td>Balance pass across 15 augments</td><td class="n">2 h</td><td>High — this is where it gets fun or doesn't</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="num">§ 06</div>
+  <div class="body">
+    <h2>How we know it worked</h2>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Signal</th><th>Target</th><th>How we check</th></tr></thead>
+        <tbody>
+          <tr><td>A first run ends somewhere interesting</td><td class="n">level 5–8</td><td>Simulated runs against the sparring bot, plus the first five humans</td></tr>
+          <tr><td>People start a second run</td><td class="n">≥ 60%</td><td>Watch the demo station</td></tr>
+          <tr><td>Augment spread — nothing is a trap or an auto-take</td><td class="n">every card 5–25%</td><td>Pick counts logged locally over the jam</td></tr>
+          <tr><td>Level 10 is beaten, but not often</td><td class="n">10–25% of runs</td><td>Run log</td></tr>
+          <tr><td>Run length</td><td class="n">≤ 15 min</td><td>Stopwatch on a full clear</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="num">§ 07</div>
+  <div class="body">
+    <h2>Not in this</h2>
+    <ul>
+      <li><strong>No shop, no currency, no inventory.</strong> Three choices is the economy.</li>
+      <li><strong>No unlocks between runs.</strong> Every run starts from the same place; the only progression is the player's.</li>
+      <li><strong>No online Arcade, no leaderboard.</strong> A seed on the end card is the version of that worth building later.</li>
+      <li><strong>No new Axies.</strong> The roster is the ladder.</li>
+      <li><strong>No per-character augments.</strong> The pool is shared, and finding out that Wings on Momo means three jumps is the good kind of discovery.</li>
+    </ul>
+  </div>
+</section>
+
+<footer class="col">
+  <p>Sources: <a href="https://github.com/axieinfinity/unity-axie-gtk2d/blob/main/images/land-item.png">Land items</a> · <a href="https://github.com/axieinfinity/axie-origins-asset-kit/tree/main/Assets/OriginsKit/PvE/UI">Origins PvE UI</a> · <a href="https://immanuelskymavis.github.io/axiekick/">the game</a>.</p>
+</footer>
+
+</div>

@@ -39,8 +39,30 @@ There is no walking; all movement comes from jumping, kicking and kicking back.
 
 ## Modes
 
-From the title screen: **local versus**, **play online**, or **vs CPU** at three
-difficulties.
+From the title screen: **local versus**, **play online**, **arcade run**, or **vs CPU**
+at three difficulties.
+
+### Arcade
+
+Ten fights, three choices, three lives. Formats escalate (one round → first to 3 → first
+to 5), the CPU sharpens, and from level 4 the opponent is drafting augments of its own.
+Win levels 3, 6 and 9 and you pick one of three **Land items** — real items from the
+gtk2d sheet, each one a named augment with its own effect and lore. Six are numbers
+(reach, dive speed, hitbox, hurtbox, recovery, kick angle); six bend a rule (an extra air
+jump, an armed kickback, a hover, a slower opponent, trades that score for you, a halved
+first whiff); three are legendary and only appear in the last draft (survive a hit, an
+extra life, all of it at once).
+
+**Level 10 is your Reflection**: the Axie you beat on level 1, carrying the exact three
+augments you drafted. Whatever you decided was strong, you have to beat.
+
+Augments are a modifier table applied when a match is created, so the simulation never
+learns what an augment is — only Ward (absorb a hit) and Ironroot (trades score for you)
+needed a flag in the round-end path. Full design in
+**[docs/ARCADE-PRD.html](docs/ARCADE-PRD.html)**.
+
+Tuned against a sparring bot with a human-shaped 12-frame reaction delay over 18 runs:
+median run ends at level 6, six of eighteen clear all ten.
 
 | | Reacts in | Kick window | Punishes a whiff |
 |---|---|---|---|

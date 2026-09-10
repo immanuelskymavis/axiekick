@@ -285,19 +285,43 @@ const CHARS = [
 const BARSTAT = ["SPEED", "ANGLE", "REACH"];
 
 /* ---- state ------------------------------------------------------------- */
-function mkPlayer(chIdx, x, facing) {
+/* A player's stats are a copy of the character, so Arcade can hand out
+   augments without the simulation ever learning what an augment is. */
+function statsFor(chIdx, augs) {
+  const c = Object.assign({}, CHARS[chIdx]);
+  if (augs) for (const id of augs) { const a = AUG[id]; if (a && a.self) a.self(c); }
+  return c;
+}
+
+/* a few augments modify the other fighter, so they are applied once both
+   stat blocks exist */
+function linkAugs(ps) {
+  for (let i = 0; i < 2; i++) {
+    for (const id of ps[i].augs) {
+      const a = AUG[id];
+      if (a && a.foe) a.foe(ps[1 - i].c);
+    }
+  }
+  return ps;
+}
+
+function mkPlayer(chIdx, x, facing, augs) {
+  const cs = statsFor(chIdx, augs);
   return {
-    ch: chIdx, x, y: 0, vx: 0, vy: 0,
+    ch: chIdx, c: cs, augs: augs || [],
+    x, y: 0, vx: 0, vy: 0,
     st: "stand", t: 0, facing,
     prevIn: 0, floatUsed: 0, inflate: 0, jumps: 0, hang: 0,
     wx: x, wy: 0, pwx: x, pwy: 0,   // weapon point, current + previous tick
-    spin: 0, hit: false, dead: false
+    spin: 0, hit: false, dead: false, ward: !!cs.wardStart, band: false
   };
 }
 
-function newMatch(c0, c1, cpu, seed) {
+function newMatch(c0, c1, cpu, seed, opt) {
+  opt = opt || {};
   return {
     tick: 0,
+    win: opt.win || WIN_ROUNDS,
     /* the CPU's RNG lives in state, so a round replays from its input log */
     cpu: cpu === null || cpu === undefined ? null
       : { diff: cpu, seed: (20220429 + (seed || 0) * 2654435761) & 0x7fffffff,
@@ -308,14 +332,18 @@ function newMatch(c0, c1, cpu, seed) {
     score: [0, 0],
     timer: ROUND_TICKS,
     result: null,              // {winner:-1|0|1, kind:"ko"|"trade"|"time"|"line"}
-    p: [mkPlayer(c0, 240, 1), mkPlayer(c1, 760, -1)],
+    p: linkAugs([mkPlayer(c0, 240, 1, opt.a0), mkPlayer(c1, 760, -1, opt.a1)]),
     shake: 0, flash: 0
   };
 }
 
 function resetRound(s) {
-  s.p[0] = mkPlayer(s.p[0].ch, 240, 1);
-  s.p[1] = mkPlayer(s.p[1].ch, 760, -1);
+  const a0 = s.p[0].augs, a1 = s.p[1].augs;
+  const w0 = s.p[0].ward, w1 = s.p[1].ward;
+  s.p[0] = mkPlayer(s.p[0].ch, 240, 1, a0);
+  s.p[1] = mkPlayer(s.p[1].ch, 760, -1, a1);
+  s.p[0].ward = w0; s.p[1].ward = w1;
+  linkAugs(s.p);
   s.timer = ROUND_TICKS;
   s.result = null;
   s.phase = "intro";
@@ -373,7 +401,7 @@ function segHitsBox(ax, ay, bx, by, box, pad) {
 
 /* ---- one player, one tick ---------------------------------------------- */
 function stepPlayer(p, opp, inp) {
-  const c = CHARS[p.ch];
+  const c = p.c;
   const dive = (inp & IN_DIVE) && !(p.prevIn & IN_DIVE);
   const kick = (inp & IN_KICK) && !(p.prevIn & IN_KICK);
   const held = inp & IN_DIVE;
@@ -423,7 +451,9 @@ function stepPlayer(p, opp, inp) {
         p.spin += 0.34;
         p.hit = true;
         if (p.y <= 0) {
-          p.y = 0; p.vx = 0; p.vy = 0; p.st = "land"; p.t = 0; p.rec = c.kickRec; sound = "whiff";
+          p.y = 0; p.vx = 0; p.vy = 0; p.st = "land"; p.t = 0; sound = "whiff";
+          p.rec = c.kickRec;
+          if (c.band && !p.band) { p.band = true; p.rec = Math.round(p.rec / 2); }
         }
       }
       break;
@@ -474,7 +504,7 @@ function step(s, in0, in1) {
       stepPlayer(s.p[1], s.p[0], 0);
     }
     if (s.pt >= KO_FREEZE + KO_RESET) {
-      if (s.score[0] >= WIN_ROUNDS || s.score[1] >= WIN_ROUNDS) { s.phase = "matchend"; s.pt = 0; }
+      if (s.score[0] >= s.win || s.score[1] >= s.win) { s.phase = "matchend"; s.pt = 0; }
       else { s.round++; resetRound(s); }
     }
     return ev;
@@ -488,7 +518,7 @@ function step(s, in0, in1) {
   if (a) ev.push(a + ":0");
   if (b) ev.push(b + ":1");
 
-  const c0 = CHARS[s.p[0].ch], c1 = CHARS[s.p[1].ch];
+  const c0 = s.p[0].c, c1 = s.p[1].c;
   const h0 = hurtBox(s.p[0], c0), h1 = hurtBox(s.p[1], c1);
   const p0hits = s.p[0].hit &&
     segHitsBox(s.p[0].pwx, s.p[0].pwy, s.p[0].wx, s.p[0].wy, h1, c0.hitR);
@@ -515,6 +545,21 @@ function step(s, in0, in1) {
 }
 
 function endRound(s, winner, kind, ev) {
+  /* Ward of the Ruins eats one hit per fight: the round resets, nobody
+     scores, and the ward visibly goes. Ironroot Helm turns a trade into
+     your round, unless they are wearing one too. */
+  if (winner >= 0 && kind === "ko" && s.p[1 - winner].ward) {
+    s.p[1 - winner].ward = false;
+    s.result = { winner: -1, kind: "ward", saved: 1 - winner };
+    s.phase = "ko"; s.pt = 0; s.shake = 14; s.flash = 8;
+    ev.push("ward");
+    return;
+  }
+  if (kind === "trade") {
+    const i0 = s.p[0].c.ironroot, i1 = s.p[1].c.ironroot;
+    if (i0 && !i1) { winner = 0; kind = "ko"; }
+    else if (i1 && !i0) { winner = 1; kind = "ko"; }
+  }
   s.result = { winner, kind };
   s.phase = "ko"; s.pt = 0;
   s.shake = kind === "ko" ? 22 : 10;
@@ -562,7 +607,7 @@ function cpuInput(s) {
   const cpu = s.cpu;
   const d = DIFFS[cpu.diff];
   const me = s.p[1], opp = s.p[0];
-  const c = CHARS[me.ch], oc = CHARS[opp.ch];
+  const c = me.c, oc = opp.c;
 
   /* the CPU only refreshes its picture of the opponent every `react` ticks */
   if (!cpu.seen || s.tick % d.react === 0) {
@@ -1271,6 +1316,15 @@ if (typeof KIT_ASSETS !== "undefined" && KIT_ASSETS && KIT_ASSETS.ui) {
     UI_IMG[key] = im;
   }
 }
+const ITEM_IMG = {};
+if (typeof KIT_ASSETS !== "undefined" && KIT_ASSETS && KIT_ASSETS.items) {
+  for (const key in KIT_ASSETS.items) {
+    const im = new Image();
+    im.decoding = "async";
+    im.src = KIT_ASSETS.items[key];
+    ITEM_IMG[key] = im;
+  }
+}
 function uiReady(key) {
   const im = UI_IMG[key];
   return im && im.complete && im.naturalWidth ? im : null;
@@ -1615,7 +1669,7 @@ function pip(x, y, r, filled, col) {
 }
 
 function drawHUD(s) {
-  const c0 = CHARS[s.p[0].ch], c1 = CHARS[s.p[1].ch];
+  const c0 = s.p[0].c, c1 = s.p[1].c;
   ctx.fillStyle = rgba("#08070F", 0.55); ctx.fillRect(0, 0, STAGE_W, 74);
   ctx.strokeStyle = rgba("#8E7BD8", 0.25); ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(0, 74.5); ctx.lineTo(STAGE_W, 74.5); ctx.stroke();
@@ -1626,9 +1680,10 @@ function drawHUD(s) {
   txt(c1.cls + " · " + (s.cpu ? "CPU " + DIFFS[s.cpu.diff].name : "P2"),
     STAGE_W - 26, 56, 11, rgba("#E7E3FB", 0.55), "right", FM, 1.2);
 
-  for (let i = 0; i < WIN_ROUNDS; i++) {
+  for (let i = 0; i < s.win; i++) {
     pip(226 + i * 26, 34, 7, i < s.score[0], c0.col);
     pip(STAGE_W - 226 - i * 26, 34, 7, i < s.score[1], c1.col);
+    /* jshint ignore:line */
   }
 
   const secs = Math.max(0, Math.ceil(s.timer / 60));
@@ -1662,7 +1717,7 @@ function drawImpact(s) {
   if (!s.result || s.result.kind === "time" || s.result.kind === "line") return;
   const w = s.result.winner;
   const src = w >= 0 ? s.p[w] : s.p[0];
-  const col = w >= 0 ? CHARS[src.ch].trim : "#FFFFFF";
+  const col = w >= 0 ? src.c.trim : "#FFFFFF";
   const t = Math.min(1, s.pt / 26);
   if (t >= 1) return;
   const x = src.wx, y = sy(src.wy);
@@ -1685,7 +1740,7 @@ function drawImpact(s) {
 function drawBoxes(s) {
   if (!showBoxes) return;
   for (let i = 0; i < 2; i++) {
-    const p = s.p[i], c = CHARS[p.ch], h = hurtBox(p, c);
+    const p = s.p[i], c = p.c, h = hurtBox(p, c);
     ctx.strokeStyle = rgba("#66E0FF", 0.85); ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.ellipse(h[0], sy(h[1]), h[2], h[3], 0, 0, 7); ctx.stroke();
     if (p.hit) {
@@ -1707,8 +1762,8 @@ function drawMatch(s) {
   }
   drawStage(s);
   drawLine(s);
-  for (let i = 0; i < 2; i++) drawTrail(i, CHARS[s.p[i].ch]);
-  for (let i = 0; i < 2; i++) drawAxie(s.p[i], CHARS[s.p[i].ch], {});
+  for (let i = 0; i < 2; i++) drawTrail(i, s.p[i].c);
+  for (let i = 0; i < 2; i++) drawAxie(s.p[i], s.p[i].c, {});
   drawImpact(s);
   drawBoxes(s);
   ctx.restore();
@@ -1721,21 +1776,23 @@ function drawMatch(s) {
   }
 
   if (s.phase === "intro") {
-    if (s.pt < 44) banner(s, "ROUND " + s.round, (s.score[0] === WIN_ROUNDS - 1 || s.score[1] === WIN_ROUNDS - 1) ? "MATCH POINT" : "", "#E7E3FB");
+    if (s.pt < 44) banner(s, "ROUND " + s.round, (s.score[0] === s.win - 1 || s.score[1] === s.win - 1) ? "MATCH POINT" : "", "#E7E3FB");
     else banner({ pt: s.pt - 44 }, "FIGHT!", "", "#FFD98A");
   }
   if (s.phase === "ko" && s.result) {
     const r = s.result;
     const col = r.winner >= 0 ? CHARS[s.p[r.winner].ch].col : "#FF8A8A";
-    const main = r.kind === "ko" ? "K.O." : r.kind === "trade" ? "TRADE" : "TIME";
-    const sub = r.kind === "trade" ? "NOBODY SCORES" :
+    const main = r.kind === "ko" ? "K.O." : r.kind === "ward" ? "WARD BROKEN"
+      : r.kind === "trade" ? "TRADE" : "TIME";
+    const sub = r.kind === "ward" ? "THE RUINS TAKE THAT ONE" :
+      r.kind === "trade" ? "NOBODY SCORES" :
       r.kind === "line" ? CHARS[s.p[r.winner].ch].name + " HELD THE LINE" :
         r.winner >= 0 ? CHARS[s.p[r.winner].ch].name : "";
     banner(s, main, sub, col);
   }
   if (s.phase === "matchend") {
-    const w = s.score[0] >= WIN_ROUNDS ? 0 : 1;
-    const c = CHARS[s.p[w].ch];
+    const w = s.score[0] >= s.win ? 0 : 1;
+    const c = s.p[w].c;
     ctx.fillStyle = rgba("#08070F", 0.72); ctx.fillRect(0, 0, STAGE_W, STAGE_H);
     drawAxie(s.p[w], c, {
       portrait: true, px: STAGE_W / 2, py: 226, scale: 1.28,
@@ -1775,6 +1832,7 @@ function drawTitle(t) {
 const MODES = [
   { cpu: null, name: "LOCAL VERSUS", blurb: "Two players, one keyboard, one argument" },
   { cpu: "net", name: "PLAY ONLINE", blurb: "Two machines, two codes, no server in between" },
+  { cpu: "arcade", name: "ARCADE RUN", blurb: "Ten fights, three things you find on the way" },
   { cpu: 0, name: "VS CPU · ROOKIE", blurb: DIFFS[0].blurb },
   { cpu: 1, name: "VS CPU · VETERAN", blurb: DIFFS[1].blurb },
   { cpu: 2, name: "VS CPU · LUNACIAN", blurb: DIFFS[2].blurb }
@@ -1791,7 +1849,8 @@ function drawMode(cur, t) {
     const m = MODES[i], y = 168 + i * 62, on = cur === i;
     const col = m.cpu === null ? "#E7E3FB"
       : m.cpu === "net" ? "#7CF0B4"
-        : [CHARS[0].col, CHARS[1].col, CHARS[2].col][m.cpu];
+        : m.cpu === "arcade" ? "#FFD98A"
+          : [CHARS[0].col, CHARS[1].col, CHARS[2].col][m.cpu];
     ctx.fillStyle = rgba(on ? "#1D1740" : "#130F28", on ? 0.98 : 0.8);
     ctx.fillRect(X, y, W, 50);
     ctx.strokeStyle = rgba(col, on ? 0.95 : 0.22);
@@ -2315,6 +2374,398 @@ function netPanel(open) {
   netFromLink();
 })();
 
+
+/* =========================== ARCADE ====================================
+   Ten fights, three choices. The run is a wrapper: augments are a modifier
+   table applied when a match is created, so the simulation never learns what
+   an augment is. Two of them (Ward, Ironroot) needed a flag each in the
+   round-end path and nothing else.
+   ====================================================================== */
+const AUGS = [
+  {
+    id: "blade", item: "blade", tier: 0, name: "RONIN BLADE",
+    line: "Your weapon sits 14% further out",
+    lore: "Left in the ruins by somebody who stopped needing it.",
+    self: c => { c.reach *= 1.14; }
+  },
+  {
+    id: "duel", item: "duel", tier: 0, name: "DUELIST'S MARK",
+    line: "Dive 12% faster",
+    lore: "Two crossed blades, scratched into every doorframe in Ronin.",
+    self: c => { c.kickSpd *= 1.12; }
+  },
+  {
+    id: "maul", item: "maul", tier: 0, name: "STONE MAUL",
+    line: "Hitbox +20%, dive 5% slower",
+    lore: "Heavier than it looks, which is the entire idea.",
+    self: c => { c.hitR *= 1.2; c.kickSpd *= 0.95; }
+  },
+  {
+    id: "moonshard", item: "moonshard", tier: 0, name: "MOONSHARD",
+    line: "You are 12% smaller to hit",
+    lore: "A piece of the moon that fell during the Cataclysm, still cold.",
+    self: c => { c.rx *= 0.88; c.ry *= 0.88; }
+  },
+  {
+    id: "haste", item: "haste", tier: 0, name: "HASTENING DRAUGHT",
+    line: "Six frames less recovery when you miss",
+    lore: "Tastes of citrus and regret.",
+    self: c => { c.kickRec = Math.max(8, c.kickRec - 6); }
+  },
+  {
+    id: "bloom", item: "bloom", tier: 0, name: "NIGHTBLOOM",
+    line: "Your arc is 6° flatter — more ground, worse up close",
+    lore: "Opens once a month, over the Mystic ruins, for nobody.",
+    self: c => { c.kickAng = Math.max(20, c.kickAng - 6); }
+  },
+  {
+    id: "wings", item: "wings", tier: 1, name: "PUFFBIRD WINGS",
+    line: "One extra jump, any time you are in the air",
+    lore: "Shed at Puffbird Peak. They do not ask what you do with them.",
+    self: c => { c.airJumps = (c.airJumps || 0) + 1; }
+  },
+  {
+    id: "bramble", item: "bramble", tier: 1, name: "BRAMBLE RING",
+    line: "Your kickback swings on the way out",
+    lore: "Worn by the door-guards of Barb Village. Rarely removed.",
+    self: c => { c.armedKB = true; }
+  },
+  {
+    id: "plume", item: "plume", tier: 1, name: "FEATHERFALL PLUME",
+    line: "Hold DIVE at the apex to hang for eight frames",
+    lore: "Falls slower than anything else on Lunacia, including snow.",
+    self: c => { c.floatMax = Math.max(c.floatMax || 0, 8); }
+  },
+  {
+    id: "tide", item: "tide", tier: 1, name: "TIDECALLER'S DRAUGHT",
+    line: "Their dive is 8% slower. Yours is not",
+    lore: "Poured into the sea at Puffy's Cove every solstice.",
+    foe: c => { c.kickSpd *= 0.92; }
+  },
+  {
+    id: "helm", item: "helm", tier: 1, name: "IRONROOT HELM",
+    line: "A trade scores for you instead of nobody",
+    lore: "Grown, not forged. It disagrees with the idea of a draw.",
+    self: c => { c.ironroot = true; }
+  },
+  {
+    id: "band", item: "band", tier: 1, name: "BANDIT'S BAND",
+    line: "Your first whiff each round recovers in half the time",
+    lore: "Stolen. Obviously.",
+    self: c => { c.band = true; }
+  },
+  {
+    id: "ward", item: "ward", tier: 2, name: "WARD OF THE RUINS",
+    line: "Survive the first hit of every fight",
+    lore: "It only works once, and it lets you know when it has.",
+    self: c => { c.wardStart = true; }
+  },
+  {
+    id: "elixir", item: "elixir", tier: 2, name: "SUNBURST ELIXIR",
+    line: "One more life, right now",
+    lore: "Brewed for the long climb. Drunk, almost always, too early.",
+    run: r => { r.lives++; }
+  },
+  {
+    id: "crown", item: "crown", tier: 2, name: "LUNACIAN CROWN",
+    line: "+8% reach, +8% dive speed, four frames off recovery",
+    lore: "Nobody agrees whose it was. Everybody agrees it fits.",
+    self: c => {
+      c.reach *= 1.08; c.kickSpd *= 1.08;
+      c.kickRec = Math.max(8, c.kickRec - 4);
+    }
+  }
+];
+const AUG = {};
+for (const a of AUGS) AUG[a.id] = a;
+
+/* ch: -1 picks a rematch at random, -2 is the Reflection */
+const LADDER = [
+  { ch: 1, win: 1, cpu: 0, foe: 0 },
+  { ch: 2, win: 1, cpu: 0, foe: 0 },
+  { ch: 0, win: 3, cpu: 0, foe: 0, draft: true },
+  { ch: 3, win: 3, cpu: 1, foe: 1 },
+  { ch: 4, win: 3, cpu: 1, foe: 1 },
+  { ch: 5, win: 3, cpu: 1, foe: 2, draft: true },
+  { ch: -1, win: 3, cpu: 2, foe: 2 },
+  { ch: -1, win: 5, cpu: 2, foe: 3 },
+  { ch: -1, win: 5, cpu: 2, foe: 3, draft: true },
+  { ch: -2, win: 5, cpu: 2, foe: 0 }
+];
+
+const run = {
+  on: false, ch: 0, level: 0, lives: 3, augs: [], seed: 1,
+  foeCh: 0, foeAugs: [], offer: [], pick: 0, won: false, rounds: [0, 0]
+};
+
+function runRand() {
+  run.seed = (run.seed * 1103515245 + 12345) & 0x7fffffff;
+  return run.seed / 0x7fffffff;
+}
+
+function arcadeStart(chIdx) {
+  run.on = true;
+  run.ch = chIdx;
+  run.level = 0;
+  run.lives = 3;
+  run.augs = [];
+  run.rounds = [0, 0];
+  run.won = false;
+  run.seed = (Date.now() ^ (chIdx * 7919)) & 0x7fffffff;
+  arcadeSetup();
+  app.screen = "ladder";
+}
+
+/* pick this level's opponent and what it is carrying */
+function arcadeSetup() {
+  const lv = LADDER[run.level];
+  if (lv.ch === -2) {
+    run.foeCh = LADDER[0].ch;
+    run.foeAugs = run.augs.slice();          /* your own build, handed back */
+  } else {
+    run.foeCh = lv.ch >= 0 ? lv.ch : Math.floor(runRand() * CHARS.length);
+    if (run.foeCh === run.ch && lv.ch < 0) run.foeCh = (run.foeCh + 1) % CHARS.length;
+    const pool = AUGS.filter(a => a.tier < 2 && !run.augs.includes(a.id));
+    run.foeAugs = [];
+    for (let i = 0; i < lv.foe && pool.length; i++) {
+      run.foeAugs.push(pool.splice(Math.floor(runRand() * pool.length), 1)[0].id);
+    }
+  }
+}
+
+function arcadeFight() {
+  const lv = LADDER[run.level];
+  app.cpu = lv.cpu;
+  app.m = newMatch(run.ch, run.foeCh, lv.cpu, run.level * 31 + 7,
+    { win: lv.win, a0: run.augs, a1: run.foeAugs });
+  trails[0].length = 0; trails[1].length = 0;
+  rollArena();
+  app.screen = "match";
+}
+
+/* called once the winner card is dismissed */
+function arcadeResolve() {
+  const s = app.m;
+  const won = s.score[0] > s.score[1];
+  run.rounds[0] += s.score[0];
+  run.rounds[1] += s.score[1];
+  if (!won) {
+    run.lives--;
+    if (run.lives <= 0) { run.won = false; app.screen = "runend"; return; }
+    arcadeSetup();
+    app.screen = "ladder";
+    return;
+  }
+  const lv = LADDER[run.level];
+  if (run.level >= LADDER.length - 1) { run.won = true; app.screen = "runend"; return; }
+  if (lv.draft) { arcadeOffer(); app.screen = "draft"; return; }
+  run.level++;
+  arcadeSetup();
+  app.screen = "ladder";
+}
+
+function arcadeOffer() {
+  const legendary = run.level >= 8;
+  const pool = AUGS.filter(a => !run.augs.includes(a.id) && (legendary || a.tier < 2));
+  const weight = a => (legendary && a.tier === 2 ? 3 : 1);
+  run.offer = [];
+  for (let i = 0; i < 3 && pool.length; i++) {
+    let total = 0;
+    for (const a of pool) total += weight(a);
+    let roll = runRand() * total, k = 0;
+    while (k < pool.length - 1 && (roll -= weight(pool[k])) > 0) k++;
+    run.offer.push(pool.splice(k, 1)[0].id);
+  }
+  run.pick = 0;
+}
+
+function arcadeTake(id) {
+  run.augs.push(id);
+  const a = AUG[id];
+  if (a.run) a.run(run);
+  run.level++;
+  arcadeSetup();
+  app.screen = "ladder";
+}
+
+function arcadeQuit() {
+  run.on = false;
+  app.screen = "title";
+  app.m = null;
+}
+
+/* ---- screens ---- */
+function drawAugMedal(id, cx, cy, size, dim) {
+  const a = AUG[id];
+  const im = KIT_ASSETS && KIT_ASSETS.items && ITEM_IMG[a.item];
+  ctx.save();
+  if (dim) ctx.globalAlpha = 0.45;
+  ctx.fillStyle = rgba("#0B0916", 0.75);
+  ctx.beginPath(); ctx.arc(cx, cy, size * 0.42, 0, 7); ctx.fill();
+  if (im && im.complete && im.naturalWidth) {
+    const w = size * 0.62, h = w * (im.naturalHeight / im.naturalWidth);
+    ctx.drawImage(im, cx - w / 2, cy - h / 2, w, h);
+  }
+  drawUI("avatar", cx, cy, size);
+  ctx.restore();
+}
+
+function drawLadder(t) {
+  drawStage(null);
+  ctx.fillStyle = rgba("#08070F", 0.66); ctx.fillRect(0, 0, STAGE_W, STAGE_H);
+  const lv = LADDER[run.level];
+
+  txt("ARCADE RUN", STAGE_W / 2, 52, 30, "#E7E3FB", "center", FD, 9);
+  txt("LEVEL " + (run.level + 1) + " OF 10", STAGE_W / 2, 72, 11, rgba("#E7E3FB", 0.5), "center", FM, 4);
+
+  /* the road */
+  const N = LADDER.length, X0 = 96, SP = (STAGE_W - X0 * 2) / (N - 1), Y = 138;
+  ctx.strokeStyle = rgba("#E7E3FB", 0.16); ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(X0, Y); ctx.lineTo(X0 + SP * (N - 1), Y); ctx.stroke();
+  for (let i = 0; i < N; i++) {
+    const x = X0 + SP * i;
+    const key = i < run.level ? "node_win" : i === run.level ? "node_now" : "node_next";
+    drawUI(key, x, Y, i === run.level ? 54 : 42, i > run.level ? 0.55 : 1);
+    if (LADDER[i].draft) drawUI("star", x + 20, Y - 20, 20, 0.85);
+  }
+
+  /* who is next */
+  const foe = CHARS[run.foeCh];
+  const boxY = 196;
+  ctx.fillStyle = rgba("#150F2C", 0.9); ctx.fillRect(180, boxY, 640, 150);
+  ctx.strokeStyle = rgba(foe.col, 0.8); ctx.lineWidth = 2;
+  ctx.strokeRect(180.5, boxY + 0.5, 639, 149);
+  drawAxie(
+    { ch: run.foeCh, x: 0, y: 0, st: "stand", t: 30, facing: -1, inflate: 0, spin: 0, vx: 0, vy: 0, dead: false },
+    foe, {
+      portrait: true, px: 268, py: boxY + 118 + Math.sin(t * 0.05) * 4, scale: 0.78,
+      anim: foe.anim.idle, animT: t / 60
+    }
+  );
+  txt(lv.ch === -2 ? "YOUR REFLECTION" : foe.name, 350, boxY + 48, 30, foe.col, "left", FD, 3);
+  txt(foe.cls + " · " + (lv.win === 1 ? "ONE ROUND" : "FIRST TO " + lv.win) +
+    " · " + DIFFS[lv.cpu].name, 350, boxY + 68, 11, rgba("#E7E3FB", 0.6), "left", FM, 2);
+  if (lv.ch === -2) {
+    txt("carrying everything you picked up", 350, boxY + 88, -12, rgba("#FFD98A", 0.9), "left", FD);
+  }
+  for (let i = 0; i < run.foeAugs.length; i++) {
+    drawAugMedal(run.foeAugs[i], 366 + i * 52, boxY + 116, 46);
+  }
+  if (!run.foeAugs.length && lv.ch !== -2) {
+    txt("no augments", 350, boxY + 120, -11, rgba("#E7E3FB", 0.4), "left", FM);
+  }
+
+  /* your run */
+  txt("YOUR RUN", 180, 386, 12, rgba("#E7E3FB", 0.5), "left", FM, 4);
+  const you = CHARS[run.ch];
+  txt(you.name, 180, 414, 22, you.col, "left", FD, 2);
+  for (let i = 0; i < 3; i++) {
+    const mx = 412 + i * 56;
+    if (run.augs[i]) drawAugMedal(run.augs[i], mx, 404, 50);
+    else {
+      ctx.strokeStyle = rgba("#E7E3FB", 0.16); ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(mx, 404, 20, 0, 7); ctx.stroke();
+    }
+  }
+  txt("LIVES", 618, 386, 12, rgba("#E7E3FB", 0.5), "left", FM, 4);
+  for (let i = 0; i < Math.max(3, run.lives); i++) pip(632 + i * 30, 404, 9, i < run.lives, "#FFD98A");
+
+  txt("KICK  FIGHT        ESC  MENU", STAGE_W / 2, STAGE_H - 28, 15, "#FFD98A", "center", FD, 6);
+}
+
+function drawDraft(t) {
+  drawStage(null);
+  ctx.fillStyle = rgba("#08070F", 0.78); ctx.fillRect(0, 0, STAGE_W, STAGE_H);
+  txt("SOMETHING IN THE RUINS", STAGE_W / 2, 62, 28, "#E7E3FB", "center", FD, 8);
+  txt("DIVE  MOVE        KICK  TAKE IT", STAGE_W / 2, 82, 11, rgba("#E7E3FB", 0.5), "center", FM, 4);
+
+  const CW = 280, GAP = 22, X0 = (STAGE_W - (CW * 3 + GAP * 2)) / 2, Y = 118, CH = 340;
+  const TIER = ["#9FB4D8", "#7CF0B4", "#FFD98A"];
+  for (let i = 0; i < run.offer.length; i++) {
+    const a = AUG[run.offer[i]], on = run.pick === i, x = X0 + i * (CW + GAP);
+    ctx.fillStyle = rgba(on ? "#1D1740" : "#120E28", on ? 0.98 : 0.82);
+    ctx.fillRect(x, Y, CW, CH);
+    ctx.strokeStyle = rgba(TIER[a.tier], on ? 0.95 : 0.25);
+    ctx.lineWidth = on ? 2 : 1;
+    ctx.strokeRect(x + 0.5, Y + 0.5, CW - 1, CH - 1);
+    ctx.fillStyle = rgba(TIER[a.tier], 0.5); ctx.fillRect(x, Y, CW, 3);
+
+    drawAugMedal(a.id, x + CW / 2, Y + 96 + (on ? Math.sin(t * 0.08) * 3 : 0), on ? 132 : 120);
+    txt(["COMMON", "RARE", "LEGENDARY"][a.tier], x + CW / 2, Y + 188, -10,
+      rgba(TIER[a.tier], 0.9), "center", FM, 3);
+    let ny = Y + 218;
+    for (const line of wrapText(a.name, CW - 40, 22)) {
+      txt(line, x + CW / 2, ny, 22, on ? "#E7E3FB" : rgba("#E7E3FB", 0.7), "center", FD, 2);
+      ny += 24;
+    }
+    ny += 8;
+    for (const line of wrapText(a.line, CW - 44, 13)) {
+      txt(line, x + CW / 2, ny, -13, rgba(TIER[a.tier], 0.95), "center", FD);
+      ny += 17;
+    }
+    ny += 6;
+    for (const line of wrapText(a.lore, CW - 44, 11.5)) {
+      if (ny > Y + CH - 12) break;
+      txt(line, x + CW / 2, ny, -11.5, rgba("#E7E3FB", 0.45), "center", FD);
+      ny += 15;
+    }
+  }
+  txt("LEVEL " + (run.level + 2) + " NEXT", STAGE_W / 2, STAGE_H - 26, 13,
+    rgba("#E7E3FB", 0.55), "center", FM, 4);
+}
+
+function drawRunEnd(t) {
+  drawStage(null);
+  ctx.fillStyle = rgba("#08070F", 0.84); ctx.fillRect(0, 0, STAGE_W, STAGE_H);
+  const good = run.won;
+  txt(good ? "RUN COMPLETE" : "RUN OVER", STAGE_W / 2, 150, 52,
+    good ? "#FFD98A" : "#FF8A8A", "center", FD, 10);
+  txt(good ? "TEN FOR TEN" : "REACHED LEVEL " + (run.level + 1) + " OF 10",
+    STAGE_W / 2, 182, 14, rgba("#E7E3FB", 0.65), "center", FM, 5);
+
+  const you = CHARS[run.ch];
+  drawAxie(
+    { ch: run.ch, x: 0, y: 0, st: "stand", t: 30, facing: 1, inflate: 0, spin: 0, vx: 0, vy: 0, dead: false },
+    you, {
+      portrait: true, px: STAGE_W / 2, py: 320, scale: 1.1,
+      anim: good ? you.anim.win : you.anim.idle, animT: t / 60
+    }
+  );
+  for (let i = 0; i < run.augs.length; i++) {
+    drawAugMedal(run.augs[i], STAGE_W / 2 - (run.augs.length - 1) * 34 + i * 68, 384, 58);
+  }
+  txt("ROUNDS  " + run.rounds[0] + " — " + run.rounds[1], STAGE_W / 2, 438, 18,
+    "#E7E3FB", "center", FM, 3);
+  txt("KICK  RUN AGAIN        DIVE  MENU", STAGE_W / 2, STAGE_H - 30, 14,
+    rgba("#E7E3FB", 0.75), "center", FM, 3);
+}
+
+/* ---- ticks ---- */
+function ladderTick(inp) {
+  const m = inp[0] | inp[1];
+  const kick = (m & IN_KICK) && !(run.prev & IN_KICK);
+  run.prev = m;
+  if (kick) { SFX.lock(); arcadeFight(); }
+}
+
+function draftTick(inp) {
+  const m = inp[0] | inp[1];
+  const dive = (m & IN_DIVE) && !(run.prev & IN_DIVE);
+  const kick = (m & IN_KICK) && !(run.prev & IN_KICK);
+  run.prev = m;
+  if (dive) { run.pick = (run.pick + 1) % run.offer.length; SFX.move(); }
+  else if (kick) { SFX.lock(); arcadeTake(run.offer[run.pick]); }
+}
+
+function runEndTick(inp) {
+  const m = inp[0] | inp[1];
+  const dive = (m & IN_DIVE) && !(run.prev & IN_DIVE);
+  const kick = (m & IN_KICK) && !(run.prev & IN_KICK);
+  run.prev = m;
+  if (kick) { SFX.lock(); arcadeStart(run.ch); }
+  else if (dive) { SFX.move(); arcadeQuit(); }
+}
+
 /* =========================== PAUSE MENU ================================= */
 /* Esc opens it from anywhere, Esc closes it again. Inside, the game's own two
    buttons move and confirm, so nobody has to learn a third one mid-match. */
@@ -2334,6 +2785,7 @@ function pauseItems() {
   /* online, the match keeps running behind the menu (your inputs just read as
      nothing), so restarting unilaterally is not on the table */
   if (net.on) return ["RESUME", "DISCONNECT"];
+  if (run.on) return ["RESUME", "ABANDON RUN"];
   return app.screen === "match"
     ? ["RESUME", "RESTART MATCH", "QUIT TO TITLE"]
     : ["RESUME", "QUIT TO TITLE"];
@@ -2353,6 +2805,8 @@ function closePause() {
 
 function quitToTitle() {
   if (net.on) netQuit();
+  run.on = false;
+  app.arcade = false;
   app.pause = null;
   app.screen = "title";
   app.m = null;
@@ -2376,6 +2830,7 @@ function pauseTick(inp) {
       SFX.lock();
       if (pick === "RESUME") closePause();
       else if (pick === "DISCONNECT") { netQuit(); quitToTitle(); }
+      else if (pick === "ABANDON RUN") { run.on = false; quitToTitle(); }
       else if (pick === "RESTART MATCH") {
         app.m = newMatch(app.m.p[0].ch, app.m.p[1].ch, app.cpu, app.t);
         trails[0].length = 0; trails[1].length = 0;
@@ -2413,6 +2868,7 @@ function drawPause() {
 const app = {
   screen: "title", t: 0,
   cpu: null,                       /* null = local versus, else difficulty index */
+  arcade: false,
   mode: { cur: 0, prev: [0, 0] },
   pause: null,
   bg: 0,                           /* which Origins arena this match is fought in */
@@ -2428,7 +2884,8 @@ function modeTick(inp) {
     if (dive) { md.cur = (md.cur + 1) % MODES.length; SFX.move(); }
     else if (kick) {
       if (MODES[md.cur].cpu === "net") { netPanel(true); md.prev[i] = inp[i]; return; }
-      app.cpu = MODES[md.cur].cpu;
+      app.arcade = MODES[md.cur].cpu === "arcade";
+      app.cpu = app.arcade ? 0 : MODES[md.cur].cpu;
       app.sel = { cur: [0, 1], lock: [false, false], t: 0, cpuT: 0, prev: inp.slice() };
       app.screen = "select";
       SFX.lock();
@@ -2439,8 +2896,13 @@ function modeTick(inp) {
 
 function selectTick(inp) {
   const sel = app.sel;
-  const humans = app.cpu === null ? 2 : 1;
-  if (app.cpu !== null) {
+  const humans = app.cpu === null || app.arcade ? (app.arcade ? 1 : 2) : 1;
+  if (app.arcade) {
+    if (sel.lock[0]) {
+      sel.t++;
+      if (sel.t > 24) { run.prev = IN_KICK; arcadeStart(sel.cur[0]); }
+    }
+  } else if (app.cpu !== null) {
     sel.cpuT++;
     if (!sel.lock[1]) {
       if (sel.cpuT % 9 === 0) { sel.cur[1] = (sel.cur[1] + 1) % CHARS.length; SFX.move(); }
@@ -2475,6 +2937,10 @@ function endTick(inp) {
   const kick = (inp[0] & IN_KICK) || (inp[1] & IN_KICK);
   const dive = (inp[0] & IN_DIVE) || (inp[1] & IN_DIVE);
   if (s.pt < 50) return;
+  if (run.on) {
+    if (kick || dive) { SFX.lock(); run.prev = kick ? IN_KICK : IN_DIVE; arcadeResolve(); }
+    return;
+  }
   if (kick) {
     app.m = newMatch(s.p[0].ch, s.p[1].ch, app.cpu, app.t);
     trails[0].length = 0; trails[1].length = 0;
@@ -2502,6 +2968,12 @@ function runScreenTick(inp) {
     modeTick(inp);
   } else if (app.screen === "select") {
     selectTick(inp);
+  } else if (app.screen === "ladder") {
+    ladderTick(inp);
+  } else if (app.screen === "draft") {
+    draftTick(inp);
+  } else if (app.screen === "runend") {
+    runEndTick(inp);
   } else if (app.screen === "match") {
     const s = app.m;
     if (s.phase === "matchend") endTick(inp);
@@ -2561,6 +3033,9 @@ function frame(now) {
   if (app.screen === "title") drawTitle(app.t);
   else if (app.screen === "mode") drawMode(app.mode.cur, app.t);
   else if (app.screen === "select") drawSelect(app.sel, app.t);
+  else if (app.screen === "ladder") drawLadder(app.t);
+  else if (app.screen === "draft") drawDraft(app.t);
+  else if (app.screen === "runend") drawRunEnd(app.t);
   else drawMatch(app.m);
 
   drawNetHUD();
