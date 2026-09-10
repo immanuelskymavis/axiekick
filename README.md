@@ -220,13 +220,13 @@ keeps 2.2 MB of media out of a 22 MB one.
 |---|---|---|---|
 | **Olek** | Plant | Leaf tail | Shallow 32° arc, longest reach on the stage; to catch someone already underneath him he has to kick late |
 | **Buba** | Beast | Horn drill | Steep 55° dive at 14 u/f, smallest hitbox, 27 frames of recovery when he misses |
-| **Puffy** | Aqua | Inflate | Hold DIVE at the apex to hover up to 14 frames; biggest hurtbox in the game while she does it |
-| **Pomodoro** | Bug | Hang | The dive stalls 9 frames before it launches — a commit you can watch that still isn't moving |
-| **Venoki** | Reptile | Armed retreat | His kickback swings on the way out, so crowding him is its own mistake |
+| **Puffy** | Aqua | Inflate | Hold DIVE at the apex to hang for 24 frames and sail forward while she does it — a stall that is also an approach |
+| **Pomodoro** | Bug | Aimed hang | The highest jump in the game, and holding KICK in the air sweeps the dive from 36° to 78°. Release to fire |
+| **Venoki** | Reptile | Armed retreat | His kickback swings wide for 16 frames and kills out to 140 units, so crowding him is its own mistake |
 | **Momo** | Bird | Second wind | One extra jump, any time she's airborne — bait the whiff, then take the air back |
 
 Effective kick ranges, measured from the sim across kick timings: Olek 120–460 units,
-Momo 140–360, Puffy 60–320, Buba 60–280, Venoki 60–280, Pomodoro 60–240. Round-start
+Pomodoro 60–420 (he chooses), Momo 140–360, Puffy 60–300, Buba 60–280, Venoki 60–280. Round-start
 distance is 520, and no character can cover that at any timing, so somebody has to
 approach.
 

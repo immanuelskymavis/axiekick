@@ -220,9 +220,9 @@ const CHARS = [
     weapon: "INFLATE — hold DIVE at the apex and hang there.",
     ...arc(22, 190), jumpVX: 1.2,
     kickAng: 46, kickSpd: 8.5, kickRec: 21,
-    hurtR: 49, hitR: 34, reach: 42,
-    kbSpd: 5.4, kbUp: 6.6, floatMax: 14,
-    bodyY: 54, rx: 49, ry: 43, artH: 2.7, kickTilt: 0.9, kickHold: 0.5, kickLead: 0.12,
+    hurtR: 41, hitR: 32, reach: 44,
+    kbSpd: 5.4, kbUp: 6.6, floatMax: 24, floatVX: 3.4,
+    bodyY: 45, rx: 41, ry: 36, artH: 2.8, kickTilt: 0.9, kickHold: 0.5, kickLead: 0.12,
     anim: {
       idle: "action/idle/normal", air: "action/run", kick: "attack/melee/tail-roll",
       land: "defense/hit-by-normal", kb: "defense/evade",
@@ -233,10 +233,10 @@ const CHARS = [
   {
     id: "pomodoro", rangeMax: 240, sfx: "bug", name: "POMODORO", cls: "BUG", role: "THE FEINT",
     col: "#E4574C", col2: "#9E2F2C", trim: "#FFC9A8", eye: "#3A0F0C",
-    flavour: "Spent a season being harvested by mistake. Has since learned that the trick is to look like you have already committed.",
-    weapon: "HANG — the dive stalls nine frames before it launches.",
-    ...arc(20, 185), jumpVX: 2.0,
-    kickAng: 58, kickSpd: 12.5, kickRec: 22, kickHang: 9,
+    flavour: "Spent a season being harvested by mistake. Has since learned that the trick is to look committed for as long as you can stand it.",
+    weapon: "HANG — hold KICK in the air to aim the dive, release to fire.",
+    ...arc(22, 250), jumpVX: 2.0,
+    kickAng: 36, kickSpd: 12.5, kickRec: 22, kickHang: 26, aimTo: 78,
     hurtR: 34, hitR: 22, reach: 46,
     kbSpd: 5.0, kbUp: 6.0, floatMax: 0,
     bodyY: 38, rx: 34, ry: 30, artH: 2.8, kickTilt: 0.85, kickHold: 0.5, kickLead: 0.12,
@@ -251,11 +251,11 @@ const CHARS = [
     id: "venoki", rangeMax: 280, sfx: "reptile", name: "VENOKI", cls: "REPTILE", role: "THE WALL",
     col: "#9B6BE0", col2: "#5A3690", trim: "#E3CBFF", eye: "#2A1046",
     flavour: "Guarded a door in the Mystic ruins for eleven years. Nobody told him the door had been removed.",
-    weapon: "ARMED RETREAT — his kickback swings on the way out.",
+    weapon: "ARMED RETREAT — his kickback swings wide on the way out.",
     ...arc(22, 175), jumpVX: 0.8,
     kickAng: 48, kickSpd: 10.0, kickRec: 24,
     hurtR: 43, hitR: 30, reach: 52,
-    kbSpd: 5.8, kbUp: 6.4, floatMax: 0, armedKB: true,
+    kbSpd: 5.8, kbUp: 6.4, floatMax: 0, armedKB: true, kbHitR: 52, kbFrames: 16,
     bodyY: 47, rx: 43, ry: 38, artH: 2.8, kickTilt: 0.82, kickHold: 0.5, kickLead: 0.12,
     anim: {
       idle: "action/idle/normal", air: "action/run", kick: "attack/melee/tail-thrash",
@@ -312,7 +312,7 @@ function mkPlayer(chIdx, x, facing, augs) {
     ch: chIdx, c: cs, augs: augs || [],
     x, y: 0, vx: 0, vy: 0,
     st: "stand", t: 0, facing,
-    prevIn: 0, floatUsed: 0, inflate: 0, jumps: 0, hang: 0,
+    prevIn: 0, floatUsed: 0, inflate: 0, jumps: 0, hang: 0, aimT: 0,
     wx: x, wy: 0, pwx: x, pwy: 0,   // weapon point, current + previous tick
     spin: 0, hit: false, dead: false, ward: !!cs.wardStart, band: false
   };
@@ -351,16 +351,28 @@ function resetRound(s) {
   s.pt = 0;
 }
 
-function startKick(p, c, opp) {
-  p.facing = opp.x >= p.x ? 1 : -1;
-  const a = (c.kickAng * Math.PI) / 180;
+/* the angle this kick is currently pointed at, given how long it was aimed */
+function kickAngle(p, c) {
+  if (!c.aimTo) return c.kickAng;
+  const k = c.kickHang ? Math.min(1, p.aimT / c.kickHang) : 0;
+  return c.kickAng + (c.aimTo - c.kickAng) * k;
+}
+
+function launchKick(p, c) {
+  const a = (kickAngle(p, c) * Math.PI) / 180;
   p.vx = c.kickSpd * Math.cos(a) * p.facing;
   p.vy = -c.kickSpd * Math.sin(a);
+}
+
+function startKick(p, c, opp) {
+  p.facing = opp.x >= p.x ? 1 : -1;
+  p.aimT = 0;
+  launchKick(p, c);
   p.st = "kick";
   p.t = 0;
   p.spin = 0;
   p.inflate = 0;
-  p.hang = c.kickHang || 0;
+  p.hang = c.kickHang ? 1 : 0;
 }
 
 /* weapon point: sits ahead of the body along the facing/travel direction */
@@ -369,7 +381,7 @@ function weaponPoint(p, c) {
     const m = Math.hypot(p.vx, p.vy) || 1;
     return [p.x + (p.vx / m) * c.reach, p.y + (p.vy / m) * c.reach + c.bodyY];
   }
-  if (p.st === "kb" && c.armedKB) return [p.x + p.facing * c.reach * 0.95, p.y + c.bodyY];
+  if (p.st === "kb" && c.armedKB) return [p.x + p.facing * c.reach * 1.1, p.y + c.bodyY];
   return [p.x + p.facing * c.reach * 0.5, p.y + c.bodyY];
 }
 
@@ -389,6 +401,11 @@ function segDist(ax, ay, bx, by, qx, qy) {
 function hurtBox(p, c) {
   const s = 1 + p.inflate * 0.32;
   return [p.x, p.y + c.bodyY, c.rx * s, c.ry * s];
+}
+
+/* an armed kickback swings wider than the same character's dive */
+function hitRadius(p, c) {
+  return p.st === "kb" && c.kbHitR ? c.kbHitR : c.hitR;
 }
 
 /* segment vs ellipse: squash the world so the ellipse is a unit circle. The
@@ -431,10 +448,14 @@ function stepPlayer(p, opp, inp) {
         break;
       }
       if (c.floatMax && held && p.vy <= 0 && p.floatUsed < c.floatMax) {
-        p.floatUsed++; p.vy = 0; p.inflate = Math.min(1, p.inflate + 0.18);
+        /* Puffy does not just stop falling, she sails: the float carries her
+           forward, which is what turns it from a stall into an approach */
+        p.floatUsed++; p.vy = 0; p.inflate = Math.min(1, p.inflate + 0.14);
+        if (c.floatVX) p.vx = c.floatVX * p.facing;
         if (p.floatUsed === 1) sound = "float";
       } else {
         p.inflate = Math.max(0, p.inflate - 0.12);
+        if (c.floatVX && p.floatUsed) p.vx = c.jumpVX * p.facing;
         p.vy -= c.g;
       }
       p.y += p.vy; p.x += p.vx;
@@ -444,9 +465,14 @@ function stepPlayer(p, opp, inp) {
 
     case "kick":
       if (p.hang > 0) {
-        /* Pomodoro hangs at the top of the swing: committed, animating, but
-           not yet moving and not yet dangerous */
-        p.hang--;
+        /* Pomodoro hangs at the top of the swing: committed, animating, and
+           still choosing his angle. Hold KICK to steepen it, let go to fire. */
+        if ((inp & IN_KICK) && p.aimT < c.kickHang) {
+          p.aimT++;
+          launchKick(p, c);
+        } else {
+          p.hang = 0;
+        }
       } else {
         p.x += p.vx; p.y += p.vy;
         p.spin += 0.34;
@@ -460,7 +486,7 @@ function stepPlayer(p, opp, inp) {
       break;
 
     case "kb":
-      if (c.armedKB && p.t <= 10) p.hit = true;   /* Venoki swings on the way out */
+      if (c.armedKB && p.t <= (c.kbFrames || 10)) p.hit = true;   /* Venoki swings on the way out */
       p.vy -= c.g * 0.9;
       p.y += p.vy; p.x += p.vx;
       if (p.y <= 0) { p.y = 0; p.vy = 0; p.vx = 0; p.st = "land"; p.t = 0; p.rec = 8; }
@@ -522,9 +548,9 @@ function step(s, in0, in1) {
   const c0 = s.p[0].c, c1 = s.p[1].c;
   const h0 = hurtBox(s.p[0], c0), h1 = hurtBox(s.p[1], c1);
   const p0hits = s.p[0].hit &&
-    segHitsBox(s.p[0].pwx, s.p[0].pwy, s.p[0].wx, s.p[0].wy, h1, c0.hitR);
+    segHitsBox(s.p[0].pwx, s.p[0].pwy, s.p[0].wx, s.p[0].wy, h1, hitRadius(s.p[0], c0));
   const p1hits = s.p[1].hit &&
-    segHitsBox(s.p[1].pwx, s.p[1].pwy, s.p[1].wx, s.p[1].wy, h0, c1.hitR);
+    segHitsBox(s.p[1].pwx, s.p[1].pwy, s.p[1].wx, s.p[1].wy, h0, hitRadius(s.p[1], c1));
 
   if (p0hits && p1hits) { endRound(s, -1, "trade", ev); return ev; }
   if (p0hits) { endRound(s, 0, "ko", ev); return ev; }
@@ -686,6 +712,16 @@ function cpuInput(s) {
       cpu.err0 = undefined;
     }
     return mask;
+  }
+
+  /* an aimed dive is still a decision: hold the angle open until the shot is
+     there, then let go */
+  if (me.st === "kick" && me.hang > 0) {
+    if (!d.smart) return 0;
+    const fall = -me.vy, drop = (me.y + c.bodyY) - (seen.y + oc.bodyY);
+    if (fall <= 0 || drop <= 0) return 0;
+    const travel = Math.abs(me.vx) * (drop / fall);
+    return travel > gap + d.tol * 0.5 ? IN_KICK : 0;
   }
 
   if (me.st === "rise" || me.st === "fall") {
@@ -1897,7 +1933,7 @@ function drawBoxes(s) {
     ctx.beginPath(); ctx.ellipse(h[0], sy(h[1]), h[2], h[3], 0, 0, 7); ctx.stroke();
     if (p.hit) {
       ctx.strokeStyle = rgba("#FF5470", 0.95);
-      ctx.beginPath(); ctx.arc(p.wx, sy(p.wy), c.hitR, 0, 7); ctx.stroke();
+      ctx.beginPath(); ctx.arc(p.wx, sy(p.wy), hitRadius(p, c), 0, 7); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(p.pwx, sy(p.pwy)); ctx.lineTo(p.wx, sy(p.wy)); ctx.stroke();
     }
     txt(`${p.st} t=${p.t} x=${p.x.toFixed(0)} y=${p.y.toFixed(0)}`,
