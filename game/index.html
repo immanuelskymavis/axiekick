@@ -283,6 +283,7 @@ const CHARS = [
   }
 ];
 const BARSTAT = ["SPEED", "ANGLE", "REACH"];
+const PCOL = ["#FF5A5A", "#54C8FF"];   /* a player keeps its colour, whoever it is hovering */
 
 /* ---- state ------------------------------------------------------------- */
 /* A player's stats are a copy of the character, so Arcade can hand out
@@ -595,6 +596,11 @@ const DIFFS = [
   {
     name: "LUNACIAN", blurb: "Leads its kick. Plays the clock. Bring a friend",
     react: 1, tol: 26, err: 0, aggr: 0.85, punish: 1, kb: 0.5, wait: 12, smart: true, antiair: true
+  },
+  {
+    name: "NIGHTMARE", blurb: "Never waits, never misses, never blinks",
+    react: 1, tol: 46, err: 0, aggr: 1, punish: 1, kb: 0.7, wait: 0,
+    smart: true, antiair: true, rush: true
   }
 ];
 
@@ -633,6 +639,11 @@ function cpuInput(s) {
       /* The whole game is who commits second. Jump when they are already
          committed and inside our range, close the gap when they are not
          reachable at all, and otherwise stand still and make them come. */
+      /* Nightmare inverts the patience: having already dodged what is
+         actually coming at it, there is no situation in which it would
+         rather be standing still. */
+      if (d.rush) return IN_DIVE;
+
       const inRange = gap < c.rangeMax;
       if (recovering && inRange) return IN_DIVE;
       if (!diving && !airborne && !inRange) return IN_DIVE;
@@ -689,6 +700,7 @@ function cpuInput(s) {
       cpu.err0 = err;
       if (err >= -4) return IN_KICK;
       if (prev !== undefined && err < prev && Math.abs(err) < d.tol) return IN_KICK;
+      if (d.rush && Math.abs(err) < d.tol * 0.5) return IN_KICK;
     } else if (aim && Math.abs(aim.gap - aim.travel) < d.tol + cpu.err) {
       return IN_KICK;
     }
@@ -1649,6 +1661,99 @@ function drawTrail(i, c) {
   }
 }
 
+
+/* =========================== POINTER + PROMPTS ==========================
+   Everything clickable registers a rectangle while it draws, so the mouse
+   never needs its own copy of the layout. Hovering moves the cursor the two
+   buttons would have moved, and clicking does what KICK would have done.
+   ====================================================================== */
+const HOT = [];
+const mouse = { x: -1e4, y: -1e4, inside: false };
+
+function hot(x, y, w, h, click, hover) {
+  HOT.push({ x, y, w, h, click, hover });
+}
+function hotAt(px, py) {
+  for (let i = HOT.length - 1; i >= 0; i--) {
+    const r = HOT[i];
+    if (px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h) return r;
+  }
+  return null;
+}
+function hovered(x, y, w, h) {
+  return mouse.inside && mouse.x >= x && mouse.x <= x + w && mouse.y >= y && mouse.y <= y + h;
+}
+
+function pointerPos(e) {
+  const r = cv.getBoundingClientRect();
+  mouse.x = ((e.clientX - r.left) / r.width) * STAGE_W;
+  mouse.y = ((e.clientY - r.top) / r.height) * STAGE_H;
+  mouse.inside = true;
+}
+cv.addEventListener("mousemove", e => {
+  pointerPos(e);
+  const r = hotAt(mouse.x, mouse.y);
+  cv.style.cursor = r ? "pointer" : "default";
+  if (r && r.hover) r.hover();
+});
+cv.addEventListener("mouseleave", () => { mouse.inside = false; mouse.x = mouse.y = -1e4; });
+cv.addEventListener("click", e => {
+  pointerPos(e);
+  audioWake();
+  const r = hotAt(mouse.x, mouse.y);
+  if (r && r.click) r.click();
+  else if (app.screen === "title") { anyPressEdge = true; }
+});
+
+/* A keycap and what it does, drawn as one object so they read as a pair. */
+function hintWidth(pairs) {
+  ctx.save();
+  let w = 0;
+  for (let i = 0; i < pairs.length; i++) {
+    ctx.font = '600 13px ' + FM;
+    const kw = Math.max(26, ctx.measureText(pairs[i][0]).width + 16);
+    ctx.font = '600 14px ' + FD;
+    w += kw + 8 + ctx.measureText(pairs[i][1]).width + (i < pairs.length - 1 ? 30 : 0);
+  }
+  ctx.restore();
+  return w;
+}
+
+function drawHints(cx, y, pairs, tone) {
+  const total = hintWidth(pairs);
+  let x = cx - total / 2;
+  const col = tone || "#FFD98A";
+  const boxes = [];
+  for (const [key, label] of pairs) {
+    ctx.save();
+    ctx.font = '600 13px ' + FM;
+    const kw = Math.max(26, ctx.measureText(key).width + 16);
+    ctx.fillStyle = rgba("#1A1436", 0.95);
+    ctx.fillRect(x, y - 15, kw, 24);
+    ctx.strokeStyle = rgba(col, 0.75); ctx.lineWidth = 1;
+    ctx.strokeRect(x + 0.5, y - 14.5, kw - 1, 23);
+    ctx.restore();
+    txt(key, x + kw / 2, y + 2, -13, col, "center", FM, 1);
+    ctx.save();
+    ctx.font = '600 14px ' + FD;
+    const lw = ctx.measureText(label).width;
+    ctx.restore();
+    txt(label, x + kw + 8, y + 2, 14, rgba("#E7E3FB", 0.92), "left", FD, 1.5);
+    boxes.push([x, x + kw + 8 + lw]);
+    x += kw + 8 + lw + 30;
+  }
+  return boxes;
+}
+
+/* the same pair, and clickable */
+function drawHintButtons(cx, y, pairs, fns) {
+  const boxes = drawHints(cx, y, pairs);
+  for (let i = 0; i < boxes.length && i < fns.length; i++) {
+    if (!fns[i]) continue;
+    hot(boxes[i][0] - 6, y - 19, boxes[i][1] - boxes[i][0] + 12, 32, fns[i]);
+  }
+}
+
 /* --- HUD --- */
 function pip(x, y, r, filled, col) {
   if (drawUI("star", x, y, r * 3.4, filled ? 1 : 0.2)) {
@@ -1680,12 +1785,23 @@ function drawHUD(s) {
   txt(c1.cls + " · " + (s.cpu ? "CPU " + DIFFS[s.cpu.diff].name : "P2"),
     STAGE_W - 26, 56, 11, rgba("#E7E3FB", 0.55), "right", FM, 1.2);
 
+  for (let i = 0; i < 2; i++) {
+    const augs = s.p[i].augs;
+    for (let a = 0; a < augs.length; a++) {
+      const x = i === 0 ? 30 + a * 32 : STAGE_W - 30 - a * 32;
+      drawAugMedal(augs[a], x, 96, 30);
+    }
+  }
   for (let i = 0; i < s.win; i++) {
     pip(226 + i * 26, 34, 7, i < s.score[0], c0.col);
     pip(STAGE_W - 226 - i * 26, 34, 7, i < s.score[1], c1.col);
     /* jshint ignore:line */
   }
 
+  if (run.on) {
+    txt("STAGE " + (run.level + 1) + " / 10", STAGE_W / 2, 16, -10,
+      rgba("#FFD98A", 0.85), "center", FM, 4);
+  }
   const secs = Math.max(0, Math.ceil(s.timer / 60));
   const urgent = s.timer <= LINE_TICKS;
   txt(String(secs).padStart(2, "0"), STAGE_W / 2, 46, 40, urgent ? "#FF6B6B" : "#E7E3FB", "center", FM, 2);
@@ -1801,7 +1917,9 @@ function drawMatch(s) {
     txt("WINNER", STAGE_W / 2, 258, 16, rgba("#E7E3FB", 0.6), "center", FM, 8);
     txt(c.name, STAGE_W / 2, 322, 74, c.col, "center", FD, 6);
     txt(s.score[0] + " — " + s.score[1], STAGE_W / 2, 362, 26, "#E7E3FB", "center", FM, 4);
-    txt("KICK  REMATCH        DIVE  CHANGE FIGHT", STAGE_W / 2, 410, 13, rgba("#E7E3FB", 0.75), "center", FM, 3);
+    drawHintButtons(STAGE_W / 2, 412,
+      [["KICK", "NEXT FIGHT"], ["DIVE", "EXIT"]],
+      [() => endChoose(true), () => endChoose(false)]);
   }
 }
 
@@ -1835,34 +1953,36 @@ const MODES = [
   { cpu: "arcade", name: "ARCADE RUN", blurb: "Ten fights, three things you find on the way" },
   { cpu: 0, name: "VS CPU · ROOKIE", blurb: DIFFS[0].blurb },
   { cpu: 1, name: "VS CPU · VETERAN", blurb: DIFFS[1].blurb },
-  { cpu: 2, name: "VS CPU · LUNACIAN", blurb: DIFFS[2].blurb }
+  { cpu: 2, name: "VS CPU · LUNACIAN", blurb: DIFFS[2].blurb },
+  { cpu: 3, name: "VS CPU · NIGHTMARE", blurb: DIFFS[3].blurb }
 ];
 
 function drawMode(cur, t) {
   drawStage(null);
   ctx.fillStyle = rgba("#08070F", 0.62); ctx.fillRect(0, 0, STAGE_W, STAGE_H);
-  txt("CHOOSE A FIGHT", STAGE_W / 2, 118, 34, "#E7E3FB", "center", FD, 9);
-  txt("DIVE  MOVE        KICK  CONFIRM", STAGE_W / 2, 142, 11, rgba("#E7E3FB", 0.5), "center", FM, 4);
+  txt("CHOOSE A FIGHT", STAGE_W / 2, 104, 32, "#E7E3FB", "center", FD, 9);
+  drawHints(STAGE_W / 2, 126, [["DIVE", "MOVE"], ["KICK", "CONFIRM"]]);
 
   const W = 460, X = (STAGE_W - W) / 2;
   for (let i = 0; i < MODES.length; i++) {
-    const m = MODES[i], y = 168 + i * 62, on = cur === i;
+    const m = MODES[i], y = 146 + i * 56, on = cur === i;
     const col = m.cpu === null ? "#E7E3FB"
       : m.cpu === "net" ? "#7CF0B4"
         : m.cpu === "arcade" ? "#FFD98A"
-          : [CHARS[0].col, CHARS[1].col, CHARS[2].col][m.cpu];
+          : ["#7FD1A0", CHARS[1].col, CHARS[4].col, "#FF4D6D"][m.cpu];
     ctx.fillStyle = rgba(on ? "#1D1740" : "#130F28", on ? 0.98 : 0.8);
-    ctx.fillRect(X, y, W, 50);
+    ctx.fillRect(X, y, W, 46);
     ctx.strokeStyle = rgba(col, on ? 0.95 : 0.22);
     ctx.lineWidth = on ? 2 : 1;
-    ctx.strokeRect(X + 0.5, y + 0.5, W - 1, 49);
+    ctx.strokeRect(X + 0.5, y + 0.5, W - 1, 45);
     if (on) {
-      ctx.fillStyle = col; ctx.fillRect(X, y, 4, 50);
+      ctx.fillStyle = col; ctx.fillRect(X, y, 4, 46);
       const a = 0.35 + 0.25 * Math.sin(t * 0.12);
-      ctx.fillStyle = rgba(col, a * 0.12); ctx.fillRect(X, y, W, 50);
+      ctx.fillStyle = rgba(col, a * 0.12); ctx.fillRect(X, y, W, 46);
     }
-    txt(m.name, X + 24, y + 24, 20, on ? col : rgba("#E7E3FB", 0.55), "left", FD, 2);
-    txt(m.blurb, X + 24, y + 41, -11.5, rgba("#E7E3FB", on ? 0.6 : 0.3), "left", FM, 0.5);
+    txt(m.name, X + 24, y + 22, 19, on ? col : rgba("#E7E3FB", 0.55), "left", FD, 2);
+    txt(m.blurb, X + 24, y + 38, -11, rgba("#E7E3FB", on ? 0.6 : 0.3), "left", FM, 0.5);
+    hot(X, y, W, 46, () => { app.mode.cur = i; modeConfirm(); }, () => { app.mode.cur = i; });
   }
   txt("THE CPU READS THE SAME TWO BUTTONS YOU DO", STAGE_W / 2, STAGE_H - 34, 10,
     rgba("#E7E3FB", 0.32), "center", FM, 4);
@@ -1876,7 +1996,7 @@ function drawSelect(sel, t) {
   drawStage(null);
   ctx.fillStyle = rgba("#08070F", 0.6); ctx.fillRect(0, 0, STAGE_W, STAGE_H);
   txt("CHOOSE YOUR AXIE", STAGE_W / 2, 44, 28, "#E7E3FB", "center", FD, 8);
-  txt("DIVE  MOVE        KICK  LOCK IN", STAGE_W / 2, 64, 10.5, rgba("#E7E3FB", 0.5), "center", FM, 4);
+  drawHints(STAGE_W / 2, 66, [["DIVE", "MOVE"], ["KICK", "LOCK IN"]]);
 
   const CW = 300, CH = 158, GX = 16, GY = 14;
   const X0 = (STAGE_W - (CW * 3 + GX * 2)) / 2, Y0 = 82;
@@ -1887,10 +2007,20 @@ function drawSelect(sel, t) {
     const on1 = sel.cur[0] === i, on2 = sel.cur[1] === i;
 
     ctx.fillStyle = rgba("#150F2C", 0.92); ctx.fillRect(x, y, CW, CH);
-    ctx.strokeStyle = rgba(c.col, on1 || on2 ? 0.95 : 0.26);
-    ctx.lineWidth = on1 || on2 ? 2 : 1;
+    ctx.strokeStyle = rgba(c.col, 0.26); ctx.lineWidth = 1;
     ctx.strokeRect(x + 0.5, y + 0.5, CW - 1, CH - 1);
+    if (on1) {
+      ctx.strokeStyle = PCOL[0]; ctx.lineWidth = 2;
+      ctx.strokeRect(x + 1, y + 1, CW - 2, CH - 2);
+    }
+    if (on2) {
+      ctx.strokeStyle = PCOL[1]; ctx.lineWidth = 2;
+      ctx.strokeRect(x + (on1 ? 5 : 1), y + (on1 ? 5 : 1), CW - (on1 ? 10 : 2), CH - (on1 ? 10 : 2));
+    }
     ctx.fillStyle = rgba(c.col, 0.16); ctx.fillRect(x, y, CW, 3);
+    hot(x, y, CW, CH,
+      () => { if (!sel.lock[0]) { sel.cur[0] = i; sel.lock[0] = true; SFX.lock(); } },
+      () => { if (!sel.lock[0]) sel.cur[0] = i; });
 
     const bob = Math.sin(t * 0.05 + i * 1.3) * 4;
     const ringY = y + CH / 2 + 4;
@@ -1901,11 +2031,11 @@ function drawSelect(sel, t) {
     drawAxie(
       { ch: i, x: 0, y: 0, st: "stand", t: 30, facing: 1, inflate: 0, spin: 0, vx: 0, vy: 0, dead: false },
       c, {
-        portrait: true, px: x + 66, py: ringY + 34 + bob, scale: 0.62,
+        portrait: true, px: x + 66, py: ringY + 40 + bob, scale: 0.7,
         anim: c.anim.idle, animT: t / 60 + i * 0.7
       }
     );
-    drawUI("avatar", x + 66, ringY, 104);
+    drawUI("avatar", x + 66, ringY, 128);
 
     txt(c.name, x + 126, y + 58, c.name.length > 6 ? 23 : 27, c.col, "left", FD, 2);
     txt(c.cls, x + 126, y + 74, -10, rgba("#E7E3FB", 0.6), "left", FM, 2);
@@ -1926,7 +2056,7 @@ function drawSelect(sel, t) {
       const who = pl === 1 && app.cpu !== null ? "CPU" : "P" + (pl + 1);
       const tag = who + (locked ? " READY" : "");
       const tw = locked ? 76 : 34, tx = pl === 0 ? x + 7 : x + CW - tw - 7;
-      ctx.fillStyle = locked ? c.col : rgba("#E7E3FB", 0.22);
+      ctx.fillStyle = locked ? PCOL[pl] : rgba(PCOL[pl], 0.32);
       ctx.fillRect(tx, y + 8, tw, 18);
       txt(tag, tx + tw / 2, y + 21, -10, locked ? "#0B0916" : "#E7E3FB", "center", FM, 1.2);
     }
@@ -1939,9 +2069,9 @@ function drawSelect(sel, t) {
     const half = (STAGE_W - 68) / 2, x = 34 + pl * (half + 4);
     const who = pl === 1 && app.cpu !== null ? "CPU" : "P" + (pl + 1);
     ctx.fillStyle = rgba("#0E0A20", 0.8); ctx.fillRect(x, SY, half - 4, 96);
-    ctx.fillStyle = rgba(c.col, 0.9); ctx.fillRect(x, SY, 3, 96);
+    ctx.fillStyle = PCOL[pl]; ctx.fillRect(x, SY, 3, 96);
 
-    txt(who, x + 16, SY + 20, -10, rgba("#E7E3FB", 0.45), "left", FM, 2);
+    txt(who, x + 16, SY + 20, -10, rgba(PCOL[pl], 0.9), "left", FM, 2);
     txt(c.name, x + 48, SY + 21, 18, c.col, "left", FD, 2);
     let ly = SY + 40;
     for (const line of wrapText(c.weapon, half - 40, 10.5, FM)) {
@@ -1958,6 +2088,9 @@ function drawSelect(sel, t) {
 
   if (sel.lock[0] && sel.lock[1]) {
     txt("GET READY", STAGE_W / 2, STAGE_H - 14, 18, "#FFD98A", "center", FD, 8);
+  } else if (app.arcade) {
+    txt("PICK YOUR AXIE FOR THE RUN", STAGE_W / 2, STAGE_H - 14, 14,
+      rgba("#FFD98A", 0.8), "center", FD, 6);
   }
 }
 
@@ -2483,14 +2616,14 @@ for (const a of AUGS) AUG[a.id] = a;
 const LADDER = [
   { ch: 1, win: 1, cpu: 0, foe: 0 },
   { ch: 2, win: 1, cpu: 0, foe: 0 },
-  { ch: 0, win: 3, cpu: 0, foe: 0, draft: true },
-  { ch: 3, win: 3, cpu: 1, foe: 1 },
-  { ch: 4, win: 3, cpu: 1, foe: 1 },
-  { ch: 5, win: 3, cpu: 1, foe: 2, draft: true },
-  { ch: -1, win: 3, cpu: 2, foe: 2 },
-  { ch: -1, win: 5, cpu: 2, foe: 3 },
-  { ch: -1, win: 5, cpu: 2, foe: 3, draft: true },
-  { ch: -2, win: 5, cpu: 2, foe: 0 }
+  { ch: 0, win: 1, cpu: 0, foe: 0, draft: true },
+  { ch: 3, win: 3, cpu: 1, foe: 2 },
+  { ch: 4, win: 3, cpu: 1, foe: 2 },
+  { ch: 5, win: 3, cpu: 1, foe: 3, draft: true },
+  { ch: -1, win: 5, cpu: 2, foe: 4 },
+  { ch: -1, win: 5, cpu: 2, foe: 4 },
+  { ch: -1, win: 5, cpu: 3, foe: 5, draft: true },
+  { ch: -2, win: 5, cpu: 3, foe: 0 }
 ];
 
 const run = {
@@ -2603,10 +2736,10 @@ function drawAugMedal(id, cx, cy, size, dim) {
   ctx.fillStyle = rgba("#0B0916", 0.75);
   ctx.beginPath(); ctx.arc(cx, cy, size * 0.42, 0, 7); ctx.fill();
   if (im && im.complete && im.naturalWidth) {
-    const w = size * 0.62, h = w * (im.naturalHeight / im.naturalWidth);
+    const w = size * 0.54, h = w * (im.naturalHeight / im.naturalWidth);
     ctx.drawImage(im, cx - w / 2, cy - h / 2, w, h);
   }
-  drawUI("avatar", cx, cy, size);
+  drawUI("avatar", cx, cy, size * 1.22);
   ctx.restore();
 }
 
@@ -2670,14 +2803,16 @@ function drawLadder(t) {
   txt("LIVES", 618, 386, 12, rgba("#E7E3FB", 0.5), "left", FM, 4);
   for (let i = 0; i < Math.max(3, run.lives); i++) pip(632 + i * 30, 404, 9, i < run.lives, "#FFD98A");
 
-  txt("KICK  FIGHT        ESC  MENU", STAGE_W / 2, STAGE_H - 28, 15, "#FFD98A", "center", FD, 6);
+  drawHintButtons(STAGE_W / 2, STAGE_H - 28,
+    [["KICK", "FIGHT"], ["ESC", "MENU"]],
+    [() => { SFX.lock(); arcadeFight(); }, () => openPause()]);
 }
 
 function drawDraft(t) {
   drawStage(null);
   ctx.fillStyle = rgba("#08070F", 0.78); ctx.fillRect(0, 0, STAGE_W, STAGE_H);
   txt("SOMETHING IN THE RUINS", STAGE_W / 2, 62, 28, "#E7E3FB", "center", FD, 8);
-  txt("DIVE  MOVE        KICK  TAKE IT", STAGE_W / 2, 82, 11, rgba("#E7E3FB", 0.5), "center", FM, 4);
+  drawHints(STAGE_W / 2, 84, [["DIVE", "MOVE"], ["KICK", "TAKE IT"]]);
 
   const CW = 280, GAP = 22, X0 = (STAGE_W - (CW * 3 + GAP * 2)) / 2, Y = 118, CH = 340;
   const TIER = ["#9FB4D8", "#7CF0B4", "#FFD98A"];
@@ -2689,6 +2824,7 @@ function drawDraft(t) {
     ctx.lineWidth = on ? 2 : 1;
     ctx.strokeRect(x + 0.5, Y + 0.5, CW - 1, CH - 1);
     ctx.fillStyle = rgba(TIER[a.tier], 0.5); ctx.fillRect(x, Y, CW, 3);
+    hot(x, Y, CW, CH, () => { SFX.lock(); arcadeTake(a.id); }, () => { run.pick = i; });
 
     drawAugMedal(a.id, x + CW / 2, Y + 96 + (on ? Math.sin(t * 0.08) * 3 : 0), on ? 132 : 120);
     txt(["COMMON", "RARE", "LEGENDARY"][a.tier], x + CW / 2, Y + 188, -10,
@@ -2736,8 +2872,9 @@ function drawRunEnd(t) {
   }
   txt("ROUNDS  " + run.rounds[0] + " — " + run.rounds[1], STAGE_W / 2, 438, 18,
     "#E7E3FB", "center", FM, 3);
-  txt("KICK  RUN AGAIN        DIVE  MENU", STAGE_W / 2, STAGE_H - 30, 14,
-    rgba("#E7E3FB", 0.75), "center", FM, 3);
+  drawHintButtons(STAGE_W / 2, STAGE_H - 30,
+    [["KICK", "NEW RUN"], ["DIVE", "EXIT"]],
+    [() => { SFX.lock(); arcadeStart(run.ch); }, () => { SFX.move(); arcadeQuit(); }]);
 }
 
 /* ---- ticks ---- */
@@ -2825,21 +2962,21 @@ function pauseTick(inp) {
     const kick = (inp[i] & IN_KICK) && !(pz.prev[i] & IN_KICK);
     pz.prev[i] = inp[i];
     if (dive) { pz.cur = (pz.cur + 1) % items.length; SFX.move(); }
-    else if (kick) {
-      const pick = items[pz.cur];
-      SFX.lock();
-      if (pick === "RESUME") closePause();
-      else if (pick === "DISCONNECT") { netQuit(); quitToTitle(); }
-      else if (pick === "ABANDON RUN") { run.on = false; quitToTitle(); }
-      else if (pick === "RESTART MATCH") {
-        app.m = newMatch(app.m.p[0].ch, app.m.p[1].ch, app.cpu, app.t);
-        trails[0].length = 0; trails[1].length = 0;
-        rollArena();
-        closePause();
-      } else quitToTitle();
-      return;
-    }
+    else if (kick) { pauseChoose(items[pz.cur]); return; }
   }
+}
+
+function pauseChoose(pick) {
+  SFX.lock();
+  if (pick === "RESUME") closePause();
+  else if (pick === "DISCONNECT") { netQuit(); quitToTitle(); }
+  else if (pick === "ABANDON RUN") { run.on = false; quitToTitle(); }
+  else if (pick === "RESTART MATCH") {
+    app.m = newMatch(app.m.p[0].ch, app.m.p[1].ch, app.cpu, app.t);
+    trails[0].length = 0; trails[1].length = 0;
+    rollArena();
+    closePause();
+  } else quitToTitle();
 }
 
 function drawPause() {
@@ -2847,8 +2984,7 @@ function drawPause() {
   ctx.fillStyle = rgba("#08070F", 0.82);
   ctx.fillRect(0, 0, STAGE_W, STAGE_H);
   txt("PAUSED", STAGE_W / 2, 176, 44, "#E7E3FB", "center", FD, 12);
-  txt("DIVE  MOVE        KICK  CONFIRM        ESC  RESUME",
-    STAGE_W / 2, 202, 11, rgba("#E7E3FB", 0.45), "center", FM, 3);
+  drawHints(STAGE_W / 2, 204, [["DIVE", "MOVE"], ["KICK", "CONFIRM"], ["ESC", "RESUME"]]);
 
   const W = 340, X = (STAGE_W - W) / 2;
   for (let i = 0; i < items.length; i++) {
@@ -2861,6 +2997,7 @@ function drawPause() {
     if (on) { ctx.fillStyle = "#F2D492"; ctx.fillRect(X, y, 4, 44); }
     txt(items[i], STAGE_W / 2, y + 29, 19,
       on ? "#E7E3FB" : rgba("#E7E3FB", 0.45), "center", FD, 3);
+    hot(X, y, W, 44, () => { app.pause.cur = i; pauseChoose(items[i]); }, () => { app.pause.cur = i; });
   }
 }
 
@@ -2876,20 +3013,23 @@ const app = {
   m: null
 };
 
+function modeConfirm(prev) {
+  const m = MODES[app.mode.cur];
+  if (m.cpu === "net") { netPanel(true); return; }
+  app.arcade = m.cpu === "arcade";
+  app.cpu = app.arcade ? 0 : m.cpu;
+  app.sel = { cur: [0, 1], lock: [false, false], t: 0, cpuT: 0, prev: prev || [0, 0] };
+  app.screen = "select";
+  SFX.lock();
+}
+
 function modeTick(inp) {
   const md = app.mode;
   for (let i = 0; i < 2; i++) {
     const dive = (inp[i] & IN_DIVE) && !(md.prev[i] & IN_DIVE);
     const kick = (inp[i] & IN_KICK) && !(md.prev[i] & IN_KICK);
     if (dive) { md.cur = (md.cur + 1) % MODES.length; SFX.move(); }
-    else if (kick) {
-      if (MODES[md.cur].cpu === "net") { netPanel(true); md.prev[i] = inp[i]; return; }
-      app.arcade = MODES[md.cur].cpu === "arcade";
-      app.cpu = app.arcade ? 0 : MODES[md.cur].cpu;
-      app.sel = { cur: [0, 1], lock: [false, false], t: 0, cpuT: 0, prev: inp.slice() };
-      app.screen = "select";
-      SFX.lock();
-    }
+    else if (kick) { modeConfirm(inp.slice()); md.prev[i] = inp[i]; return; }
     md.prev[i] = inp[i];
   }
 }
@@ -2930,23 +3070,16 @@ function selectTick(inp) {
   }
 }
 
-function endTick(inp) {
+function endChoose(isKick) {
   const s = app.m;
-  /* step() is not running on this screen, so the phase timer is ours to keep */
-  s.pt++;
-  const kick = (inp[0] & IN_KICK) || (inp[1] & IN_KICK);
-  const dive = (inp[0] & IN_DIVE) || (inp[1] & IN_DIVE);
-  if (s.pt < 50) return;
-  if (run.on) {
-    if (kick || dive) { SFX.lock(); run.prev = kick ? IN_KICK : IN_DIVE; arcadeResolve(); }
-    return;
-  }
-  if (kick) {
+  if (!s || s.pt < 50) return;
+  if (run.on) { SFX.lock(); run.prev = isKick ? IN_KICK : IN_DIVE; arcadeResolve(); return; }
+  if (isKick) {
     app.m = newMatch(s.p[0].ch, s.p[1].ch, app.cpu, app.t);
     trails[0].length = 0; trails[1].length = 0;
     rollArena();
     SFX.lock();
-  } else if (dive) {
+  } else {
     if (net.on) {
       app.sel = { cur: app.sel.cur.slice(), lock: [false, false], t: 0, cpuT: 0, prev: [IN_DIVE, IN_DIVE] };
       app.screen = "select";
@@ -2956,6 +3089,16 @@ function endTick(inp) {
     }
     SFX.move();
   }
+}
+
+function endTick(inp) {
+  const s = app.m;
+  /* step() is not running on this screen, so the phase timer is ours to keep */
+  s.pt++;
+  const kick = (inp[0] & IN_KICK) || (inp[1] & IN_KICK);
+  const dive = (inp[0] & IN_DIVE) || (inp[1] & IN_DIVE);
+  if (s.pt < 50) return;
+  if (kick || dive) { endChoose(!!kick); return; }
 }
 
 /* one tick of whichever screen is up, from a pair of player inputs */
@@ -3030,6 +3173,7 @@ function frame(now) {
 
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   ctx.clearRect(0, 0, STAGE_W, STAGE_H);
+  HOT.length = 0;
   if (app.screen === "title") drawTitle(app.t);
   else if (app.screen === "mode") drawMode(app.mode.cur, app.t);
   else if (app.screen === "select") drawSelect(app.sel, app.t);

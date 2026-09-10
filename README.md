@@ -31,6 +31,7 @@ the live URL serves.
 | **Gamepad** | A / ✕ | B / ○ |
 
 <kbd>Esc</kbd> opens the menu — resume, restart the match, or quit to the title.
+Every menu in the game is clickable too: hover moves the cursor, click confirms.
 Gamepads auto-assign to the first free player slot on their first button press.
 <kbd>F1</kbd> hitboxes · <kbd>F3</kbd> perf · <kbd>M</kbd> mute.
 
@@ -44,8 +45,9 @@ at three difficulties.
 
 ### Arcade
 
-Ten fights, three choices, three lives. Formats escalate (one round → first to 3 → first
-to 5), the CPU sharpens, and from level 4 the opponent is drafting augments of its own.
+Ten fights, three choices, three lives. Stages 1–3 are single rounds, 4–6 first to 3,
+7–10 first to 5; the CPU climbs Rookie → Veteran → Lunacian → Nightmare, and from stage 4
+the opponent is drafting augments of its own — two at first, five by stage 9.
 Win levels 3, 6 and 9 and you pick one of three **Land items** — real items from the
 gtk2d sheet, each one a named augment with its own effect and lore. Six are numbers
 (reach, dive speed, hitbox, hurtbox, recovery, kick angle); six bend a rule (an extra air
@@ -62,13 +64,14 @@ needed a flag in the round-end path. Full design in
 **[docs/ARCADE-PRD.html](docs/ARCADE-PRD.html)**.
 
 Tuned against a sparring bot with a human-shaped 12-frame reaction delay over 18 runs:
-median run ends at level 6, six of eighteen clear all ten.
+median run ends at stage 5, three of eighteen clear all ten.
 
 | | Reacts in | Kick window | Punishes a whiff |
 |---|---|---|---|
 | **Rookie** | 15 frames | ±84 units | 20% |
 | **Veteran** | 8 frames | ±46 units | 60% |
 | **Lunacian** | 1 frame | leads the target | always |
+| **Nightmare** | 1 frame | leads the target | always, and never stands still |
 
 Rookie and Veteran fire whenever the gap is roughly right. Lunacian plays a different
 game: it solves for where you will be when its weapon arrives rather than where you are
@@ -76,9 +79,13 @@ now, it only jumps when you are already committed or out of its reach, it swings
 kickback as an attack and floats Puffy's inflate to make you whiff, and if the clock
 would hand it the round on Hold the Line it simply stands still and lets it.
 
+Nightmare is Lunacian with the patience removed: it dodges what is genuinely aimed at it
+and then attacks in every other situation, so there is no neutral to hide in.
+
 Measured against a sparring bot with a human-shaped 12-frame reaction delay, over 24
-matches: Rookie wins 3, Veteran 8, Lunacian 16. All 36 character pairings finish without
-stalling, and two Lunacians against each other still resolve.
+matches: Rookie wins 3, Veteran 8, Lunacian 16, **Nightmare 23** (rounds 33–119). All 36
+character pairings finish without stalling, and two Lunacians against each other still
+resolve.
 
 The CPU is not special-cased anywhere in the simulation — it reads state and returns
 the same 2-bit input mask a player does, so a CPU match steps through exactly the same
