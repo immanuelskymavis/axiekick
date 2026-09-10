@@ -83,6 +83,9 @@ kbd{
 }
 .netstep{display:none;flex-direction:column;gap:6px}
 .netstep.on{display:flex}
+#netwarn{display:none;border-left:2px solid #E0A159;background:rgba(224,161,89,.09);padding:9px 12px;color:#E9D3AE}
+#netwarn.on{display:block}
+#netwarn code{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--pale);background:#0B0916;padding:1px 5px}
 </style>
 
 <div id="shell">
@@ -96,6 +99,10 @@ kbd{
     <p>No server: one of you hosts, the other joins, and you paste two codes at each other
       over Slack. Inputs then go peer to peer.
       <b>Host</b> is player 1 on the left.</p>
+    <p id="netwarn"><b>This page blocks the STUN lookup,</b> so it can only find an opponent
+      on the same network as you. For an opponent on the internet, both of you need to run
+      the game from your own machine: <code>python3 -m http.server 8123</code> in the repo,
+      then open <code>localhost:8123/game/</code>.</p>
     <div class="netrow">
       <button id="nethost">Host a match</button>
       <button id="netjoin">Join a match</button>
@@ -1840,14 +1847,42 @@ function iceSettled(pc) {
   });
 }
 
+/* Some hosts (the published artifact among them) refuse the STUN lookup at the
+   Content-Security-Policy level, and Chrome throws right inside the
+   RTCPeerConnection constructor when that happens. Fall back to host
+   candidates only, which still finds an opponent on the same network, and say
+   so rather than leaving an empty box on screen. */
 function newPeer() {
-  const pc = new RTCPeerConnection({ iceServers: ICE });
+  if (typeof RTCPeerConnection === "undefined") {
+    throw new Error("this browser has no WebRTC");
+  }
+  let pc;
+  net.noStun = false;
+  try {
+    pc = new RTCPeerConnection({ iceServers: ICE });
+  } catch (e) {
+    pc = new RTCPeerConnection({ iceServers: [] });
+    net.noStun = true;
+  }
   pc.oniceconnectionstatechange = () => {
     if (["failed", "disconnected", "closed"].includes(pc.iceConnectionState) && net.on) {
-      netSay("connection " + pc.iceConnectionState + " — no hole punched, you probably need a TURN relay");
+      netSay("connection " + pc.iceConnectionState + " — no hole punched, you need a TURN relay");
     }
   };
   return pc;
+}
+
+/* Can this page reach a STUN server at all? Asked before anyone clicks. */
+function netProbe() {
+  const warn = document.getElementById("netwarn");
+  let ok = true;
+  try {
+    const pc = new RTCPeerConnection({ iceServers: ICE });
+    pc.close();
+  } catch (e) { ok = false; }
+  if (typeof RTCPeerConnection === "undefined") ok = false;
+  warn.classList.toggle("on", !ok);
+  return ok;
 }
 
 function wireChannel(ch) {
@@ -1859,6 +1894,14 @@ function wireChannel(ch) {
 }
 
 async function netHost() {
+  try {
+    await hostFlow();
+  } catch (e) {
+    netSay("could not start hosting: " + e.message);
+  }
+}
+
+async function hostFlow() {
   netTeardown();
   net.role = "host";
   net.seed = (Math.random() * 0x7fffffff) | 0;
@@ -1869,7 +1912,9 @@ async function netHost() {
   await iceSettled(pc);
   const code = await packCode({ t: "o", seed: net.seed, sdp: pc.localDescription.sdp });
   document.getElementById("hostcode").value = code;
-  netSay("code ready — send it over, then paste their reply below");
+  netSay(net.noStun
+    ? "code ready, but this page blocks STUN — same network only"
+    : "code ready — send it over, then paste their reply below");
 }
 
 async function netTakeAnswer(code) {
@@ -1896,8 +1941,10 @@ async function netJoin(code) {
     await iceSettled(pc);
     document.getElementById("joincode").value =
       await packCode({ t: "a", sdp: pc.localDescription.sdp });
-    netSay("reply ready — send it back to the host");
-  } catch (e) { netSay("could not read that code: " + e.message); }
+    netSay(net.noStun
+      ? "reply ready, but this page blocks STUN — same network only"
+      : "reply ready — send it back to the host");
+  } catch (e) { netSay("could not join: " + e.message); }
 }
 
 /* ---- session ---- */
@@ -2079,7 +2126,14 @@ function drawNetHUD() {
 /* ---- panel wiring ---- */
 function netPanel(open) {
   document.getElementById("net").classList.toggle("on", !!open);
-  if (open) { audioWake(); netSay("choose host or join"); }
+  if (open) {
+    audioWake();
+    document.getElementById("step-host").classList.remove("on");
+    document.getElementById("step-join").classList.remove("on");
+    document.getElementById("hostcode").value = "";
+    document.getElementById("joincode").value = "";
+    netSay(netProbe() ? "choose host or join" : "this page cannot reach a STUN server");
+  }
 }
 (function () {
   const $ = id => document.getElementById(id);
@@ -2092,7 +2146,17 @@ function netPanel(open) {
   $("netclose").onclick = () => { netPanel(false); netTeardown(); };
   $("makeanswer").onclick = () => netJoin($("offerin").value);
   $("acceptanswer").onclick = () => netTakeAnswer($("answerin").value);
-  const copy = el => { el.select(); try { document.execCommand("copy"); netSay("copied"); } catch (e) { } };
+  const copy = async el => {
+    if (!el.value) { netSay("nothing to copy yet — the code is still being built"); return; }
+    el.select();
+    try {
+      if (navigator.clipboard) await navigator.clipboard.writeText(el.value);
+      else if (!document.execCommand("copy")) throw new Error("blocked");
+      netSay("copied — send it to your opponent");
+    } catch (e) {
+      netSay("clipboard is blocked here — the code is selected, press Cmd+C");
+    }
+  };
   $("copyhost").onclick = () => copy($("hostcode"));
   $("copyjoin").onclick = () => copy($("joincode"));
 })();

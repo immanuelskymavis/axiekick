@@ -67,8 +67,10 @@ hand. There is no signalling server, no lobby and nothing deployed — which als
 nothing to stand up before a test and nothing to keep running after it.
 
 **To play across the internet**, both people need the game running from their own
-machine (see [Run it](#run-it)) — the published artifact's CSP blocks the STUN lookup, so
-online only works from a served copy:
+machine (see [Run it](#run-it)). The published artifact blocks the STUN lookup at the
+CSP level, so from that link the game falls back to host candidates only — fine for two
+laptops on the same office wifi, useless between continents. The panel says so when it
+happens rather than leaving you with an empty box.
 
 1. One of you picks **PLAY ONLINE → HOST A MATCH** and sends the ~730-character code
    over Slack. The host is player 1, on the left.
