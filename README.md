@@ -34,7 +34,8 @@ There is no walking; all movement comes from jumping, kicking and kicking back.
 
 ## Modes
 
-From the title screen: **local versus**, or **vs CPU** at three difficulties.
+From the title screen: **local versus**, **play online**, or **vs CPU** at three
+difficulties.
 
 | | Reacts in | Kick window | Punishes a whiff |
 |---|---|---|---|
@@ -58,6 +59,46 @@ opponent is, and how often it takes the fight to you.
 
 The reference bot for those numbers uses the same geometry with a fixed ±44 window.
 A match runs 39–47 seconds, which is the number that matters for the demo queue.
+
+## Online
+
+Delay-based lockstep over a WebRTC data channel, with the offer and answer passed by
+hand. There is no signalling server, no lobby and nothing deployed — which also means
+nothing to stand up before a test and nothing to keep running after it.
+
+**To play across the internet**, both people need the game running from their own
+machine (see [Run it](#run-it)) — the published artifact's CSP blocks the STUN lookup, so
+online only works from a served copy:
+
+1. One of you picks **PLAY ONLINE → HOST A MATCH** and sends the ~730-character code
+   over Slack. The host is player 1, on the left.
+2. The other picks **JOIN A MATCH**, pastes it, hits **Generate reply**, and sends the
+   reply code back.
+3. The host pastes the reply and hits **Connect**. You land on character select
+   together.
+
+How it works, and what it costs:
+
+- Inputs for frame *F* are decided at frame *F − delay*. Both peers run the same
+  `step()` over the same input pairs, so neither ever has to send game state.
+- The host picks the delay from the round trip it can actually measure —
+  `round(rtt/2 / 16.7ms) + 2`, clamped to 3–14 frames — and tells the guest. Toronto to
+  Ho Chi Minh City is around 250ms, so expect **10 frames (~170ms) of input lag**. That
+  is the honest price of delay-based lockstep at that distance, and the reason rollback
+  is next: it needs nothing new from this transport, which already carries a full input
+  history.
+- The channel is unordered and unreliable on purpose, and every packet re-sends the last
+  24 frames of input (12 bytes a tick), so a dropped datagram heals on the next tick
+  instead of stalling the match waiting for a retransmit.
+- A state hash goes across every 30 frames. If the two ever disagree the HUD says
+  `DESYNC @ frame` instead of quietly drifting.
+- Ping, delay, stall count and worst stall are on screen for the whole match.
+
+Verified end to end between two browsers over a real data channel: a full FT5 match plus
+a rematch, 2,228 frames, 73 hash checkpoints, zero desyncs. **Not yet verified across
+continents** — that test needs two people, and it is the one that matters. If it fails
+to connect at all, the cause is almost certainly NAT: add a TURN relay to `ICE` in
+`game/index.html` and try again.
 
 ## The art
 

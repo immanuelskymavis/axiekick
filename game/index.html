@@ -48,11 +48,80 @@ kbd{
   font-size:15px;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;
 }
 #focusnag.on{display:flex}
+/* ---- online: manual signalling panel ---- */
+#net{
+  position:fixed;inset:0;z-index:9;display:none;
+  align-items:center;justify-content:center;background:rgba(6,5,12,.86);
+  padding:16px;font-family:"Chakra Petch","Trebuchet MS",sans-serif;
+}
+#net.on{display:flex}
+#netbox{
+  width:min(680px,100%);max-height:100%;overflow:auto;
+  background:#120E28;border:1px solid var(--edge);padding:20px 22px 18px;
+  display:flex;flex-direction:column;gap:12px;
+}
+#netbox h2{margin:0;font-size:22px;letter-spacing:.14em;text-transform:uppercase}
+#netbox p{margin:0;font-size:13px;line-height:1.5;color:var(--dim)}
+#netbox p b{color:var(--pale);font-weight:600}
+.netrow{display:flex;gap:8px;flex-wrap:wrap}
+#net button{
+  font-family:inherit;font-size:13px;letter-spacing:.1em;text-transform:uppercase;
+  background:#1D1740;color:var(--pale);border:1px solid var(--edge);
+  padding:8px 14px;cursor:pointer;
+}
+#net button:hover{border-color:var(--moon);color:var(--moon)}
+#net button[disabled]{opacity:.35;cursor:default;border-color:var(--edge);color:var(--dim)}
+#net textarea{
+  width:100%;height:74px;resize:vertical;background:#0B0916;color:var(--pale);
+  border:1px solid var(--edge);padding:8px;font-family:"IBM Plex Mono",monospace;
+  font-size:10.5px;line-height:1.35;word-break:break-all;
+}
+#net label{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+#netstat{
+  font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--moon);
+  border-top:1px solid var(--edge);padding-top:10px;
+}
+.netstep{display:none;flex-direction:column;gap:6px}
+.netstep.on{display:flex}
 </style>
 
 <div id="shell">
   <canvas id="cv" width="1000" height="580"></canvas>
   <div id="focusnag">Click to play</div>
+</div>
+
+<div id="net">
+  <div id="netbox">
+    <h2>Play online</h2>
+    <p>No server: one of you hosts, the other joins, and you paste two codes at each other
+      over Slack. Inputs then go peer to peer.
+      <b>Host</b> is player 1 on the left.</p>
+    <div class="netrow">
+      <button id="nethost">Host a match</button>
+      <button id="netjoin">Join a match</button>
+      <button id="netclose">Cancel</button>
+    </div>
+
+    <div class="netstep" id="step-host">
+      <label>1 · send this to your opponent</label>
+      <textarea id="hostcode" readonly placeholder="gathering network candidates…"></textarea>
+      <div class="netrow"><button id="copyhost">Copy</button></div>
+      <label>2 · paste the code they send back</label>
+      <textarea id="answerin" placeholder="their reply code"></textarea>
+      <div class="netrow"><button id="acceptanswer">Connect</button></div>
+    </div>
+
+    <div class="netstep" id="step-join">
+      <label>1 · paste the host's code</label>
+      <textarea id="offerin" placeholder="the host's code"></textarea>
+      <div class="netrow"><button id="makeanswer">Generate reply</button></div>
+      <label>2 · send this back to the host</label>
+      <textarea id="joincode" readonly></textarea>
+      <div class="netrow"><button id="copyjoin">Copy</button></div>
+    </div>
+
+    <div id="netstat">idle</div>
+  </div>
 </div>
 <div id="legend">
   <span><b>P1</b> <kbd>A</kbd> dive <kbd>S</kbd> kick</span>
@@ -1574,6 +1643,7 @@ function drawTitle(t) {
 /* --- fight select (versus / CPU difficulty) --- */
 const MODES = [
   { cpu: null, name: "LOCAL VERSUS", blurb: "Two players, one keyboard, one argument" },
+  { cpu: "net", name: "PLAY ONLINE", blurb: "Two machines, two codes, no server in between" },
   { cpu: 0, name: "VS CPU · ROOKIE", blurb: DIFFS[0].blurb },
   { cpu: 1, name: "VS CPU · VETERAN", blurb: DIFFS[1].blurb },
   { cpu: 2, name: "VS CPU · LUNACIAN", blurb: DIFFS[2].blurb }
@@ -1587,20 +1657,22 @@ function drawMode(cur, t) {
 
   const W = 460, X = (STAGE_W - W) / 2;
   for (let i = 0; i < MODES.length; i++) {
-    const m = MODES[i], y = 190 + i * 66, on = cur === i;
-    const col = m.cpu === null ? "#E7E3FB" : [CHARS[0].col, CHARS[1].col, CHARS[2].col][m.cpu];
+    const m = MODES[i], y = 168 + i * 62, on = cur === i;
+    const col = m.cpu === null ? "#E7E3FB"
+      : m.cpu === "net" ? "#7CF0B4"
+        : [CHARS[0].col, CHARS[1].col, CHARS[2].col][m.cpu];
     ctx.fillStyle = rgba(on ? "#1D1740" : "#130F28", on ? 0.98 : 0.8);
-    ctx.fillRect(X, y, W, 54);
+    ctx.fillRect(X, y, W, 50);
     ctx.strokeStyle = rgba(col, on ? 0.95 : 0.22);
     ctx.lineWidth = on ? 2 : 1;
-    ctx.strokeRect(X + 0.5, y + 0.5, W - 1, 53);
+    ctx.strokeRect(X + 0.5, y + 0.5, W - 1, 49);
     if (on) {
-      ctx.fillStyle = col; ctx.fillRect(X, y, 4, 54);
+      ctx.fillStyle = col; ctx.fillRect(X, y, 4, 50);
       const a = 0.35 + 0.25 * Math.sin(t * 0.12);
-      ctx.fillStyle = rgba(col, a * 0.12); ctx.fillRect(X, y, W, 54);
+      ctx.fillStyle = rgba(col, a * 0.12); ctx.fillRect(X, y, W, 50);
     }
-    txt(m.name, X + 24, y + 25, 21, on ? col : rgba("#E7E3FB", 0.55), "left", FD, 2);
-    txt(m.blurb, X + 24, y + 43, -12, rgba("#E7E3FB", on ? 0.6 : 0.3), "left", FM, 0.5);
+    txt(m.name, X + 24, y + 24, 20, on ? col : rgba("#E7E3FB", 0.55), "left", FD, 2);
+    txt(m.blurb, X + 24, y + 41, -11.5, rgba("#E7E3FB", on ? 0.6 : 0.3), "left", FM, 0.5);
   }
   txt("THE CPU READS THE SAME TWO BUTTONS YOU DO", STAGE_W / 2, STAGE_H - 34, 10,
     rgba("#E7E3FB", 0.32), "center", FM, 4);
@@ -1693,15 +1765,357 @@ function drawSelect(sel, t) {
   }
 }
 
+
+/* =========================== ONLINE ====================================
+   Delay-based lockstep over a WebRTC data channel, with the offer and answer
+   passed by hand so there is no signalling server to stand up. Both peers run
+   the same deterministic step() over the same input pairs, which is the whole
+   reason the simulation was written the way it was.
+
+   Inputs for frame F are decided at frame F-delay and every packet re-sends
+   the last 24 frames, so a dropped datagram heals itself on the next tick
+   instead of stalling the match waiting for a retransmit. The channel is
+   unordered and unreliable on purpose: late is worse than lost here.
+
+   Rollback is the next step and needs nothing new from the transport — this
+   already carries a full input history.
+   ====================================================================== */
+const NET_WINDOW = 24;          /* frames of input history in every packet */
+const HASH_EVERY = 30;          /* desync canary cadence */
+const ICE = [{ urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] }];
+
+const net = {
+  on: false, role: null, pc: null, ch: null,
+  frame: 0, delay: 5, seed: 1,
+  local: [], remote: [],
+  stall: 0, stalls: 0, worstStall: 0,
+  rtt: 0, pingSent: 0, lastPing: 0, rttPeak: 0, lastTune: 0,
+  hashes: new Map(), peerHashes: new Map(), desyncAt: -1,
+  status: "idle"
+};
+
+function netSay(msg) {
+  net.status = msg;
+  const el = document.getElementById("netstat");
+  if (el) el.textContent = msg;
+}
+
+/* ---- codes: JSON -> deflate (where the browser has it) -> base64 ---- */
+async function packCode(obj) {
+  const raw = new TextEncoder().encode(JSON.stringify(obj));
+  let bytes = raw, tag = "r";
+  if (window.CompressionStream) {
+    try {
+      const cs = new CompressionStream("deflate-raw");
+      const w = cs.writable.getWriter(); w.write(raw); w.close();
+      bytes = new Uint8Array(await new Response(cs.readable).arrayBuffer());
+      tag = "z";
+    } catch (e) { bytes = raw; tag = "r"; }
+  }
+  let bin = "";
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return tag + btoa(bin).replace(/=+$/, "");
+}
+
+async function unpackCode(code) {
+  const t = code.trim();
+  const tag = t[0], b64 = t.slice(1).replace(/\s+/g, "");
+  const bin = atob(b64 + "===".slice((b64.length + 3) % 4));
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  if (tag !== "z") return JSON.parse(new TextDecoder().decode(bytes));
+  const ds = new DecompressionStream("deflate-raw");
+  const w = ds.writable.getWriter(); w.write(bytes); w.close();
+  return JSON.parse(await new Response(ds.readable).text());
+}
+
+/* ICE trickling has nowhere to trickle to, so wait for the full candidate set */
+function iceSettled(pc) {
+  if (pc.iceGatheringState === "complete") return Promise.resolve();
+  return new Promise(res => {
+    const done = () => { clearTimeout(timer); pc.removeEventListener("icegatheringstatechange", check); res(); };
+    const check = () => { if (pc.iceGatheringState === "complete") done(); };
+    const timer = setTimeout(done, 3000);   /* good enough with host + STUN */
+    pc.addEventListener("icegatheringstatechange", check);
+  });
+}
+
+function newPeer() {
+  const pc = new RTCPeerConnection({ iceServers: ICE });
+  pc.oniceconnectionstatechange = () => {
+    if (["failed", "disconnected", "closed"].includes(pc.iceConnectionState) && net.on) {
+      netSay("connection " + pc.iceConnectionState + " — no hole punched, you probably need a TURN relay");
+    }
+  };
+  return pc;
+}
+
+function wireChannel(ch) {
+  net.ch = ch;
+  ch.binaryType = "arraybuffer";
+  ch.onopen = () => startSession();
+  ch.onclose = () => { if (net.on) netSay("opponent disconnected"); netTeardown(); };
+  ch.onmessage = e => netRecv(new DataView(e.data));
+}
+
+async function netHost() {
+  netTeardown();
+  net.role = "host";
+  net.seed = (Math.random() * 0x7fffffff) | 0;
+  const pc = net.pc = newPeer();
+  wireChannel(pc.createDataChannel("in", { ordered: false, maxRetransmits: 0 }));
+  await pc.setLocalDescription(await pc.createOffer());
+  netSay("gathering network candidates…");
+  await iceSettled(pc);
+  const code = await packCode({ t: "o", seed: net.seed, sdp: pc.localDescription.sdp });
+  document.getElementById("hostcode").value = code;
+  netSay("code ready — send it over, then paste their reply below");
+}
+
+async function netTakeAnswer(code) {
+  try {
+    const msg = await unpackCode(code);
+    if (msg.t !== "a") throw new Error("that is not a reply code");
+    await net.pc.setRemoteDescription({ type: "answer", sdp: msg.sdp });
+    netSay("connecting…");
+  } catch (e) { netSay("could not read that code: " + e.message); }
+}
+
+async function netJoin(code) {
+  try {
+    netTeardown();
+    net.role = "guest";
+    const msg = await unpackCode(code);
+    if (msg.t !== "o") throw new Error("that is not a host code");
+    net.seed = msg.seed | 0;
+    const pc = net.pc = newPeer();
+    pc.ondatachannel = e => wireChannel(e.channel);
+    await pc.setRemoteDescription({ type: "offer", sdp: msg.sdp });
+    await pc.setLocalDescription(await pc.createAnswer());
+    netSay("gathering network candidates…");
+    await iceSettled(pc);
+    document.getElementById("joincode").value =
+      await packCode({ t: "a", sdp: pc.localDescription.sdp });
+    netSay("reply ready — send it back to the host");
+  } catch (e) { netSay("could not read that code: " + e.message); }
+}
+
+/* ---- session ---- */
+function startSession() {
+  net.on = true;
+  net.frame = 0;
+  net.local = []; net.remote = [];
+  net.stall = 0; net.stalls = 0; net.worstStall = 0;
+  net.hashes.clear(); net.peerHashes.clear(); net.desyncAt = -1;
+  for (let f = 0; f < net.delay; f++) { net.local[f] = 0; net.remote[f] = 0; }
+  app.cpu = null;
+  app.pause = null;
+  app.sel = { cur: [0, 1], lock: [false, false], t: 0, cpuT: 0, prev: [0, 0] };
+  app.screen = "select";
+  rollArena();
+  document.getElementById("net").classList.remove("on");
+  netSay("connected");
+  audioWake();
+}
+
+function netTeardown() {
+  if (net.ch) { try { net.ch.close(); } catch (e) { } }
+  if (net.pc) { try { net.pc.close(); } catch (e) { } }
+  net.ch = net.pc = null;
+  net.on = false;
+}
+
+function netQuit() {
+  netTeardown();
+  netSay("disconnected");
+}
+
+/* ---- wire format: every packet is one small binary frame ---- */
+function netSendInputs() {
+  if (!net.ch || net.ch.readyState !== "open") return;
+  const end = net.frame + net.delay;
+  const start = Math.max(0, end - NET_WINDOW + 1);
+  const count = end - start + 1;
+  const buf = new ArrayBuffer(6 + Math.ceil(count / 4));
+  const v = new DataView(buf);
+  v.setUint8(0, 1);
+  v.setUint32(1, start);
+  v.setUint8(5, count);
+  for (let i = 0; i < count; i++) {
+    const val = net.local[start + i] || 0;
+    const at = 6 + (i >> 2), sh = (i & 3) * 2;
+    v.setUint8(at, v.getUint8(at) | ((val & 3) << sh));
+  }
+  try { net.ch.send(buf); } catch (e) { }
+}
+
+function netSendHash(frame, hash) {
+  if (!net.ch || net.ch.readyState !== "open") return;
+  const v = new DataView(new ArrayBuffer(9));
+  v.setUint8(0, 2); v.setUint32(1, frame); v.setUint32(5, hash);
+  try { net.ch.send(v.buffer); } catch (e) { }
+}
+
+/* Inputs are addressed by absolute frame, so the two peers do not have to agree
+   on the delay for correctness - but they do for fairness, since the shorter
+   side ends up doing all the waiting. The host picks it from the round trip it
+   can actually see and tells the guest. */
+function netTuneDelay() {
+  if (net.role !== "host") return;
+  const f = net.frame;
+  if (f - net.lastTune < 180) return;
+  net.lastTune = f;
+  const half = Math.max(net.rtt, net.rttPeak) / 2;
+  const want = Math.min(14, Math.max(3, Math.round(half / (1000 / 60)) + 2));
+  net.rttPeak = net.rtt;
+  if (want === net.delay) return;
+  net.delay = want;
+  const v = new DataView(new ArrayBuffer(2));
+  v.setUint8(0, 5); v.setUint8(1, want);
+  try { net.ch.send(v.buffer); } catch (e) { }
+}
+
+function netPing(kind, stamp) {
+  if (!net.ch || net.ch.readyState !== "open") return;
+  const v = new DataView(new ArrayBuffer(5));
+  v.setUint8(0, kind); v.setUint32(1, stamp >>> 0);
+  try { net.ch.send(v.buffer); } catch (e) { }
+}
+
+function netRecv(v) {
+  const kind = v.getUint8(0);
+  if (kind === 1) {
+    const start = v.getUint32(1), count = v.getUint8(5);
+    for (let i = 0; i < count; i++) {
+      const at = 6 + (i >> 2), sh = (i & 3) * 2;
+      const val = (v.getUint8(at) >> sh) & 3;
+      const f = start + i;
+      if (net.remote[f] === undefined) net.remote[f] = val;
+    }
+  } else if (kind === 2) {
+    const f = v.getUint32(1), h = v.getUint32(5);
+    net.peerHashes.set(f, h);
+    const mine = net.hashes.get(f);
+    if (mine !== undefined && mine !== h && net.desyncAt < 0) net.desyncAt = f;
+  } else if (kind === 3) {
+    netPing(4, v.getUint32(1));
+  } else if (kind === 4) {
+    net.rtt = Math.round(performance.now()) - v.getUint32(1);
+    if (net.rtt > net.rttPeak) net.rttPeak = net.rtt;
+  } else if (kind === 5) {
+    net.delay = v.getUint8(1);            /* the host sets the pace */
+  }
+}
+
+/* a cheap but sensitive fingerprint of everything the sim owns */
+function stateHash(s) {
+  let h = 2166136261;
+  const mix = n => { h = (Math.imul(h ^ (n | 0), 16777619)) >>> 0; };
+  mix(s.tick); mix(s.round); mix(s.timer); mix(s.score[0]); mix(s.score[1]);
+  mix(s.phase.length * 31 + s.phase.charCodeAt(0));
+  for (const p of s.p) {
+    mix(Math.round(p.x * 64)); mix(Math.round(p.y * 64));
+    mix(Math.round(p.vx * 64)); mix(Math.round(p.vy * 64));
+    mix(p.st.charCodeAt(0) * 7 + p.st.length); mix(p.t);
+    mix(p.ch * 13 + p.jumps * 3 + p.hang * 11 + p.floatUsed);
+  }
+  return h >>> 0;
+}
+
+/* One networked tick. Returns the input pair to run, or null to stall. */
+function netTick(localMask) {
+  const target = net.frame + net.delay;
+  if (net.local[target] === undefined) net.local[target] = localMask;
+  netSendInputs();
+
+  const now = Math.round(performance.now());
+  if (now - net.lastPing > 500) { net.lastPing = now; netPing(3, now); }
+  netTuneDelay();
+
+  const mine = net.local[net.frame], theirs = net.remote[net.frame];
+  if (mine === undefined || theirs === undefined) {
+    net.stall++;
+    if (net.stall > net.worstStall) net.worstStall = net.stall;
+    if (net.stall === 1) net.stalls++;
+    return null;
+  }
+  net.stall = 0;
+  net.frame++;
+  return net.role === "host" ? [mine, theirs] : [theirs, mine];
+}
+
+function netAfterTick() {
+  if (!app.m || app.screen !== "match") return;
+  const f = net.frame;
+  if (f % HASH_EVERY) return;
+  const h = stateHash(app.m);
+  net.hashes.set(f, h);
+  netSendHash(f, h);
+  const peer = net.peerHashes.get(f);
+  if (peer !== undefined && peer !== h && net.desyncAt < 0) net.desyncAt = f;
+}
+
+/* the readout that tells you whether to trust the match */
+function drawNetHUD() {
+  if (!net.on) return;
+  if (net.stall > 30) {
+    const a = 0.55 + 0.35 * Math.sin(net.stall * 0.12);
+    ctx.fillStyle = rgba("#08070F", 0.5); ctx.fillRect(0, 250, STAGE_W, 60);
+    txt("WAITING FOR OPPONENT", STAGE_W / 2, 288, 26, rgba("#FFD98A", a), "center", FD, 8);
+  }
+  const bad = net.desyncAt >= 0;
+  const w = 168, x = STAGE_W - w - 10, y = STAGE_H - 62;
+  ctx.fillStyle = rgba("#08070F", 0.66); ctx.fillRect(x, y, w, 52);
+  ctx.strokeStyle = rgba(bad ? "#FF5470" : "#7CF0B4", 0.5); ctx.lineWidth = 1;
+  ctx.strokeRect(x + 0.5, y + 0.5, w - 1, 51);
+  const col = bad ? "#FF5470" : "#7CF0B4";
+  txt((net.role === "host" ? "HOST · P1" : "GUEST · P2"), x + 10, y + 16, -10.5, col, "left", FM, 1.5);
+  txt("ping " + net.rtt + " ms   delay " + net.delay + "f", x + 10, y + 31, -10.5,
+    rgba("#E7E3FB", 0.75), "left", FM);
+  txt(bad ? "DESYNC @ " + net.desyncAt : "stalls " + net.stalls + "  worst " + net.worstStall + "f",
+    x + 10, y + 45, -10.5, bad ? "#FF5470" : rgba("#E7E3FB", 0.5), "left", FM);
+}
+
+/* ---- panel wiring ---- */
+function netPanel(open) {
+  document.getElementById("net").classList.toggle("on", !!open);
+  if (open) { audioWake(); netSay("choose host or join"); }
+}
+(function () {
+  const $ = id => document.getElementById(id);
+  const show = which => {
+    $("step-host").classList.toggle("on", which === "host");
+    $("step-join").classList.toggle("on", which === "join");
+  };
+  $("nethost").onclick = () => { show("host"); netHost(); };
+  $("netjoin").onclick = () => { show("join"); netSay("paste the host's code"); };
+  $("netclose").onclick = () => { netPanel(false); netTeardown(); };
+  $("makeanswer").onclick = () => netJoin($("offerin").value);
+  $("acceptanswer").onclick = () => netTakeAnswer($("answerin").value);
+  const copy = el => { el.select(); try { document.execCommand("copy"); netSay("copied"); } catch (e) { } };
+  $("copyhost").onclick = () => copy($("hostcode"));
+  $("copyjoin").onclick = () => copy($("joincode"));
+})();
+
 /* =========================== PAUSE MENU ================================= */
 /* Esc opens it from anywhere, Esc closes it again. Inside, the game's own two
    buttons move and confirm, so nobody has to learn a third one mid-match. */
 /* a different arena every match; presentation only, so it never touches the sim */
 function rollArena() {
-  if (BG_IMGS.length) app.bg = Math.floor(Math.random() * BG_IMGS.length);
+  if (!BG_IMGS.length) return;
+  if (net.on) {
+    /* both peers have to land in the same arena, so it comes off the shared seed */
+    net.seed = (net.seed * 1103515245 + 12345) & 0x7fffffff;
+    app.bg = net.seed % BG_IMGS.length;
+  } else {
+    app.bg = Math.floor(Math.random() * BG_IMGS.length);
+  }
 }
 
 function pauseItems() {
+  /* online, the match keeps running behind the menu (your inputs just read as
+     nothing), so restarting unilaterally is not on the table */
+  if (net.on) return ["RESUME", "DISCONNECT"];
   return app.screen === "match"
     ? ["RESUME", "RESTART MATCH", "QUIT TO TITLE"]
     : ["RESUME", "QUIT TO TITLE"];
@@ -1720,6 +2134,7 @@ function closePause() {
 }
 
 function quitToTitle() {
+  if (net.on) netQuit();
   app.pause = null;
   app.screen = "title";
   app.m = null;
@@ -1742,6 +2157,7 @@ function pauseTick(inp) {
       const pick = items[pz.cur];
       SFX.lock();
       if (pick === "RESUME") closePause();
+      else if (pick === "DISCONNECT") { netQuit(); quitToTitle(); }
       else if (pick === "RESTART MATCH") {
         app.m = newMatch(app.m.p[0].ch, app.m.p[1].ch, app.cpu, app.t);
         trails[0].length = 0; trails[1].length = 0;
@@ -1793,6 +2209,7 @@ function modeTick(inp) {
     const kick = (inp[i] & IN_KICK) && !(md.prev[i] & IN_KICK);
     if (dive) { md.cur = (md.cur + 1) % MODES.length; SFX.move(); }
     else if (kick) {
+      if (MODES[md.cur].cpu === "net") { netPanel(true); md.prev[i] = inp[i]; return; }
       app.cpu = MODES[md.cur].cpu;
       app.sel = { cur: [0, 1], lock: [false, false], t: 0, cpuT: 0, prev: inp.slice() };
       app.screen = "select";
@@ -1846,8 +2263,35 @@ function endTick(inp) {
     rollArena();
     SFX.lock();
   } else if (dive) {
-    app.mode.prev = [IN_DIVE, IN_DIVE];
-    app.screen = "mode"; SFX.move();
+    if (net.on) {
+      app.sel = { cur: app.sel.cur.slice(), lock: [false, false], t: 0, cpuT: 0, prev: [IN_DIVE, IN_DIVE] };
+      app.screen = "select";
+    } else {
+      app.mode.prev = [IN_DIVE, IN_DIVE];
+      app.screen = "mode";
+    }
+    SFX.move();
+  }
+}
+
+/* one tick of whichever screen is up, from a pair of player inputs */
+function runScreenTick(inp) {
+  if (app.screen === "title") {
+    if (anyPressEdge) {
+      anyPressEdge = false; app.screen = "mode"; app.mode.prev = inp.slice(); SFX.lock();
+    }
+  } else if (app.screen === "mode") {
+    modeTick(inp);
+  } else if (app.screen === "select") {
+    selectTick(inp);
+  } else if (app.screen === "match") {
+    const s = app.m;
+    if (s.phase === "matchend") endTick(inp);
+    else {
+      const in1 = s.cpu ? cpuInput(s) : inp[1];
+      for (const e of step(s, inp[0], in1)) playEv(e);
+    }
+    pushTrail(0, s.p[0]); pushTrail(1, s.p[1]);
   }
 }
 
@@ -1871,25 +2315,24 @@ function frame(now) {
       if (app.pause) closePause(); else openPause();
     }
 
-    if (app.pause) {
-      pauseTick(inp);
-    } else if (app.screen === "title") {
-      if (anyPressEdge) {
-        anyPressEdge = false; app.screen = "mode"; app.mode.prev = inp.slice(); SFX.lock();
-      }
-    } else if (app.screen === "mode") {
-      modeTick(inp);
-    } else if (app.screen === "select") {
-      selectTick(inp);
-    } else if (app.screen === "match") {
-      const s = app.m;
-      if (s.phase === "matchend") endTick(inp);
-      else {
-        const in1 = s.cpu ? cpuInput(s) : inp[1];
-        for (const e of step(s, inp[0], in1)) playEv(e);
-      }
-      pushTrail(0, s.p[0]); pushTrail(1, s.p[1]);
+    if (net.on) {
+      /* Online, the pair of inputs comes from the lockstep buffer, not the
+         keyboard: both peers run identical ticks or they run none. Your own
+         input reads as nothing while the pause menu is open, which the other
+         side simply sees as you standing still. */
+      if (app.pause) pauseTick(inp);
+      const pair = netTick(app.pause ? 0 : (inp[0] | inp[1]));
+      music("battle");
+      anyPressEdge = false;
+      if (!pair) break;                       /* waiting on the opponent */
+      runScreenTick(pair);
+      netAfterTick();
+      continue;
     }
+
+    if (app.pause) pauseTick(inp);
+    else runScreenTick(inp);
+
     music(app.screen === "match" ? "battle" : "menu");
     anyPressEdge = false;
   }
@@ -1902,6 +2345,7 @@ function frame(now) {
   else if (app.screen === "select") drawSelect(app.sel, app.t);
   else drawMatch(app.m);
 
+  drawNetHUD();
   if (app.pause) drawPause();
 
   if (showPerf) {
