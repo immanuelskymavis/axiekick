@@ -174,6 +174,12 @@ const IN_DIVE = 1, IN_KICK = 2;
 /* how much of the drawn body the hurtbox fills; 1.0 is the art's own edge */
 const BODY_FIT = 0.94;
 
+/* Kick Meter: three committed divekicks buy one special. */
+const METER_MAX = 100, METER_GAIN = 34, SPECIAL_WINDOW = 3;
+
+/* Kick Factor: fall two rounds behind and the game hands you something back. */
+const KF_SPEED = 0.09, KF_JUMP = 0.04, KF_REC = 3, KF_CAP = 3;
+
 /* ---- roster ------------------------------------------------------------ */
 /* jumpV / g derived from apex frames T and height h:  v0 = 2h/T,  g = v0/T  */
 function arc(T, h) { const v0 = (2 * h) / T; return { jumpV: v0, g: v0 / T, apex: T }; }
@@ -182,6 +188,9 @@ const CHARS = [
   {
     id: "olek", rangeMax: 460, sfx: "plant", name: "OLEK", cls: "PLANT", role: "THE TEACHER",
     col: "#4FBF6B", col2: "#2E7F45", trim: "#BFE86C", eye: "#12351D",
+    quote: "\"You jumped because you were nervous. I could hear it.\"",
+    taunt: "\"Show me what they taught you. Slowly, if you like.\"",
+    reply: "\"After you, teacher.\"",
     flavour: "Fought in wars the other two have only heard about. Holds the whole stage with one leaf and a lot of patience.",
     weapon: "LEAF TAIL — wide, shallow, hardest arc in the game to jump over.",
     ...arc(26, 218), jumpVX: 0,
@@ -189,6 +198,11 @@ const CHARS = [
     hurtR: 41, hitR: 37, reach: 57,
     kbSpd: 6.6, kbUp: 7.2, floatMax: 0,
     bodyY: 45, rx: 41, ry: 36, artH: 2.9, kickTilt: 0.8, kickHold: 0.5, kickLead: 0.12,
+    spec: {
+      name: "TAIL SWEEP", where: "ground", vx: 13, vy: 0, grav: false,
+      dur: 22, rec: 22, hitR: 46, reach: 64,
+      blurb: "A flat lunge along the floor that nobody jumps over in time"
+    },
     anim: {
       idle: "action/idle/normal", air: "action/run", kick: "attack/melee/tail-smash",
       land: "defense/hit-by-normal", kb: "defense/evade",
@@ -199,6 +213,9 @@ const CHARS = [
   {
     id: "buba", rangeMax: 280, sfx: "beast", name: "BUBA", cls: "BEAST", role: "THE HOTHEAD",
     col: "#F0A03C", col2: "#B0631B", trim: "#FFD98A", eye: "#3A1D06",
+    quote: "\"I did not even see it. Did you see it? Did anyone?\"",
+    taunt: "\"I have got a really good feeling about this one.\"",
+    reply: "\"You never have a plan. That IS the plan, isn't it.\"",
     flavour: "Has never landed where he aimed. Has never once slowed down to think about it.",
     weapon: "HORN DRILL — steepest, fastest dive; smallest hitbox on it.",
     ...arc(18, 200), jumpVX: 3.2,
@@ -206,6 +223,11 @@ const CHARS = [
     hurtR: 37, hitR: 24, reach: 50,
     kbSpd: 4.2, kbUp: 5.4, floatMax: 0,
     bodyY: 41, rx: 37, ry: 33, artH: 2.9, kickTilt: 0.85, kickHold: 0.5, kickLead: 0.12,
+    spec: {
+      name: "METEOR", where: "air", vx: 7, vy: -23, grav: false,
+      dur: 40, rec: 26, hitR: 34, reach: 56,
+      blurb: "Cancels whatever he was doing into a straight drop"
+    },
     anim: {
       idle: "action/idle/normal", air: "action/run", kick: "attack/melee/horn-gore",
       land: "defense/hit-by-normal", kb: "defense/evade",
@@ -216,6 +238,9 @@ const CHARS = [
   {
     id: "puffy", rangeMax: 320, sfx: "aqua", name: "PUFFY", cls: "AQUA", role: "THE CANNONBALL",
     col: "#48B6E8", col2: "#1E6FA8", trim: "#BDEBFF", eye: "#0B2E44",
+    quote: "\"You landed. That was the mistake.\"",
+    taunt: "\"I will just be up here. Take your time.\"",
+    reply: "\"Come down and say that.\"",
     flavour: "Learned to hang in the air from a Puffbird. Nobody ever taught her the landing.",
     weapon: "INFLATE — hold DIVE at the apex and hang there.",
     ...arc(22, 190), jumpVX: 1.2,
@@ -223,6 +248,11 @@ const CHARS = [
     hurtR: 41, hitR: 32, reach: 44,
     kbSpd: 5.4, kbUp: 6.6, floatMax: 24, floatVX: 3.4,
     bodyY: 45, rx: 41, ry: 36, artH: 2.8, kickTilt: 0.9, kickHold: 0.5, kickLead: 0.12,
+    spec: {
+      name: "BURST", where: "air", vx: 17, vy: -1.5, grav: false,
+      dur: 28, rec: 24, hitR: 42, reach: 50,
+      blurb: "Pops and crosses the stage flat out"
+    },
     anim: {
       idle: "action/idle/normal", air: "action/run", kick: "attack/melee/tail-roll",
       land: "defense/hit-by-normal", kb: "defense/evade",
@@ -233,6 +263,9 @@ const CHARS = [
   {
     id: "pomodoro", rangeMax: 240, sfx: "bug", name: "POMODORO", cls: "BUG", role: "THE FEINT",
     col: "#E4574C", col2: "#9E2F2C", trim: "#FFC9A8", eye: "#3A0F0C",
+    quote: "\"You went early. Everyone goes early.\"",
+    taunt: "\"Watch my feet. No - keep watching.\"",
+    reply: "\"I am not falling for the pause again.\"",
     flavour: "Spent a season being harvested by mistake. Has since learned that the trick is to look committed for as long as you can stand it.",
     weapon: "HANG — hold KICK in the air to aim the dive, release to fire.",
     ...arc(22, 250), jumpVX: 2.0,
@@ -240,6 +273,11 @@ const CHARS = [
     hurtR: 34, hitR: 22, reach: 46,
     kbSpd: 5.0, kbUp: 6.0, floatMax: 0,
     bodyY: 38, rx: 34, ry: 30, artH: 2.8, kickTilt: 0.85, kickHold: 0.5, kickLead: 0.12,
+    spec: {
+      name: "SPLIT", where: "air", vx: 0, vy: 0, aimed: 1.6, grav: false,
+      dur: 34, rec: 22, hitR: 34, reach: 52,
+      blurb: "Fires the angle he was aiming at, half again as fast"
+    },
     anim: {
       idle: "action/idle/normal", air: "action/run", kick: "attack/melee/horn-gore",
       land: "defense/hit-by-normal", kb: "defense/evade",
@@ -250,6 +288,9 @@ const CHARS = [
   {
     id: "venoki", rangeMax: 280, sfx: "reptile", name: "VENOKI", cls: "REPTILE", role: "THE WALL",
     col: "#9B6BE0", col2: "#5A3690", trim: "#E3CBFF", eye: "#2A1046",
+    quote: "\"The door stays shut.\"",
+    taunt: "\"Nobody gets past. That has always been the arrangement.\"",
+    reply: "\"There is no door, Venoki. There has not been for years.\"",
     flavour: "Guarded a door in the Mystic ruins for eleven years. Nobody told him the door had been removed.",
     weapon: "ARMED RETREAT — his kickback swings wide on the way out.",
     ...arc(22, 175), jumpVX: 0.8,
@@ -257,6 +298,11 @@ const CHARS = [
     hurtR: 43, hitR: 30, reach: 52,
     kbSpd: 5.8, kbUp: 6.4, floatMax: 0, armedKB: true, kbHitR: 52, kbFrames: 16,
     bodyY: 47, rx: 43, ry: 38, artH: 2.8, kickTilt: 0.82, kickHold: 0.5, kickLead: 0.12,
+    spec: {
+      name: "COIL", where: "ground", vx: -9, vy: 7, grav: true,
+      dur: 26, rec: 20, hitR: 64, reach: 62,
+      blurb: "Leaves, and takes the whole doorway with him"
+    },
     anim: {
       idle: "action/idle/normal", air: "action/run", kick: "attack/melee/tail-thrash",
       land: "defense/hit-by-normal", kb: "defense/evade",
@@ -267,6 +313,9 @@ const CHARS = [
   {
     id: "momo", rangeMax: 360, sfx: "bird", name: "MOMO", cls: "BIRD", role: "THE SECOND THOUGHT",
     col: "#FF7FA8", col2: "#BE4571", trim: "#FFDCE8", eye: "#4A1230",
+    quote: "\"One more jump. There is always one more jump.\"",
+    taunt: "\"Up here the rules are different.\"",
+    reply: "\"Then I will wait until you run out of air.\"",
     flavour: "Left the flock at Puffbird Peak because they all landed too early. Still has not landed.",
     weapon: "SECOND WIND — one extra jump, any time you are in the air.",
     ...arc(24, 205), jumpVX: 1.6,
@@ -274,6 +323,11 @@ const CHARS = [
     hurtR: 33, hitR: 24, reach: 44,
     kbSpd: 6.0, kbUp: 6.8, floatMax: 0, airJumps: 1,
     bodyY: 37, rx: 33, ry: 29, artH: 2.75, kickTilt: 0.86, kickHold: 0.5, kickLead: 0.12,
+    spec: {
+      name: "DIVEBOMB", where: "air", vx: 9, vy: -19, grav: false,
+      dur: 36, rec: 20, hitR: 36, reach: 50,
+      blurb: "Turns the second wind into a stoop"
+    },
     anim: {
       idle: "action/idle/normal", air: "action/run", kick: "attack/melee/mouth-bite",
       land: "defense/hit-by-normal", kb: "defense/evade",
@@ -294,8 +348,28 @@ function statsFor(chIdx, augs) {
   return c;
 }
 
+/* Kick Factor: the round score is a handicap. Two rounds down and the game
+   starts giving it back, a little more for every round after that. */
+function applyKickFactor(s) {
+  for (let i = 0; i < 2; i++) {
+    const k = Math.min(KF_CAP, Math.max(0, s.score[1 - i] - s.score[i] - 1));
+    s.p[i].kf = k;
+    if (!k) continue;
+    const c = s.p[i].c;
+    c.kickSpd *= 1 + KF_SPEED * k;
+    c.jumpV *= 1 + KF_JUMP * k;
+    c.kickRec = Math.max(6, c.kickRec - KF_REC * k);
+  }
+}
+
 /* a few augments modify the other fighter, so they are applied once both
    stat blocks exist */
+/* two of the same Axie is unreadable, so the second one is recoloured */
+function mirrorMark(ps) {
+  if (ps[0].ch === ps[1].ch) ps[1].tint = true;
+  return ps;
+}
+
 function linkAugs(ps) {
   for (let i = 0; i < 2; i++) {
     for (const id of ps[i].augs) {
@@ -313,6 +387,7 @@ function mkPlayer(chIdx, x, facing, augs) {
     x, y: 0, vx: 0, vy: 0,
     st: "stand", t: 0, facing,
     prevIn: 0, floatUsed: 0, inflate: 0, jumps: 0, hang: 0, aimT: 0,
+    meter: 0, kf: 0, dvT: -1, kkT: -1, specT: 0, tint: false,
     wx: x, wy: 0, pwx: x, pwy: 0,   // weapon point, current + previous tick
     spin: 0, hit: false, dead: false, ward: !!cs.wardStart, band: false
   };
@@ -333,7 +408,7 @@ function newMatch(c0, c1, cpu, seed, opt) {
     score: [0, 0],
     timer: ROUND_TICKS,
     result: null,              // {winner:-1|0|1, kind:"ko"|"trade"|"time"|"line"}
-    p: linkAugs([mkPlayer(c0, 240, 1, opt.a0), mkPlayer(c1, 760, -1, opt.a1)]),
+    p: mirrorMark(linkAugs([mkPlayer(c0, 240, 1, opt.a0), mkPlayer(c1, 760, -1, opt.a1)])),
     shake: 0, flash: 0
   };
 }
@@ -341,10 +416,14 @@ function newMatch(c0, c1, cpu, seed, opt) {
 function resetRound(s) {
   const a0 = s.p[0].augs, a1 = s.p[1].augs;
   const w0 = s.p[0].ward, w1 = s.p[1].ward;
+  const m0 = s.p[0].meter, m1 = s.p[1].meter;   /* meter carries between rounds */
   s.p[0] = mkPlayer(s.p[0].ch, 240, 1, a0);
   s.p[1] = mkPlayer(s.p[1].ch, 760, -1, a1);
   s.p[0].ward = w0; s.p[1].ward = w1;
+  s.p[0].meter = m0; s.p[1].meter = m1;
+  mirrorMark(s.p);
   linkAugs(s.p);
+  applyKickFactor(s);
   s.timer = ROUND_TICKS;
   s.result = null;
   s.phase = "intro";
@@ -377,6 +456,10 @@ function startKick(p, c, opp) {
 
 /* weapon point: sits ahead of the body along the facing/travel direction */
 function weaponPoint(p, c) {
+  if (p.st === "spec") {
+    const m = Math.hypot(p.vx, p.vy) || 1;
+    return [p.x + (p.vx / m) * c.spec.reach, p.y + (p.vy / m) * c.spec.reach + c.bodyY];
+  }
   if (p.st === "kick") {
     const m = Math.hypot(p.vx, p.vy) || 1;
     return [p.x + (p.vx / m) * c.reach, p.y + (p.vy / m) * c.reach + c.bodyY];
@@ -405,6 +488,7 @@ function hurtBox(p, c) {
 
 /* an armed kickback swings wider than the same character's dive */
 function hitRadius(p, c) {
+  if (p.st === "spec") return c.spec.hitR;
   return p.st === "kb" && c.kbHitR ? c.kbHitR : c.hitR;
 }
 
@@ -418,17 +502,56 @@ function segHitsBox(ax, ay, bx, by, box, pad) {
 }
 
 /* ---- one player, one tick ---------------------------------------------- */
+function startSpecial(p, c, opp) {
+  const sp = c.spec;
+  p.facing = opp.x >= p.x ? 1 : -1;
+  p.meter = 0;
+  p.st = "spec"; p.t = 0; p.hang = 0; p.inflate = 0;
+  if (sp.where === "ground") { p.y = 0; }
+  if (sp.aimed) {
+    launchKick(p, c);
+    p.vx *= sp.aimed; p.vy *= sp.aimed;
+  } else {
+    p.vx = sp.vx * p.facing;
+    p.vy = sp.vy;
+  }
+}
+
 function stepPlayer(p, opp, inp) {
   const c = p.c;
   const dive = (inp & IN_DIVE) && !(p.prevIn & IN_DIVE);
   const kick = (inp & IN_KICK) && !(p.prevIn & IN_KICK);
   const held = inp & IN_DIVE;
   p.t++;
+
+  /* Both buttons is the special. Nobody presses two keys on the same frame, so
+     a press counts as "both" if its partner went down in the last few - which
+     also means the special cancels whatever that first press had started. */
+  if (dive) p.dvT = 0; else if (p.dvT >= 0) p.dvT++;
+  if (kick) p.kkT = 0; else if (p.kkT >= 0) p.kkT++;
+  const paired = (dive && p.kkT >= 0 && p.kkT <= SPECIAL_WINDOW) ||
+    (kick && p.dvT >= 0 && p.dvT <= SPECIAL_WINDOW);
+  let fired = false;
+  if (paired && c.spec && p.meter >= METER_MAX) {
+    /* pressing DIVE first has already started the jump by the time KICK
+       lands, so a jump that is only a few frames old still counts as grounded
+       - otherwise ground specials would only come out in one button order */
+    const ground = p.st === "stand" || p.st === "kb" ||
+      (p.st === "rise" && p.t <= SPECIAL_WINDOW + 1);
+    const air = p.st === "rise" || p.st === "fall" || p.st === "kick";
+    if ((c.spec.where === "ground" && ground) || (c.spec.where === "air" && air)) {
+      p.dvT = p.kkT = -1;
+      startSpecial(p, c, opp);
+      fired = true;
+    }
+  }
   p.pwx = p.wx; p.pwy = p.wy;
   p.hit = false;
-  let sound = null;
+  let sound = fired ? "spec" : null;
 
-  switch (p.st) {
+  switch (fired ? "_fired" : p.st) {
+    case "_fired": break;
+
     case "stand":
       p.facing = opp.x >= p.x ? 1 : -1;
       if (dive) {
@@ -440,7 +563,11 @@ function stepPlayer(p, opp, inp) {
 
     case "rise":
     case "fall":
-      if (kick) { startKick(p, c, opp); sound = "kick"; break; }
+      if (kick) {
+        startKick(p, c, opp); sound = "kick";
+        p.meter = Math.min(METER_MAX, p.meter + METER_GAIN);
+        break;
+      }
       if (c.airJumps && dive && p.jumps < c.airJumps) {
         /* Momo's second wind: a fresh, slightly shorter jump out of mid-air */
         p.vy = c.jumpV * 0.86; p.vx = c.jumpVX * p.facing;
@@ -485,6 +612,19 @@ function stepPlayer(p, opp, inp) {
       }
       break;
 
+    case "spec": {
+      const sp = c.spec;
+      p.hit = true;
+      if (sp.grav) p.vy -= c.g * 0.55;
+      p.x += p.vx; p.y += p.vy;
+      p.spin += 0.3;
+      if (p.y <= 0) { p.y = 0; p.vy = 0; }
+      if (p.t >= sp.dur) {
+        p.y = 0; p.vx = 0; p.vy = 0; p.st = "land"; p.t = 0; p.rec = sp.rec;
+      }
+      break;
+    }
+
     case "kb":
       if (c.armedKB && p.t <= (c.kbFrames || 10)) p.hit = true;   /* Venoki swings on the way out */
       p.vy -= c.g * 0.9;
@@ -502,7 +642,7 @@ function stepPlayer(p, opp, inp) {
 
   const w = weaponPoint(p, c);
   p.wx = w[0]; p.wy = w[1];
-  if (p.t === 0 && p.st === "kick") { p.pwx = p.wx; p.pwy = p.wy; }
+  if (p.t === 0 && (p.st === "kick" || p.st === "spec")) { p.pwx = p.wx; p.pwy = p.wy; }
   p.prevIn = inp;
   return sound;
 }
@@ -518,6 +658,9 @@ function step(s, in0, in1) {
   if (s.flash > 0) s.flash--;
 
   if (s.phase === "intro") {
+    if (s.pt === 1) {
+      ev.push(s.score[0] === s.win - 1 || s.score[1] === s.win - 1 ? "matchpoint" : "round");
+    }
     stepPlayer(s.p[0], s.p[1], 0);
     stepPlayer(s.p[1], s.p[0], 0);
     if (s.pt >= INTRO_TICKS) { s.phase = "fight"; s.pt = 0; ev.push("fight"); }
@@ -692,6 +835,12 @@ function cpuInput(s) {
       }
     }
 
+    /* a full meter is a resource, and the smart tiers spend it */
+    if (d.smart && me.meter >= METER_MAX && c.spec && c.spec.where === "ground" &&
+      gap < c.spec.vx * c.spec.dur * 0.9 && seen.st !== "kick") {
+      return IN_DIVE | IN_KICK;
+    }
+
     /* Lunacian plays the character it was given, not a generic one: Venoki's
        kickback is an attack, so at point-blank range it just swings. */
     if (d.smart && c.armedKB && gap < c.reach * 1.7 && seen.st !== "kick") return IN_KICK;
@@ -734,9 +883,11 @@ function cpuInput(s) {
       const err = aim.gap - aim.travel;
       const prev = cpu.err0;
       cpu.err0 = err;
-      if (err >= -4) return IN_KICK;
-      if (prev !== undefined && err < prev && Math.abs(err) < d.tol) return IN_KICK;
-      if (d.rush && Math.abs(err) < d.tol * 0.5) return IN_KICK;
+      const spend = me.meter >= METER_MAX && c.spec && c.spec.where === "air"
+        ? IN_DIVE | IN_KICK : IN_KICK;
+      if (err >= -4) return spend;
+      if (prev !== undefined && err < prev && Math.abs(err) < d.tol) return spend;
+      if (d.rush && Math.abs(err) < d.tol * 0.5) return spend;
     } else if (aim && Math.abs(aim.gap - aim.travel) < d.tol + cpu.err) {
       return IN_KICK;
     }
@@ -883,8 +1034,10 @@ function decodeInto(key, uri) {
    the voice is faded out at it. */
 const SFX_LEN = {
   dive: 0.30, kick: 0.45, hit: 1.60, trade: 1.20, whiff: 0.35,
-  kb: 0.30, land: 0.25, lock: 0.40, fight: 0.90, line: 0.90
+  kb: 0.30, land: 0.25, lock: 0.40, fight: 0.90, line: 0.90, spec: 1.10
 };
+/* the kit has no announcer, so a few events borrow a sting that fits */
+const SFX_ALIAS = { spec: "fight", round: "lock", matchpoint: "line" };
 
 function playSample(key, gain, len) {
   const buf = samples[key];
@@ -966,6 +1119,7 @@ function playEv(name) {
   const len = SFX_LEN[ev];
   if (who && playSample(ev + "_" + who.sfx, gain, len)) return;
   if (playSample(ev, gain, len)) return;
+  if (SFX_ALIAS[ev] && playSample(SFX_ALIAS[ev], gain, len)) return;
   const f = SFX[ev];
   if (f) f();
 }
@@ -1346,6 +1500,8 @@ function animFor(p, c) {
 const BG_IMGS = [];
 const BG_ZOOM = 1.42;    /* zoom past the canvas so the arena floor can be placed */
 const BG_MENU = 7;       /* bg-plant: the clearing every menu stands in */
+const BG_NAMES = ["PUFFY'S COVE", "BEAST CAMP", "PUFFBIRD PEAK", "BUG HOLLOW",
+  "DAWN TERRACE", "DUSK HOLLOW", "MECH YARD", "PLANT CLEARING", "REPTILE RUINS"];
 const BG_FLOOR = 0.66;   /* where the fighting plane sits in the source art */
 if (typeof KIT_ASSETS !== "undefined" && KIT_ASSETS) {
   for (const uri of KIT_ASSETS.bg) {
@@ -1413,7 +1569,7 @@ function drawArena(i) {
   return true;
 }
 
-const MENU_SCREENS = ["title", "mode", "select", "ladder", "draft", "runend"];
+const MENU_SCREENS = ["title", "mode", "select", "ladder", "draft", "runend", "stage", "story"];
 
 let starCache = null;
 function drawStage(s) {
@@ -1644,6 +1800,15 @@ function drawAxie(p, c, opt) {
   const px = opt.px !== undefined ? opt.px : p.x;
   const feet = opt.py !== undefined ? opt.py : FLOOR_Y - p.y;
 
+  if (!opt.portrait && p.kf) {
+    const r = c.hurtR * (1.5 + 0.12 * Math.sin(p.t * 0.3 + p.x * 0.05));
+    const g2 = ctx.createRadialGradient(p.x, FLOOR_Y - p.y - c.bodyY, r * 0.35,
+      p.x, FLOOR_Y - p.y - c.bodyY, r);
+    g2.addColorStop(0, rgba("#FF8A5C", 0.3 * p.kf / KF_CAP + 0.12));
+    g2.addColorStop(1, rgba("#FF8A5C", 0));
+    ctx.fillStyle = g2;
+    ctx.beginPath(); ctx.arc(p.x, FLOOR_Y - p.y - c.bodyY, r, 0, 7); ctx.fill();
+  }
   if (!opt.portrait) {
     const k = Math.max(0.28, 1 - Math.max(0, p.y) / 420);
     ctx.fillStyle = rgba("#000000", 0.42 * k);
@@ -1672,6 +1837,7 @@ function drawAxie(p, c, opt) {
   const S = (opt.scale || 1) * sp.fit;
 
   ctx.save();
+  if (p.tint) ctx.filter = "hue-rotate(155deg) saturate(1.2)";
   ctx.translate(px, feet);
   ctx.scale(p.facing, 1);
   ctx.translate(0, -c.bodyY);
@@ -1702,6 +1868,127 @@ function drawTrail(i, c) {
   }
 }
 
+
+
+/* --- stage select ---------------------------------------------------------
+   Versus and VS CPU only: online has to agree on an arena and Arcade wants
+   the surprise. RANDOM is a real option, not a fallback. */
+function drawStagePick(t) {
+  drawStage(null);
+  ctx.fillStyle = rgba("#08070F", 0.7); ctx.fillRect(0, 0, STAGE_W, STAGE_H);
+  txt("SELECT STAGE", STAGE_W / 2, 58, 30, "#E7E3FB", "center", FD, 9);
+  drawHints(STAGE_W / 2, 80, [["DIVE", "MOVE"], ["KICK", "FIGHT"]]);
+
+  const N = BG_IMGS.length + 1, COLS = 5;
+  const TW = 176, TH = 104, GX = 12, GY = 34;
+  const X0 = (STAGE_W - (TW * COLS + GX * (COLS - 1))) / 2, Y0 = 108;
+  for (let i = 0; i < N; i++) {
+    const x = X0 + (i % COLS) * (TW + GX), y = Y0 + Math.floor(i / COLS) * (TH + GY);
+    const on = app.stage.cur === i, random = i === BG_IMGS.length;
+    ctx.save();
+    ctx.beginPath(); ctx.rect(x, y, TW, TH); ctx.clip();
+    if (random) {
+      ctx.fillStyle = "#171235"; ctx.fillRect(x, y, TW, TH);
+      txt("?", x + TW / 2, y + TH / 2 + 22, 62, rgba("#FFD98A", 0.85), "center", FD);
+    } else {
+      const im = bgReady(i);
+      if (im) {
+        const h = TH * 1.5, w = h * (im.naturalWidth / im.naturalHeight);
+        ctx.drawImage(im, x + (TW - w) / 2, y - h * 0.22, w, h);
+      } else { ctx.fillStyle = "#171235"; ctx.fillRect(x, y, TW, TH); }
+    }
+    if (!on) { ctx.fillStyle = rgba("#08070F", 0.45); ctx.fillRect(x, y, TW, TH); }
+    ctx.restore();
+    ctx.strokeStyle = rgba(on ? "#FFD98A" : "#8E7BD8", on ? 1 : 0.3);
+    ctx.lineWidth = on ? 3 : 1;
+    ctx.strokeRect(x + 0.5, y + 0.5, TW - 1, TH - 1);
+    txt(random ? "RANDOM" : BG_NAMES[i], x + TW / 2, y + TH + 18, -11,
+      on ? "#FFD98A" : rgba("#E7E3FB", 0.5), "center", FM, 2);
+    hot(x, y, TW, TH + 22, () => { app.stage.cur = i; startPickedMatch(); },
+      () => { app.stage.cur = i; });
+  }
+}
+
+function startPickedMatch() {
+  const sel = app.sel;
+  app.m = newMatch(sel.cur[0], sel.cur[1], app.cpu, app.t);
+  trails[0].length = 0; trails[1].length = 0;
+  if (app.stage.cur >= BG_IMGS.length) rollArena();
+  else app.bg = app.stage.cur;
+  app.screen = "match";
+  SFX.lock();
+}
+
+function stagePickTick(inp) {
+  const st = app.stage;
+  const m = inp[0] | inp[1];
+  const dive = (m & IN_DIVE) && !(st.prev & IN_DIVE);
+  const kick = (m & IN_KICK) && !(st.prev & IN_KICK);
+  st.prev = m;
+  if (dive) { st.cur = (st.cur + 1) % (BG_IMGS.length + 1); SFX.move(); }
+  else if (kick) startPickedMatch();
+}
+
+/* --- arcade story beats ---------------------------------------------------
+   Two lines before each fight. Cheap words, and the only place the roster
+   gets to be characters rather than stat blocks. */
+function storyLines() {
+  const foe = CHARS[run.foeCh], you = CHARS[run.ch];
+  const lv = run.level;
+  if (LADDER[lv].ch === -2) {
+    return [[foe, you.taunt], [you, '"That is my line."']];
+  }
+  if (lv === 0) return [[foe, foe.taunt], [you, you.reply]];
+  if (lv === 5) return [[foe, '"You have been picking things up off the floor, have you not."'], [you, you.reply]];
+  if (lv >= 6) return [[foe, '"Again? You beat one of us. There are ten."'], [you, you.reply]];
+  return [[foe, foe.taunt], [you, you.reply]];
+}
+
+function drawStory(t) {
+  drawStage(null);
+  ctx.fillStyle = rgba("#08070F", 0.74); ctx.fillRect(0, 0, STAGE_W, STAGE_H);
+  const lines = storyLines();
+  txt("STAGE " + (run.level + 1), STAGE_W / 2, 56, 14, rgba("#FFD98A", 0.8), "center", FM, 6);
+
+  for (let i = 0; i < 2; i++) {
+    const [who, line] = lines[i];
+    const left = i === 1;
+    const y = 110 + i * 172, H = 148;
+    const shown = Math.min(1, Math.max(0, (app.story.t - i * 26) / 22));
+    if (shown <= 0) continue;
+    ctx.save();
+    ctx.globalAlpha = shown;
+    ctx.fillStyle = rgba("#150F2C", 0.92);
+    ctx.fillRect(120, y, 760, H);
+    ctx.fillStyle = who.col;
+    ctx.fillRect(left ? 120 : 876, y, 4, H);
+    drawAxie(
+      { ch: CHARS.indexOf(who), x: 0, y: 0, st: "stand", t: 30, facing: left ? 1 : -1, inflate: 0, spin: 0, vx: 0, vy: 0, dead: false },
+      who, {
+        portrait: true, px: left ? 196 : 804, py: y + H - 14 + Math.sin(t * 0.05 + i) * 3,
+        scale: 0.78, anim: who.anim.idle, animT: t / 60 + i
+      }
+    );
+    txt(who.name, left ? 268 : 732, y + 44, 24, who.col, left ? "left" : "right", FD, 2);
+    let ly = y + 76;
+    for (const l of wrapText(line, 520, 17)) {
+      txt(l, left ? 268 : 732, ly, -17, "#E7E3FB", left ? "left" : "right", FD);
+      ly += 23;
+    }
+    ctx.restore();
+  }
+  if (app.story.t > 60) {
+    drawHintButtons(STAGE_W / 2, STAGE_H - 30, [["KICK", "FIGHT"]], [() => arcadeFight()]);
+  }
+}
+
+function storyTick(inp) {
+  app.story.t++;
+  const m = inp[0] | inp[1];
+  const kick = (m & IN_KICK) && !(app.story.prev & IN_KICK);
+  app.story.prev = m;
+  if (app.story.t > 30 && kick) { SFX.lock(); arcadeFight(); }
+}
 
 /* =========================== POINTER + PROMPTS ==========================
    Everything clickable registers a rectangle while it draws, so the mouse
@@ -1851,17 +2138,39 @@ function drawHUD(s) {
   ctx.strokeStyle = rgba("#8E7BD8", 0.25); ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(0, 74.5); ctx.lineTo(STAGE_W, 74.5); ctx.stroke();
 
+  const col1 = s.p[1].tint ? "#7CE0C8" : c1.col;
   txt(c0.name, 26, 36, 26, c0.col, "left", FD, 1);
   txt("P1 · " + c0.cls, 26, 56, 11, rgba("#E7E3FB", 0.55), "left", FM, 1.2);
-  txt(c1.name, STAGE_W - 26, 36, 26, c1.col, "right", FD, 1);
+  txt(c1.name, STAGE_W - 26, 36, 26, col1, "right", FD, 1);
   txt(c1.cls + " · " + (s.cpu ? "CPU " + DIFFS[s.cpu.diff].name : "P2"),
     STAGE_W - 26, 56, 11, rgba("#E7E3FB", 0.55), "right", FM, 1.2);
+
+  /* kick meter, and the comeback tag if the score has handed one out */
+  for (let i = 0; i < 2; i++) {
+    const p = s.p[i], c = p.c, col = i && p.tint ? "#7CE0C8" : c.col;
+    const w = 150, x = i === 0 ? 26 : STAGE_W - 26 - w, y = 62;
+    ctx.fillStyle = rgba("#08070F", 0.6); ctx.fillRect(x, y, w, 6);
+    const full = p.meter >= METER_MAX;
+    const pulse = full ? 0.7 + 0.3 * Math.sin(s.tick * 0.25) : 1;
+    ctx.fillStyle = rgba(full ? "#FFD98A" : col, pulse);
+    ctx.fillRect(x, y, w * (p.meter / METER_MAX), 6);
+    ctx.strokeStyle = rgba("#E7E3FB", 0.25); ctx.lineWidth = 1;
+    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, 5);
+    if (full && c.spec) {
+      txt("DIVE+KICK  " + c.spec.name, i === 0 ? x : x + w, y + 20, -10,
+        rgba("#FFD98A", pulse), i === 0 ? "left" : "right", FM, 1.5);
+    }
+    if (p.kf) {
+      txt("KICK FACTOR x" + p.kf, i === 0 ? x : x + w, y - 16, -10.5,
+        "#FF8A5C", i === 0 ? "left" : "right", FM, 1.5);
+    }
+  }
 
   for (let i = 0; i < 2; i++) {
     const augs = s.p[i].augs;
     for (let a = 0; a < augs.length; a++) {
       const x = i === 0 ? 30 + a * 32 : STAGE_W - 30 - a * 32;
-      drawAugMedal(augs[a], x, 96, 30);
+      drawAugMedal(augs[a], x, 104, 30);
     }
   }
   for (let i = 0; i < s.win; i++) {
@@ -1958,6 +2267,15 @@ function drawMatch(s) {
 
   drawHUD(s);
 
+  /* announcer callouts that belong to a fighter rather than the round */
+  for (let i = 0; i < 2; i++) {
+    const p = s.p[i];
+    if (p.st !== "spec" || p.t > 26) continue;
+    const a = Math.max(0, 1 - p.t / 26);
+    txt(p.c.spec.name, p.x, sy(p.y) - 110 - p.t * 1.6, 26,
+      rgba("#FFD98A", a), "center", FD, 6);
+  }
+
   if (s.flash > 0) {
     ctx.fillStyle = rgba("#FFFFFF", (s.flash / 10) * 0.35);
     ctx.fillRect(0, 0, STAGE_W, STAGE_H);
@@ -1989,6 +2307,11 @@ function drawMatch(s) {
     txt("WINNER", STAGE_W / 2, 258, 16, rgba("#E7E3FB", 0.6), "center", FM, 8);
     txt(c.name, STAGE_W / 2, 322, 74, c.col, "center", FD, 6);
     txt(s.score[0] + " — " + s.score[1], STAGE_W / 2, 362, 26, "#E7E3FB", "center", FM, 4);
+    let qy = 386;
+    for (const line of wrapText(c.quote, 620, 15)) {
+      txt(line, STAGE_W / 2, qy, -15, rgba("#E7E3FB", 0.8), "center", FD);
+      qy += 19;
+    }
     drawHintButtons(STAGE_W / 2, 412,
       [["KICK", "NEXT FIGHT"], ["DIVE", "EXIT"]],
       [() => endChoose(true), () => endChoose(false)]);
@@ -2981,7 +3304,8 @@ function drawLadder(t) {
 
   drawHintButtons(STAGE_W / 2, STAGE_H - 28,
     [["KICK", "FIGHT"], ["ESC", "MENU"]],
-    [() => { SFX.lock(); arcadeFight(); }, () => openPause()]);
+    [() => { SFX.lock(); app.story = { t: 0, prev: IN_KICK }; app.screen = "story"; },
+     () => openPause()]);
 }
 
 function drawDraft(t) {
@@ -3058,7 +3382,7 @@ function ladderTick(inp) {
   const m = inp[0] | inp[1];
   const kick = (m & IN_KICK) && !(run.prev & IN_KICK);
   run.prev = m;
-  if (kick) { SFX.lock(); arcadeFight(); }
+  if (kick) { SFX.lock(); app.story = { t: 0, prev: IN_KICK }; app.screen = "story"; }
 }
 
 function draftTick(inp) {
@@ -3185,6 +3509,8 @@ const app = {
   mode: { cur: 0, prev: [0, 0], sub: null, subCur: 1 },
   pause: null,
   bg: 0,                           /* which Origins arena this match is fought in */
+  stage: { cur: 9, prev: 0 },
+  story: { t: 0, prev: 0 },
   sel: { cur: [0, 1], lock: [false, false], t: 0, cpuT: 0, prev: [0, 0] },
   m: null
 };
@@ -3217,10 +3543,15 @@ function selectTick(inp) {
   if (sel.lock[0] && sel.lock[1]) {
     sel.t++;
     if (sel.t > 36) {
-      app.m = newMatch(sel.cur[0], sel.cur[1], app.cpu, app.t);
-      trails[0].length = 0; trails[1].length = 0;
-      rollArena();
-      app.screen = "match";
+      if (net.on) {
+        app.m = newMatch(sel.cur[0], sel.cur[1], app.cpu, app.t);
+        trails[0].length = 0; trails[1].length = 0;
+        rollArena();
+        app.screen = "match";
+      } else {
+        app.stage.prev = IN_KICK;
+        app.screen = "stage";
+      }
     }
   }
 }
@@ -3266,6 +3597,10 @@ function runScreenTick(inp) {
     modeTick(inp);
   } else if (app.screen === "select") {
     selectTick(inp);
+  } else if (app.screen === "stage") {
+    stagePickTick(inp);
+  } else if (app.screen === "story") {
+    storyTick(inp);
   } else if (app.screen === "ladder") {
     ladderTick(inp);
   } else if (app.screen === "draft") {
@@ -3335,6 +3670,8 @@ function frame(now) {
   if (app.screen === "title") drawTitle(app.t);
   else if (app.screen === "mode") drawMode(app.mode.cur, app.t);
   else if (app.screen === "select") drawSelect(app.sel, app.t);
+  else if (app.screen === "stage") drawStagePick(app.t);
+  else if (app.screen === "story") drawStory(app.t);
   else if (app.screen === "ladder") drawLadder(app.t);
   else if (app.screen === "draft") drawDraft(app.t);
   else if (app.screen === "runend") drawRunEnd(app.t);

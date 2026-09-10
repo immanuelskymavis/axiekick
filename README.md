@@ -44,6 +44,12 @@ There is no walking; all movement comes from jumping, kicking and kicking back.
 From the title screen: **local versus**, **play online**, **arcade run**, or **vs CPU**
 at three difficulties.
 
+### Stages
+
+Local versus and VS CPU pick their arena on a stage screen — nine Origins class arenas
+by name, plus RANDOM. Online rolls a shared arena from the connection seed (both sides
+have to land in the same place) and Arcade keeps the surprise.
+
 ### Arcade
 
 Ten fights, three choices, three lives. Stages 1–3 are single rounds, 4–6 first to 3,
@@ -58,6 +64,9 @@ that score for you, a first whiff with no recovery at all); three are legendary 
 appear in the last draft (survive the first hit of every fight, two extra lives, or all
 of it at once). Hover any medallion — on the ladder or mid-fight — to see what it does.
 
+Every stage opens with two lines of dialogue: the opponent says something, your Axie
+answers. Stage 10 answers itself.
+
 **Level 10 is your Reflection**: the Axie you beat on level 1, carrying the exact three
 augments you drafted. Whatever you decided was strong, you have to beat.
 
@@ -67,7 +76,9 @@ needed a flag in the round-end path. Full design in
 **[docs/ARCADE-PRD.html](docs/ARCADE-PRD.html)**.
 
 Tuned against a sparring bot with a human-shaped 12-frame reaction delay over 18 runs:
-median run ends at stage 5, three of eighteen clear all ten.
+median run ends at stage 4, three of eighteen clear all ten. That bot never uses a ground
+special and only half-uses air ones, so it understates two of the six Axies — a person
+who spends meter should get further.
 
 | | Reacts in | Kick window | Punishes a whiff |
 |---|---|---|---|
@@ -82,13 +93,14 @@ now, it only jumps when you are already committed or out of its reach, it swings
 kickback as an attack and floats Puffy's inflate to make you whiff, and if the clock
 would hand it the round on Hold the Line it simply stands still and lets it.
 
-Nightmare is Lunacian with the patience removed: it dodges what is genuinely aimed at it
+The smart tiers spend meter on specials too. Nightmare is Lunacian with the patience
+removed: it dodges what is genuinely aimed at it
 and then attacks in every other situation, so there is no neutral to hide in.
 
 Measured against a sparring bot with a human-shaped 12-frame reaction delay, over 24
-matches: Rookie wins 3, Veteran 8, Lunacian 16, **Nightmare 23** (rounds 33–119). All 36
-character pairings finish without stalling, and two Lunacians against each other still
-resolve.
+matches, with both sides using meter: Rookie 0, Veteran 6, Lunacian 9, **Nightmare 12**
+out of 12. All 36 character pairings finish without stalling, and two Lunacians against
+each other still resolve.
 
 The CPU is not special-cased anywhere in the simulation — it reads state and returns
 the same 2-bit input mask a player does, so a CPU match steps through exactly the same
@@ -103,6 +115,28 @@ opponent is, and how often it takes the fight to you.
 
 The reference bot for those numbers uses the same geometry with a fixed ±44 window.
 A match runs 39–47 seconds, which is the number that matters for the demo queue.
+
+## Meter, specials and Kick Factor
+
+Committing a divekick fills the **Kick Meter** — three of them buys one special,
+spent with **DIVE + KICK together** (either order; the special cancels whatever that
+first press started). One per Axie, and each one is that character's idea taken too far:
+
+| Axie | Special | |
+|---|---|---|
+| Olek | **TAIL SWEEP** | a flat lunge along the floor nobody jumps over in time |
+| Buba | **METEOR** | cancels whatever he was doing into a straight drop |
+| Puffy | **BURST** | pops and crosses the stage flat out |
+| Pomodoro | **SPLIT** | fires the angle he was aiming at, half again as fast |
+| Venoki | **COIL** | leaves, and takes the whole doorway with him |
+| Momo | **DIVEBOMB** | turns the second wind into a stoop |
+
+**Kick Factor** is the comeback rule: fall two rounds behind and you get faster, jump
+higher and recover quicker, a little more for every round after that, up to three. It
+shows as an ember aura on the fighter and a tag on the HUD. Nobody has to earn it and
+nobody can turn it off — it exists so a 0–4 match is still worth watching.
+
+Mirror matches recolour the second Axie, so Olek vs Olek is legible.
 
 ## Online
 
