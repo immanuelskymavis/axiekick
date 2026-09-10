@@ -454,7 +454,7 @@ function stepPlayer(p, opp, inp) {
         if (p.y <= 0) {
           p.y = 0; p.vx = 0; p.vy = 0; p.st = "land"; p.t = 0; sound = "whiff";
           p.rec = c.kickRec;
-          if (c.band && !p.band) { p.band = true; p.rec = Math.round(p.rec / 2); }
+          if (c.band && !p.band) { p.band = true; p.rec = 4; }
         }
       }
       break;
@@ -1309,6 +1309,7 @@ function animFor(p, c) {
    fallback, and still what the game looks like with the kit block stripped. */
 const BG_IMGS = [];
 const BG_ZOOM = 1.42;    /* zoom past the canvas so the arena floor can be placed */
+const BG_MENU = 7;       /* bg-plant: the clearing every menu stands in */
 const BG_FLOOR = 0.66;   /* where the fighting plane sits in the source art */
 if (typeof KIT_ASSETS !== "undefined" && KIT_ASSETS) {
   for (const uri of KIT_ASSETS.bg) {
@@ -1376,9 +1377,13 @@ function drawArena(i) {
   return true;
 }
 
+const MENU_SCREENS = ["title", "mode", "select", "ladder", "draft", "runend"];
+
 let starCache = null;
 function drawStage(s) {
-  if (drawArena(app.bg)) return;
+  /* arenas are for fights; the shell of the game keeps one home */
+  const which = MENU_SCREENS.includes(app.screen) ? BG_MENU : app.bg;
+  if (drawArena(which)) return;
   const g = ctx.createLinearGradient(0, 0, 0, FLOOR_Y);
   g.addColorStop(0, "#0B0918"); g.addColorStop(0.55, "#1B1338"); g.addColorStop(1, "#3E2050");
   ctx.fillStyle = g; ctx.fillRect(0, 0, STAGE_W, FLOOR_Y);
@@ -1668,6 +1673,7 @@ function drawTrail(i, c) {
    buttons would have moved, and clicking does what KICK would have done.
    ====================================================================== */
 const HOT = [];
+let TIP = null;
 const mouse = { x: -1e4, y: -1e4, inside: false };
 
 function hot(x, y, w, h, click, hover) {
@@ -1752,6 +1758,36 @@ function drawHintButtons(cx, y, pairs, fns) {
     if (!fns[i]) continue;
     hot(boxes[i][0] - 6, y - 19, boxes[i][1] - boxes[i][0] + 12, 32, fns[i]);
   }
+}
+
+
+/* what that little medallion actually does, on hover */
+function drawTip() {
+  if (!TIP) return;
+  const a = TIP.a;
+  const TIER = ["#9FB4D8", "#7CF0B4", "#FFD98A"];
+  const W = 268, PAD = 14;
+  const eff = wrapText(a.line, W - PAD * 2, 12.5);
+  const lore = wrapText(a.lore, W - PAD * 2, 11);
+  const H = 30 + 16 + eff.length * 16 + 6 + lore.length * 14 + PAD;
+  let x = TIP.cx - W / 2;
+  let y = TIP.cy + TIP.size / 2 + 8;
+  if (y + H > STAGE_H - 8) y = TIP.cy - TIP.size / 2 - H - 8;
+  x = Math.max(8, Math.min(STAGE_W - W - 8, x));
+
+  ctx.fillStyle = rgba("#0B0916", 0.96);
+  ctx.fillRect(x, y, W, H);
+  ctx.strokeStyle = rgba(TIER[a.tier], 0.9); ctx.lineWidth = 1;
+  ctx.strokeRect(x + 0.5, y + 0.5, W - 1, H - 1);
+  ctx.fillStyle = rgba(TIER[a.tier], 0.85); ctx.fillRect(x, y, W, 2);
+
+  txt(["COMMON", "RARE", "LEGENDARY"][a.tier], x + PAD, y + 20, -9.5,
+    rgba(TIER[a.tier], 0.9), "left", FM, 2.5);
+  txt(a.name, x + PAD, y + 40, 17, "#E7E3FB", "left", FD, 1.5);
+  let ly = y + 60;
+  for (const line of eff) { txt(line, x + PAD, ly, -12.5, rgba(TIER[a.tier], 0.95), "left", FD); ly += 16; }
+  ly += 6;
+  for (const line of lore) { txt(line, x + PAD, ly, -11, rgba("#E7E3FB", 0.45), "left", FD); ly += 14; }
 }
 
 /* --- HUD --- */
@@ -1946,46 +1982,154 @@ function drawTitle(t) {
 }
 
 
-/* --- fight select (versus / CPU difficulty) --- */
+/* --- mode select ---------------------------------------------------------
+   Four panels, left to right, each one showing you what it is rather than
+   describing it. VS CPU opens a difficulty rack underneath. */
 const MODES = [
-  { cpu: null, name: "LOCAL VERSUS", blurb: "Two players, one keyboard, one argument" },
-  { cpu: "net", name: "PLAY ONLINE", blurb: "Two machines, two codes, no server in between" },
-  { cpu: "arcade", name: "ARCADE RUN", blurb: "Ten fights, three things you find on the way" },
-  { cpu: 0, name: "VS CPU · ROOKIE", blurb: DIFFS[0].blurb },
-  { cpu: 1, name: "VS CPU · VETERAN", blurb: DIFFS[1].blurb },
-  { cpu: 2, name: "VS CPU · LUNACIAN", blurb: DIFFS[2].blurb },
-  { cpu: 3, name: "VS CPU · NIGHTMARE", blurb: DIFFS[3].blurb }
+  { key: "versus", name: "LOCAL VERSUS", blurb: "Two players, one keyboard, one argument", col: "#E7E3FB", cast: [1, 0] },
+  { key: "net", name: "ONLINE VERSUS", blurb: "Two machines, two codes, no server between", col: "#7CF0B4", cast: [2, 5] },
+  { key: "arcade", name: "ARCADE RUN", blurb: "Ten fights, three things you find on the way", col: "#FFD98A", cast: [3] },
+  { key: "cpu", name: "VS CPU", blurb: "Pick your wall", col: "#FF6E7F", cast: [4] }
 ];
+
+function modePanelCast(m, x, y, w, h, t, i) {
+  const feet = y + h - 14;
+  if (m.cast.length === 2) {
+    const a = CHARS[m.cast[0]], b = CHARS[m.cast[1]];
+    const gap = m.key === "net" ? 0.34 : 0.24;
+    drawAxie({ ch: m.cast[0], x: 0, y: 0, st: "stand", t: 30, facing: 1, inflate: 0, spin: 0, vx: 0, vy: 0, dead: false },
+      a, { portrait: true, px: x + w * (0.5 - gap), py: feet + Math.sin(t * 0.05 + i) * 3, scale: 0.62, anim: a.anim.idle, animT: t / 60 + i });
+    drawAxie({ ch: m.cast[1], x: 0, y: 0, st: "stand", t: 30, facing: -1, inflate: 0, spin: 0, vx: 0, vy: 0, dead: false },
+      b, { portrait: true, px: x + w * (0.5 + gap), py: feet + Math.sin(t * 0.05 + i + 2) * 3, scale: 0.62, anim: b.anim.idle, animT: t / 60 + i + 1 });
+    if (m.key === "net") {
+      ctx.save();
+      ctx.setLineDash([6, 7]); ctx.lineDashOffset = -t * 0.6;
+      ctx.strokeStyle = rgba(m.col, 0.6); ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(x + w * 0.32, feet - 34); ctx.lineTo(x + w * 0.68, feet - 34); ctx.stroke();
+      ctx.restore();
+    }
+    return;
+  }
+  const a = CHARS[m.cast[0]];
+  drawAxie({ ch: m.cast[0], x: 0, y: 0, st: "stand", t: 30, facing: 1, inflate: 0, spin: 0, vx: 0, vy: 0, dead: false },
+    a, { portrait: true, px: x + w / 2, py: feet + Math.sin(t * 0.05 + i) * 3, scale: 0.72, anim: a.anim.idle, animT: t / 60 + i });
+  if (m.key === "arcade") {
+    for (let n = 0; n < 5; n++) {
+      drawUI(n === 2 ? "node_now" : n < 2 ? "node_win" : "node_next",
+        x + w / 2 + (n - 2) * 34, feet - 108, n === 2 ? 30 : 24, n > 2 ? 0.5 : 1);
+    }
+  }
+  if (m.key === "cpu") {
+    txt(DIFFS[app.mode.subCur].name, x + w / 2, feet - 104, 20, m.col, "center", FD, 3);
+  }
+}
 
 function drawMode(cur, t) {
   drawStage(null);
   ctx.fillStyle = rgba("#08070F", 0.62); ctx.fillRect(0, 0, STAGE_W, STAGE_H);
-  txt("CHOOSE A FIGHT", STAGE_W / 2, 104, 32, "#E7E3FB", "center", FD, 9);
-  drawHints(STAGE_W / 2, 126, [["DIVE", "MOVE"], ["KICK", "CONFIRM"]]);
+  txt("SELECT MODE", STAGE_W / 2, 56, 32, "#E7E3FB", "center", FD, 10);
+  drawHints(STAGE_W / 2, 80, app.mode.sub
+    ? [["DIVE", "MOVE"], ["KICK", "START"], ["ESC", "BACK"]]
+    : [["DIVE", "MOVE"], ["KICK", "CONFIRM"]]);
 
-  const W = 460, X = (STAGE_W - W) / 2;
+  const PW = 230, GAP = 16, X0 = (STAGE_W - (PW * 4 + GAP * 3)) / 2;
+  const Y = 108, PH = app.mode.sub ? 250 : 316;
+
   for (let i = 0; i < MODES.length; i++) {
-    const m = MODES[i], y = 146 + i * 56, on = cur === i;
-    const col = m.cpu === null ? "#E7E3FB"
-      : m.cpu === "net" ? "#7CF0B4"
-        : m.cpu === "arcade" ? "#FFD98A"
-          : ["#7FD1A0", CHARS[1].col, CHARS[4].col, "#FF4D6D"][m.cpu];
-    ctx.fillStyle = rgba(on ? "#1D1740" : "#130F28", on ? 0.98 : 0.8);
-    ctx.fillRect(X, y, W, 46);
-    ctx.strokeStyle = rgba(col, on ? 0.95 : 0.22);
-    ctx.lineWidth = on ? 2 : 1;
-    ctx.strokeRect(X + 0.5, y + 0.5, W - 1, 45);
-    if (on) {
-      ctx.fillStyle = col; ctx.fillRect(X, y, 4, 46);
-      const a = 0.35 + 0.25 * Math.sin(t * 0.12);
-      ctx.fillStyle = rgba(col, a * 0.12); ctx.fillRect(X, y, W, 46);
+    const m = MODES[i], x = X0 + i * (PW + GAP);
+    const on = cur === i && !app.mode.sub;
+    const dim = app.mode.sub && m.key !== "cpu";
+    ctx.save();
+    if (dim) ctx.globalAlpha = 0.35;
+
+    ctx.fillStyle = rgba(on ? "#1B1540" : "#120E28", 0.95);
+    ctx.fillRect(x, Y, PW, PH);
+    const g = ctx.createLinearGradient(0, Y, 0, Y + PH);
+    g.addColorStop(0, rgba(m.col, on ? 0.16 : 0.05));
+    g.addColorStop(1, rgba(m.col, 0));
+    ctx.fillStyle = g; ctx.fillRect(x, Y, PW, PH);
+
+    modePanelCast(m, x, Y, PW, PH - 74, t, i);
+
+    ctx.fillStyle = rgba(m.col, on ? 0.9 : 0.35);
+    ctx.fillRect(x, Y + PH - 74, PW, 3);
+    txt(m.name, x + PW / 2, Y + PH - 46, m.name.length > 12 ? 20 : 24,
+      on ? m.col : rgba("#E7E3FB", 0.65), "center", FD, 2);
+    let by = Y + PH - 28;
+    for (const line of wrapText(m.blurb, PW - 26, 11, FM)) {
+      txt(line, x + PW / 2, by, -11, rgba("#E7E3FB", on ? 0.6 : 0.3), "center", FM);
+      by += 13;
     }
-    txt(m.name, X + 24, y + 22, 19, on ? col : rgba("#E7E3FB", 0.55), "left", FD, 2);
-    txt(m.blurb, X + 24, y + 38, -11, rgba("#E7E3FB", on ? 0.6 : 0.3), "left", FM, 0.5);
-    hot(X, y, W, 46, () => { app.mode.cur = i; modeConfirm(); }, () => { app.mode.cur = i; });
+
+    ctx.strokeStyle = rgba(m.col, on ? 1 : 0.22);
+    ctx.lineWidth = on ? 3 : 1;
+    ctx.strokeRect(x + 0.5, Y + 0.5, PW - 1, PH - 1);
+    if (on) {
+      ctx.strokeStyle = rgba(m.col, 0.25 + 0.2 * Math.sin(t * 0.12));
+      ctx.lineWidth = 6;
+      ctx.strokeRect(x - 3, Y - 3, PW + 6, PH + 6);
+    }
+    ctx.restore();
+    if (!app.mode.sub) {
+      hot(x, Y, PW, PH, () => { app.mode.cur = i; modeConfirm(); }, () => { app.mode.cur = i; });
+    }
   }
-  txt("THE CPU READS THE SAME TWO BUTTONS YOU DO", STAGE_W / 2, STAGE_H - 34, 10,
-    rgba("#E7E3FB", 0.32), "center", FM, 4);
+
+  /* the difficulty rack slides in under VS CPU */
+  if (app.mode.sub === "cpu") {
+    const RY = Y + PH + 18, RH = 76, RW = 760, RX = (STAGE_W - RW) / 2;
+    txt("HOW HARD", STAGE_W / 2, RY - 10, 12, rgba("#E7E3FB", 0.5), "center", FM, 5);
+    for (let i = 0; i < DIFFS.length; i++) {
+      const on = app.mode.subCur === i;
+      const w = (RW - 3 * 10) / DIFFS.length, x = RX + i * (w + 10);
+      const col = ["#7FD1A0", CHARS[1].col, CHARS[4].col, "#FF4D6D"][i];
+      ctx.fillStyle = rgba(on ? "#1B1540" : "#120E28", 0.96);
+      ctx.fillRect(x, RY, w, RH);
+      ctx.strokeStyle = rgba(col, on ? 1 : 0.25);
+      ctx.lineWidth = on ? 2 : 1;
+      ctx.strokeRect(x + 0.5, RY + 0.5, w - 1, RH - 1);
+      ctx.fillStyle = rgba(col, on ? 0.9 : 0.3); ctx.fillRect(x, RY, w, 3);
+      txt(DIFFS[i].name, x + w / 2, RY + 30, 20, on ? col : rgba("#E7E3FB", 0.6), "center", FD, 2);
+      let ly = RY + 48;
+      for (const line of wrapText(DIFFS[i].blurb, w - 20, 10.5, FM)) {
+        if (ly > RY + RH - 6) break;
+        txt(line, x + w / 2, ly, -10.5, rgba("#E7E3FB", on ? 0.6 : 0.3), "center", FM);
+        ly += 12;
+      }
+      hot(x, RY, w, RH,
+        () => { app.mode.subCur = i; modeConfirm(); },
+        () => { app.mode.subCur = i; });
+    }
+  }
+
+  txt("THE CPU READS THE SAME TWO BUTTONS YOU DO", STAGE_W / 2, STAGE_H - 16, 10,
+    rgba("#E7E3FB", 0.3), "center", FM, 4);
+}
+
+function modeConfirm(prev) {
+  const m = MODES[app.mode.cur];
+  if (m.key === "cpu" && !app.mode.sub) { app.mode.sub = "cpu"; SFX.move(); return; }
+  if (m.key === "net") { netPanel(true); return; }
+  app.arcade = m.key === "arcade";
+  app.cpu = m.key === "cpu" ? app.mode.subCur : app.arcade ? 0 : null;
+  app.mode.sub = null;
+  app.sel = { cur: [0, 1], lock: [false, false], t: 0, cpuT: 0, prev: prev || [0, 0] };
+  app.screen = "select";
+  SFX.lock();
+}
+
+function modeTick(inp) {
+  const md = app.mode;
+  for (let i = 0; i < 2; i++) {
+    const dive = (inp[i] & IN_DIVE) && !(md.prev[i] & IN_DIVE);
+    const kick = (inp[i] & IN_KICK) && !(md.prev[i] & IN_KICK);
+    if (dive) {
+      if (md.sub) md.subCur = (md.subCur + 1) % DIFFS.length;
+      else md.cur = (md.cur + 1) % MODES.length;
+      SFX.move();
+    } else if (kick) { modeConfirm(inp.slice()); md.prev[i] = inp[i]; return; }
+    md.prev[i] = inp[i];
+  }
 }
 
 /* --- character select --- */
@@ -2024,10 +2168,6 @@ function drawSelect(sel, t) {
 
     const bob = Math.sin(t * 0.05 + i * 1.3) * 4;
     const ringY = y + CH / 2 + 4;
-    ctx.save();
-    ctx.fillStyle = rgba(c.col2, 0.35);
-    ctx.beginPath(); ctx.arc(x + 66, ringY, 43, 0, 7); ctx.fill();
-    ctx.restore();
     drawAxie(
       { ch: i, x: 0, y: 0, st: "stand", t: 30, facing: 1, inflate: 0, spin: 0, vx: 0, vy: 0, dead: false },
       c, {
@@ -2035,7 +2175,6 @@ function drawSelect(sel, t) {
         anim: c.anim.idle, animT: t / 60 + i * 0.7
       }
     );
-    drawUI("avatar", x + 66, ringY, 128);
 
     txt(c.name, x + 126, y + 58, c.name.length > 6 ? 23 : 27, c.col, "left", FD, 2);
     txt(c.cls, x + 126, y + 74, -10, rgba("#E7E3FB", 0.6), "left", FM, 2);
@@ -2517,39 +2656,39 @@ function netPanel(open) {
 const AUGS = [
   {
     id: "blade", item: "blade", tier: 0, name: "RONIN BLADE",
-    line: "Your weapon sits 14% further out",
+    line: "Your weapon reaches a third further out",
     lore: "Left in the ruins by somebody who stopped needing it.",
-    self: c => { c.reach *= 1.14; }
+    self: c => { c.reach *= 1.34; }
   },
   {
     id: "duel", item: "duel", tier: 0, name: "DUELIST'S MARK",
-    line: "Dive 12% faster",
+    line: "Dive a third faster",
     lore: "Two crossed blades, scratched into every doorframe in Ronin.",
-    self: c => { c.kickSpd *= 1.12; }
+    self: c => { c.kickSpd *= 1.32; }
   },
   {
     id: "maul", item: "maul", tier: 0, name: "STONE MAUL",
-    line: "Hitbox +20%, dive 5% slower",
+    line: "Hitbox two thirds bigger, dive a tenth slower",
     lore: "Heavier than it looks, which is the entire idea.",
-    self: c => { c.hitR *= 1.2; c.kickSpd *= 0.95; }
+    self: c => { c.hitR *= 1.65; c.kickSpd *= 0.9; }
   },
   {
     id: "moonshard", item: "moonshard", tier: 0, name: "MOONSHARD",
-    line: "You are 12% smaller to hit",
+    line: "You are a third smaller to hit",
     lore: "A piece of the moon that fell during the Cataclysm, still cold.",
-    self: c => { c.rx *= 0.88; c.ry *= 0.88; }
+    self: c => { c.rx *= 0.7; c.ry *= 0.7; }
   },
   {
     id: "haste", item: "haste", tier: 0, name: "HASTENING DRAUGHT",
-    line: "Six frames less recovery when you miss",
+    line: "Whiffing barely costs you anything",
     lore: "Tastes of citrus and regret.",
-    self: c => { c.kickRec = Math.max(8, c.kickRec - 6); }
+    self: c => { c.kickRec = Math.max(6, c.kickRec - 14); }
   },
   {
     id: "bloom", item: "bloom", tier: 0, name: "NIGHTBLOOM",
-    line: "Your arc is 6° flatter — more ground, worse up close",
+    line: "Your arc flattens by 14° — far more ground, far worse up close",
     lore: "Opens once a month, over the Mystic ruins, for nobody.",
-    self: c => { c.kickAng = Math.max(20, c.kickAng - 6); }
+    self: c => { c.kickAng = Math.max(18, c.kickAng - 14); }
   },
   {
     id: "wings", item: "wings", tier: 1, name: "PUFFBIRD WINGS",
@@ -2565,15 +2704,15 @@ const AUGS = [
   },
   {
     id: "plume", item: "plume", tier: 1, name: "FEATHERFALL PLUME",
-    line: "Hold DIVE at the apex to hang for eight frames",
+    line: "Hold DIVE at the apex to hang for a quarter of a second",
     lore: "Falls slower than anything else on Lunacia, including snow.",
-    self: c => { c.floatMax = Math.max(c.floatMax || 0, 8); }
+    self: c => { c.floatMax = Math.max(c.floatMax || 0, 16); }
   },
   {
     id: "tide", item: "tide", tier: 1, name: "TIDECALLER'S DRAUGHT",
-    line: "Their dive is 8% slower. Yours is not",
+    line: "Their dive is a quarter slower. Yours is not",
     lore: "Poured into the sea at Puffy's Cove every solstice.",
-    foe: c => { c.kickSpd *= 0.92; }
+    foe: c => { c.kickSpd *= 0.76; }
   },
   {
     id: "helm", item: "helm", tier: 1, name: "IRONROOT HELM",
@@ -2583,7 +2722,7 @@ const AUGS = [
   },
   {
     id: "band", item: "band", tier: 1, name: "BANDIT'S BAND",
-    line: "Your first whiff each round recovers in half the time",
+    line: "Your first whiff each round costs you nothing at all",
     lore: "Stolen. Obviously.",
     self: c => { c.band = true; }
   },
@@ -2595,17 +2734,17 @@ const AUGS = [
   },
   {
     id: "elixir", item: "elixir", tier: 2, name: "SUNBURST ELIXIR",
-    line: "One more life, right now",
+    line: "Two more lives, right now",
     lore: "Brewed for the long climb. Drunk, almost always, too early.",
-    run: r => { r.lives++; }
+    run: r => { r.lives += 2; }
   },
   {
     id: "crown", item: "crown", tier: 2, name: "LUNACIAN CROWN",
-    line: "+8% reach, +8% dive speed, four frames off recovery",
+    line: "A fifth more reach, a fifth more speed, ten frames off recovery",
     lore: "Nobody agrees whose it was. Everybody agrees it fits.",
     self: c => {
-      c.reach *= 1.08; c.kickSpd *= 1.08;
-      c.kickRec = Math.max(8, c.kickRec - 4);
+      c.reach *= 1.2; c.kickSpd *= 1.2;
+      c.kickRec = Math.max(6, c.kickRec - 10);
     }
   }
 ];
@@ -2730,6 +2869,7 @@ function arcadeQuit() {
 /* ---- screens ---- */
 function drawAugMedal(id, cx, cy, size, dim) {
   const a = AUG[id];
+  if (hovered(cx - size / 2, cy - size / 2, size, size)) TIP = { a, cx, cy, size };
   const im = KIT_ASSETS && KIT_ASSETS.items && ITEM_IMG[a.item];
   ctx.save();
   if (dim) ctx.globalAlpha = 0.45;
@@ -3006,33 +3146,12 @@ const app = {
   screen: "title", t: 0,
   cpu: null,                       /* null = local versus, else difficulty index */
   arcade: false,
-  mode: { cur: 0, prev: [0, 0] },
+  mode: { cur: 0, prev: [0, 0], sub: null, subCur: 1 },
   pause: null,
   bg: 0,                           /* which Origins arena this match is fought in */
   sel: { cur: [0, 1], lock: [false, false], t: 0, cpuT: 0, prev: [0, 0] },
   m: null
 };
-
-function modeConfirm(prev) {
-  const m = MODES[app.mode.cur];
-  if (m.cpu === "net") { netPanel(true); return; }
-  app.arcade = m.cpu === "arcade";
-  app.cpu = app.arcade ? 0 : m.cpu;
-  app.sel = { cur: [0, 1], lock: [false, false], t: 0, cpuT: 0, prev: prev || [0, 0] };
-  app.screen = "select";
-  SFX.lock();
-}
-
-function modeTick(inp) {
-  const md = app.mode;
-  for (let i = 0; i < 2; i++) {
-    const dive = (inp[i] & IN_DIVE) && !(md.prev[i] & IN_DIVE);
-    const kick = (inp[i] & IN_KICK) && !(md.prev[i] & IN_KICK);
-    if (dive) { md.cur = (md.cur + 1) % MODES.length; SFX.move(); }
-    else if (kick) { modeConfirm(inp.slice()); md.prev[i] = inp[i]; return; }
-    md.prev[i] = inp[i];
-  }
-}
 
 function selectTick(inp) {
   const sel = app.sel;
@@ -3145,7 +3264,9 @@ function frame(now) {
 
     if (escEdge) {
       escEdge = false;
-      if (app.pause) closePause(); else openPause();
+      if (app.screen === "mode" && app.mode.sub) { app.mode.sub = null; SFX.move(); }
+      else if (app.pause) closePause();
+      else openPause();
     }
 
     if (net.on) {
@@ -3174,6 +3295,7 @@ function frame(now) {
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   ctx.clearRect(0, 0, STAGE_W, STAGE_H);
   HOT.length = 0;
+  TIP = null;
   if (app.screen === "title") drawTitle(app.t);
   else if (app.screen === "mode") drawMode(app.mode.cur, app.t);
   else if (app.screen === "select") drawSelect(app.sel, app.t);
@@ -3184,6 +3306,7 @@ function frame(now) {
 
   drawNetHUD();
   if (app.pause) drawPause();
+  drawTip();
 
   if (showPerf) {
     ctx.fillStyle = rgba("#08070F", 0.7); ctx.fillRect(8, STAGE_H - 58, 176, 50);

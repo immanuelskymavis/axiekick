@@ -31,7 +31,8 @@ the live URL serves.
 | **Gamepad** | A / ✕ | B / ○ |
 
 <kbd>Esc</kbd> opens the menu — resume, restart the match, or quit to the title.
-Every menu in the game is clickable too: hover moves the cursor, click confirms.
+Every menu in the game is clickable too: hover moves the cursor, click confirms, and
+hovering an augment medallion explains it.
 Gamepads auto-assign to the first free player slot on their first button press.
 <kbd>F1</kbd> hitboxes · <kbd>F3</kbd> perf · <kbd>M</kbd> mute.
 
@@ -48,12 +49,14 @@ at three difficulties.
 Ten fights, three choices, three lives. Stages 1–3 are single rounds, 4–6 first to 3,
 7–10 first to 5; the CPU climbs Rookie → Veteran → Lunacian → Nightmare, and from stage 4
 the opponent is drafting augments of its own — two at first, five by stage 9.
-Win levels 3, 6 and 9 and you pick one of three **Land items** — real items from the
-gtk2d sheet, each one a named augment with its own effect and lore. Six are numbers
-(reach, dive speed, hitbox, hurtbox, recovery, kick angle); six bend a rule (an extra air
-jump, an armed kickback, a hover, a slower opponent, trades that score for you, a halved
-first whiff); three are legendary and only appear in the last draft (survive a hit, an
-extra life, all of it at once).
+Win stages 3, 6 and 9 and you pick one of three **Land items** — real items from the
+gtk2d sheet, each one a named augment with its own effect and lore. They are deliberately
+loud: a third more reach, a third faster, a third smaller, a hitbox two thirds bigger, an
+arc 14° flatter, whiffs that cost you almost nothing. Six bend a rule instead (an extra
+air jump, an armed kickback, a quarter-second hover, an opponent a quarter slower, trades
+that score for you, a first whiff with no recovery at all); three are legendary and only
+appear in the last draft (survive the first hit of every fight, two extra lives, or all
+of it at once). Hover any medallion — on the ladder or mid-fight — to see what it does.
 
 **Level 10 is your Reflection**: the Axie you beat on level 1, carrying the exact three
 augments you drafted. Whatever you decided was strong, you have to beat.
