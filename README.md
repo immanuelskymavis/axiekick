@@ -1,6 +1,8 @@
 # AxieKick
 
-A two-button fighting game starring the three Origins starter Axies, built for a Sky Mavis
+**Play it: https://immanuelskymavis.github.io/axiekick/**
+
+A two-button fighting game starring six Origins starter Axies, built for a Sky Mavis
 internal gamejam. One hit ends a round. First to five wins the match.
 
 - **[PITCH.md](PITCH.md)** — the one-page pitch
@@ -16,6 +18,9 @@ python3 -m http.server 8080
 ```
 
 Then open `http://localhost:8080/game/`.
+
+`tools/publish_pages.sh` pushes the current build to the `gh-pages` branch, which is what
+the live URL serves.
 
 ## Controls
 
@@ -66,18 +71,22 @@ Delay-based lockstep over a WebRTC data channel, with the offer and answer passe
 hand. There is no signalling server, no lobby and nothing deployed — which also means
 nothing to stand up before a test and nothing to keep running after it.
 
-**To play across the internet**, both people need the game running from their own
-machine (see [Run it](#run-it)). The published artifact blocks the STUN lookup at the
-CSP level, so from that link the game falls back to host candidates only — fine for two
-laptops on the same office wifi, useless between continents. The panel says so when it
-happens rather than leaving you with an empty box.
+Both players open **https://immanuelskymavis.github.io/axiekick/**, then:
 
-1. One of you picks **PLAY ONLINE → HOST A MATCH** and sends the ~730-character code
-   over Slack. The host is player 1, on the left.
-2. The other picks **JOIN A MATCH**, pastes it, hits **Generate reply**, and sends the
-   reply code back.
-3. The host pastes the reply and hits **Connect**. You land on character select
-   together.
+1. One of you picks **PLAY ONLINE → HOST A MATCH** and sends the link it generates over
+   Slack. The host is player 1, on the left.
+2. The other opens that link. It joins automatically and produces a reply code.
+3. They send the reply code back; the host pastes it and hits **Connect**. You land on
+   character select together.
+
+The invite lives in the URL fragment, which browsers never send to a server — so the
+"host" in "GitHub Pages hosting" only ever serves the same static file to both of you.
+It never sees a match. There is also a manual **JOIN A MATCH** box if you would rather
+paste the code than open a link.
+
+Not the published Claude artifact, though: that page blocks the STUN lookup at the CSP
+level and falls back to host candidates only — fine for two laptops on one office wifi,
+useless between continents. The panel says so when it happens.
 
 How it works, and what it costs:
 
@@ -96,11 +105,14 @@ How it works, and what it costs:
   `DESYNC @ frame` instead of quietly drifting.
 - Ping, delay, stall count and worst stall are on screen for the whole match.
 
-Verified end to end between two browsers over a real data channel: a full FT5 match plus
-a rematch, 2,228 frames, 73 hash checkpoints, zero desyncs. **Not yet verified across
-continents** — that test needs two people, and it is the one that matters. If it fails
-to connect at all, the cause is almost certainly NAT: add a TURN relay to `ICE` in
-`game/index.html` and try again.
+Verified end to end between two browser contexts over a real data channel: a full FT5
+match plus a rematch, 2,228 frames, 73 hash checkpoints, zero desyncs; and again through
+the link handshake, with STUN returning server-reflexive candidates, the host's chosen
+delay propagating to the guest, and both sides agreeing on every checkpoint.
+
+**Not yet verified across continents** — that test needs two people, and it is the one
+that matters. If it will not connect at all, the cause is NAT rather than netcode: add a
+TURN relay to the `ICE` list in `game/index.html` and try again.
 
 ## The art
 
