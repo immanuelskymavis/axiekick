@@ -55,8 +55,8 @@ have to land in the same place) and Arcade keeps the surprise.
 
 ### Tutorial
 
-Four prompts, about twenty seconds: jump, divekick, kickback, land a hit. On the mode
-screen next to the season pass chip.
+Five prompts, about half a minute: jump, divekick, kickback, spend the Kick Meter on a
+special, land a hit. **HOW TO** on the menu header.
 
 ### Story mode
 
@@ -164,12 +164,15 @@ prize pool is a mock, and there is no payment code.
 - **10 challenges** in the pool; six are live at a time (two daily, two weekly, two
   seasonal), rotating off the date so it works without a server. Easy/medium/hard, worth
   5 to 100 points.
-- **One season**, always 30 days, one pass at $5 (free here). Buying it unlocks **Momo**
-  immediately and starts challenges paying out. Challenges finished before you buy stay
-  unclaimed and pay when you do.
-- **10 tiers** of rewards: Nightmare Keys as filler, and five **costumes** — a palette
+- **Points are always yours.** Challenges pay whether or not you own the pass; what the
+  pass unlocks is the right to *claim* the reward track. Buy it after a week of playing
+  and every tier you already earned opens at once.
+- **One season**, always 30 days, one pass at $5 (free here). It also unlocks **Momo**.
+- **10 tiers** of rewards, each one rendered on the track as the thing you get: the
+  Nightmare Key item, or the actual Axie wearing the skin. Five **skins** — a palette
   shift plus a face swap using the rig's own alternate eyes and mouths, so Ember Buba is
-  angry and Tidewalker Puffy is smiling with first-party art.
+  angry and Ruin Warden Venoki has his eyes shut. Equip them on the **SKINS** screen or
+  by clicking the chip on a character card.
 - **Prize pool** on the main menu, ticking upward, captioned *leaderboard coming soon*.
   It is a seeded number plus whatever this machine "spent"; the code says so.
 
