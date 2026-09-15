@@ -131,8 +131,7 @@ kbd{
   </div>
 </div>
 <div id="legend">
-  <span><b>P1</b> <kbd>A</kbd> dive <kbd>S</kbd> kick</span>
-  <span><b>P2</b> <kbd>K</kbd> dive <kbd>L</kbd> kick</span>
+  <span id="legend-keys"><b>P1</b> <kbd>A</kbd> dive <kbd>S</kbd> kick &nbsp; <b>P2</b> <kbd>K</kbd> dive <kbd>L</kbd> kick</span>
   <span><kbd>Esc</kbd> menu</span>
   <span>Gamepads auto-assign on first press</span>
   <span><kbd>F1</kbd> hitboxes <kbd>F3</kbd> perf <kbd>M</kbd> mute</span>
@@ -191,6 +190,24 @@ const CHARS = [
     quote: "\"You jumped because you were nervous. I could hear it.\"",
     taunt: "\"Show me what they taught you. Slowly, if you like.\"",
     reply: "\"After you, teacher.\"",
+    taunts: [
+      '"Show me what they taught you. Slowly, if you like."',
+      '"You are holding your breath. You always do."',
+      '"I have fought this fight four hundred times. Once with you in it."',
+      '"Land once. That is all I am asking of you."'
+    ],
+    replies: [
+      '"After you, teacher."',
+      '"Four hundred and one, then."',
+      '"You talk more than you used to."',
+      '"I have been practising the part where I do not."'
+    ],
+    arc: {
+      title: "THE LAST LESSON",
+      open: "Forty years of teaching, and not one of them ever asked the only question that matters: what do you do when there is nothing left to teach? Olek walks down from the terrace to find out.",
+      mid: "Halfway down and he has not been surprised once. That is either mastery or it is the beginning of the end, and he is no longer certain which he would prefer.",
+      end: "He beat every one of them, and the walk back up is longer than the walk down. Somewhere behind him a very young Axie is practising the thing he did on stage four."
+    },
     flavour: "Fought in wars the other two have only heard about. Holds the whole stage with one leaf and a lot of patience.",
     weapon: "LEAF TAIL — wide, shallow, hardest arc in the game to jump over.",
     ...arc(26, 218), jumpVX: 0,
@@ -216,6 +233,24 @@ const CHARS = [
     quote: "\"I did not even see it. Did you see it? Did anyone?\"",
     taunt: "\"I have got a really good feeling about this one.\"",
     reply: "\"You never have a plan. That IS the plan, isn't it.\"",
+    taunts: [
+      '"I have got a really good feeling about this one."',
+      '"No plan. Never had one. Works though."',
+      '"If I go first I cannot be countered. That is just maths."',
+      '"Do not tell Olek about this."'
+    ],
+    replies: [
+      '"You never have a plan. That IS the plan, isn\'t it."',
+      '"That is not maths."',
+      '"I am going to tell Olek."',
+      '"Go on then. Go first."'
+    ],
+    arc: {
+      title: "NO PLAN WHATSOEVER",
+      open: "Buba heard there was a tournament. Buba did not hear where, when, or what the rules were. Buba is already halfway there.",
+      mid: "Five in and still no plan. He has started telling people this is the plan, and the worrying part is that it keeps working.",
+      end: "Ten for ten, and he genuinely could not tell you how. Olek asked him to explain it. He tried. It took four minutes and explained nothing."
+    },
     flavour: "Has never landed where he aimed. Has never once slowed down to think about it.",
     weapon: "HORN DRILL — steepest, fastest dive; smallest hitbox on it.",
     ...arc(18, 200), jumpVX: 3.2,
@@ -241,6 +276,24 @@ const CHARS = [
     quote: "\"You landed. That was the mistake.\"",
     taunt: "\"I will just be up here. Take your time.\"",
     reply: "\"Come down and say that.\"",
+    taunts: [
+      '"I will just be up here. Take your time."',
+      '"Everything looks slower from above."',
+      '"You have to come down eventually. I do not."',
+      '"Hold your breath with me. See how you do."'
+    ],
+    replies: [
+      '"Come down and say that."',
+      '"I will wait. I am good at waiting."',
+      '"You come down first."',
+      '"I have got all round."'
+    ],
+    arc: {
+      title: "NOBODY EVER TAUGHT HER THE LANDING",
+      open: "Puffy learned to hang in the air from a Puffbird, which is a fine teacher for going up and a terrible one for coming down. She has decided this is a tournament problem.",
+      mid: "She has not touched the floor in three fights. The crowd has started counting. She has started listening to the count.",
+      end: "She won it without ever really landing, which everyone agrees should not be possible and nobody can prove was not exactly what happened."
+    },
     flavour: "Learned to hang in the air from a Puffbird. Nobody ever taught her the landing.",
     weapon: "INFLATE — hold DIVE at the apex and hang there.",
     ...arc(22, 190), jumpVX: 1.2,
@@ -266,6 +319,24 @@ const CHARS = [
     quote: "\"You went early. Everyone goes early.\"",
     taunt: "\"Watch my feet. No - keep watching.\"",
     reply: "\"I am not falling for the pause again.\"",
+    taunts: [
+      '"Watch my feet. No - keep watching."',
+      '"I have not decided yet. That is the point."',
+      '"You will move first. You always move first."',
+      '"Take your time. I have got all the time in the air."'
+    ],
+    replies: [
+      '"I am not falling for the pause again."',
+      '"Decide, then. I will wait."',
+      '"You hang there long enough, gravity gets a vote."',
+      '"I moved first once. Once."'
+    ],
+    arc: {
+      title: "A SEASON OF BEING HARVESTED",
+      open: "Pomodoro spent a season being picked by mistake and put back with an apology. He has since worked out that looking committed and being committed are entirely different things.",
+      mid: "Nobody has read him yet. He hangs there a half second longer each fight, and each fight somebody moves first.",
+      end: "He won by not deciding, for ten fights, until deciding was free. The Lunalog lists him as a vegetable. The Lunalog is wrong about several things."
+    },
     flavour: "Spent a season being harvested by mistake. Has since learned that the trick is to look committed for as long as you can stand it.",
     weapon: "HANG — hold KICK in the air to aim the dive, release to fire.",
     ...arc(22, 250), jumpVX: 2.0,
@@ -291,6 +362,24 @@ const CHARS = [
     quote: "\"The door stays shut.\"",
     taunt: "\"Nobody gets past. That has always been the arrangement.\"",
     reply: "\"There is no door, Venoki. There has not been for years.\"",
+    taunts: [
+      '"Nobody gets past. That has always been the arrangement."',
+      '"Eleven years. Nobody. Not once."',
+      '"You may approach. That is as far as it goes."',
+      '"The door is shut. The door is always shut."'
+    ],
+    replies: [
+      '"There is no door, Venoki. There has not been for years."',
+      '"Eleven years of nothing happening is not a record."',
+      '"I am not approaching. I am arriving."',
+      '"Then I will go through the wall."'
+    ],
+    arc: {
+      title: "THE DOOR THAT IS NOT THERE",
+      open: "Eleven years guarding a doorway in the Mystic ruins. The door came down in the Cataclysm. Venoki has not been told and nobody has volunteered.",
+      mid: "Five challengers turned back. He counts them as failed entries. They count them as a very determined reptile in an empty archway.",
+      end: "He held it. All of it, against all of them. There is still no door. He is, by any measure that counts, the best guard on Lunacia."
+    },
     flavour: "Guarded a door in the Mystic ruins for eleven years. Nobody told him the door had been removed.",
     weapon: "ARMED RETREAT — his kickback swings wide on the way out.",
     ...arc(22, 175), jumpVX: 0.8,
@@ -316,6 +405,24 @@ const CHARS = [
     quote: "\"One more jump. There is always one more jump.\"",
     taunt: "\"Up here the rules are different.\"",
     reply: "\"Then I will wait until you run out of air.\"",
+    taunts: [
+      '"Up here the rules are different."',
+      '"One more jump. There is always one more jump."',
+      '"You get one go at this. I get three."',
+      '"I left the flock because they landed. Look at you."'
+    ],
+    replies: [
+      '"Then I will wait until you run out of air."',
+      '"You have to land some time."',
+      '"Three goes and you still have to be right."',
+      '"Landing is the whole game, Momo."'
+    ],
+    arc: {
+      title: "ONE MORE JUMP",
+      open: "Momo left the flock at Puffbird Peak because they all landed too early. Ten fights on the ground sounds like somebody else's idea of a good time, but the prize is up in the air.",
+      mid: "Six fights and she has spent most of them above everyone's heads. The flock would call this showing off. The flock landed.",
+      end: "She took it without ever giving up the height. The peak sent nobody to watch. She will tell them anyway, at length, for years."
+    },
     flavour: "Left the flock at Puffbird Peak because they all landed too early. Still has not landed.",
     weapon: "SECOND WIND — one extra jump, any time you are in the air.",
     ...arc(24, 205), jumpVX: 1.6,
@@ -362,6 +469,20 @@ function applyKickFactor(s) {
   }
 }
 
+/* A head shot costs the loser the round after it: slower, lower, and longer to
+   recover. It wears off on its own. */
+function applyRocked(s) {
+  for (let i = 0; i < 2; i++) {
+    if (!s.rocked[i]) { s.p[i].rocked = 0; continue; }
+    s.rocked[i]--;
+    s.p[i].rocked = 1;
+    const c = s.p[i].c;
+    c.kickSpd *= 0.85;
+    c.jumpV *= 0.92;
+    c.kickRec += 6;
+  }
+}
+
 /* a few augments modify the other fighter, so they are applied once both
    stat blocks exist */
 /* two of the same Axie is unreadable, so the second one is recoloured */
@@ -387,9 +508,9 @@ function mkPlayer(chIdx, x, facing, augs) {
     x, y: 0, vx: 0, vy: 0,
     st: "stand", t: 0, facing,
     prevIn: 0, floatUsed: 0, inflate: 0, jumps: 0, hang: 0, aimT: 0,
-    meter: 0, kf: 0, dvT: -1, kkT: -1, specT: 0, tint: false,
+    meter: 0, kf: 0, rocked: 0, dvT: -1, kkT: -1, specT: 0, tint: false,
     wx: x, wy: 0, pwx: x, pwy: 0,   // weapon point, current + previous tick
-    spin: 0, hit: false, dead: false, ward: !!cs.wardStart, band: false
+    spin: 0, hit: false, dead: false, ward: cs.wardStart || 0, band: 0
   };
 }
 
@@ -408,6 +529,7 @@ function newMatch(c0, c1, cpu, seed, opt) {
     score: [0, 0],
     timer: ROUND_TICKS,
     result: null,              // {winner:-1|0|1, kind:"ko"|"trade"|"time"|"line"}
+    rocked: [0, 0],            // a head shot follows you into the next round
     p: mirrorMark(linkAugs([mkPlayer(c0, 240, 1, opt.a0), mkPlayer(c1, 760, -1, opt.a1)])),
     shake: 0, flash: 0
   };
@@ -424,6 +546,7 @@ function resetRound(s) {
   mirrorMark(s.p);
   linkAugs(s.p);
   applyKickFactor(s);
+  applyRocked(s);
   s.timer = ROUND_TICKS;
   s.result = null;
   s.phase = "intro";
@@ -507,6 +630,7 @@ function startSpecial(p, c, opp) {
   p.facing = opp.x >= p.x ? 1 : -1;
   p.meter = 0;
   p.st = "spec"; p.t = 0; p.hang = 0; p.inflate = 0;
+  p.sx = p.x; p.sy = p.y + c.bodyY;
   if (sp.where === "ground") { p.y = 0; }
   if (sp.aimed) {
     launchKick(p, c);
@@ -607,7 +731,7 @@ function stepPlayer(p, opp, inp) {
         if (p.y <= 0) {
           p.y = 0; p.vx = 0; p.vy = 0; p.st = "land"; p.t = 0; sound = "whiff";
           p.rec = c.kickRec;
-          if (c.band && !p.band) { p.band = true; p.rec = 4; }
+          if (c.band && p.band < c.band) { p.band++; p.rec = 4; }
         }
       }
       break;
@@ -674,7 +798,10 @@ function step(s, in0, in1) {
       stepPlayer(s.p[1], s.p[0], 0);
     }
     if (s.pt >= KO_FREEZE + KO_RESET) {
-      if (s.score[0] >= s.win || s.score[1] >= s.win) { s.phase = "matchend"; s.pt = 0; }
+      if (s.score[0] >= s.win || s.score[1] >= s.win) {
+        s.phase = "matchend"; s.pt = 0;
+        s.announce = (s.score[0] >= s.win ? s.p[0] : s.p[1]).c.name + " wins";
+      }
       else { s.round++; resetRound(s); }
     }
     return ev;
@@ -687,6 +814,7 @@ function step(s, in0, in1) {
   const b = stepPlayer(s.p[1], s.p[0], in1);
   if (a) ev.push(a + ":0");
   if (b) ev.push(b + ":1");
+  if (a === "spec" || b === "spec") { s.flash = 12; s.shake = 20; }
 
   const c0 = s.p[0].c, c1 = s.p[1].c;
   const h0 = hurtBox(s.p[0], c0), h1 = hurtBox(s.p[1], c1);
@@ -694,6 +822,10 @@ function step(s, in0, in1) {
     segHitsBox(s.p[0].pwx, s.p[0].pwy, s.p[0].wx, s.p[0].wy, h1, hitRadius(s.p[0], c0));
   const p1hits = s.p[1].hit &&
     segHitsBox(s.p[1].pwx, s.p[1].pwy, s.p[1].wx, s.p[1].wy, h0, hitRadius(s.p[1], c1));
+  /* where it landed matters: catch them above the waistline and it rocks them
+     into the next round */
+  s.head = p0hits ? s.p[0].wy > h1[1] + h1[3] * 0.18
+    : p1hits ? s.p[1].wy > h0[1] + h0[3] * 0.18 : false;
 
   if (p0hits && p1hits) { endRound(s, -1, "trade", ev); return ev; }
   if (p0hits) { endRound(s, 0, "ko", ev); return ev; }
@@ -718,8 +850,8 @@ function endRound(s, winner, kind, ev) {
   /* Ward of the Ruins eats one hit per fight: the round resets, nobody
      scores, and the ward visibly goes. Ironroot Helm turns a trade into
      your round, unless they are wearing one too. */
-  if (winner >= 0 && kind === "ko" && s.p[1 - winner].ward) {
-    s.p[1 - winner].ward = false;
+  if (winner >= 0 && kind === "ko" && s.p[1 - winner].ward > 0) {
+    s.p[1 - winner].ward--;
     s.result = { winner: -1, kind: "ward", saved: 1 - winner };
     s.phase = "ko"; s.pt = 0; s.shake = 14; s.flash = 8;
     ev.push("ward");
@@ -729,11 +861,14 @@ function endRound(s, winner, kind, ev) {
     const i0 = s.p[0].c.ironroot, i1 = s.p[1].c.ironroot;
     if (i0 && !i1) { winner = 0; kind = "ko"; }
     else if (i1 && !i0) { winner = 1; kind = "ko"; }
+    if (winner >= 0 && s.p[winner].c.ironDrain) s.p[1 - winner].meter = 0;
   }
-  s.result = { winner, kind };
+  const head = kind === "ko" && s.head && winner >= 0;
+  s.result = { winner, kind, head };
   s.phase = "ko"; s.pt = 0;
-  s.shake = kind === "ko" ? 22 : 10;
-  s.flash = 10;
+  s.shake = head ? 36 : kind === "ko" ? 22 : 10;
+  s.flash = head ? 18 : 10;
+  if (head) s.rocked[1 - winner] = 2;
   if (winner >= 0) { s.score[winner]++; s.p[1 - winner].dead = true; }
   else { s.p[0].dead = true; s.p[1].dead = true; }
   ev.push(kind === "ko" ? "hit:" + winner : kind === "trade" ? "trade" : "time");
@@ -940,15 +1075,69 @@ function kickSolution(me, c, seen, oc, lead) {
 
 /* =========================== INPUT ====================================== */
 const keys = Object.create(null);
-const KEYMAP = { KeyA: [0, IN_DIVE], KeyS: [0, IN_KICK], KeyK: [1, IN_DIVE], KeyL: [1, IN_KICK] };
+const DEFAULT_BINDS = { p1dive: "KeyA", p1kick: "KeyS", p2dive: "KeyK", p2kick: "KeyL" };
+const BINDS = Object.assign({}, DEFAULT_BINDS);
+let KEYMAP = {};
+function rebuildKeymap() {
+  KEYMAP = {};
+  KEYMAP[BINDS.p1dive] = [0, IN_DIVE];
+  KEYMAP[BINDS.p1kick] = [0, IN_KICK];
+  KEYMAP[BINDS.p2dive] = [1, IN_DIVE];
+  KEYMAP[BINDS.p2kick] = [1, IN_KICK];
+  const L = document.getElementById("legend-keys");
+  if (L) {
+    L.innerHTML =
+      "<b>P1</b> <kbd>" + keyName(BINDS.p1dive) + "</kbd> dive <kbd>" + keyName(BINDS.p1kick) + "</kbd> kick" +
+      " &nbsp; <b>P2</b> <kbd>" + keyName(BINDS.p2dive) + "</kbd> dive <kbd>" + keyName(BINDS.p2kick) + "</kbd> kick";
+  }
+}
+function keyName(code) {
+  if (!code) return "—";
+  return code.replace(/^Key/, "").replace(/^Digit/, "").replace(/^Arrow/, "")
+    .replace("Space", "SPC").replace("Semicolon", ";").replace("Quote", "'")
+    .replace("Comma", ",").replace("Period", ".").replace("Slash", "/")
+    .replace("BracketLeft", "[").replace("BracketRight", "]").toUpperCase();
+}
+
+/* everything the settings panel owns, remembered between visits */
+const SETTINGS = { master: 0.55, music: 0.24, sfx: 1, announcer: true, shake: true };
+function loadSettings() {
+  try {
+    const raw = JSON.parse(localStorage.getItem("axiekick.settings") || "{}");
+    if (raw.s) Object.assign(SETTINGS, raw.s);
+    if (raw.b) Object.assign(BINDS, raw.b);
+  } catch (e) { }
+  announcer = SETTINGS.announcer;
+}
+function saveSettings() {
+  try {
+    localStorage.setItem("axiekick.settings", JSON.stringify({ s: SETTINGS, b: BINDS }));
+  } catch (e) { }
+}
+function applyAudioSettings() {
+  announcer = SETTINGS.announcer;
+  if (master) master.gain.value = SETTINGS.master;
+  if (sfxBus) sfxBus.gain.value = SETTINGS.sfx;
+  setMusicGain();
+}
 let anyPressEdge = false, escEdge = false;
 let showBoxes = false, showPerf = false, muted = false;
 
 addEventListener("keydown", e => {
   if (e.repeat) return;
+  if (app.pause && app.pause.bind) {
+    e.preventDefault();
+    if (e.code !== "Escape") {
+      for (const k in BINDS) if (BINDS[k] === e.code) BINDS[k] = null;
+      BINDS[app.pause.bind] = e.code;
+      rebuildKeymap(); saveSettings();
+    }
+    app.pause.bind = null;
+    return;
+  }
   if (e.code === "F1") { showBoxes = !showBoxes; e.preventDefault(); return; }
   if (e.code === "F3") { showPerf = !showPerf; e.preventDefault(); return; }
-  if (e.code === "KeyM") { muted = !muted; setMusicGain(); return; }
+  if (e.code === "KeyM") { muted = !muted; applyAudioSettings(); return; }
   if (e.code === "Escape") { escEdge = true; audioWake(); e.preventDefault(); return; }
   if (KEYMAP[e.code]) { keys[e.code] = true; anyPressEdge = true; audioWake(); e.preventDefault(); }
   if (e.code === "Space") e.preventDefault();
@@ -1006,8 +1195,8 @@ function audioWake() {
   const AC = window.AudioContext || window.webkitAudioContext;
   if (!AC) return;
   ac = new AC();
-  master = ac.createGain(); master.gain.value = 0.55; master.connect(ac.destination);
-  sfxBus = ac.createGain(); sfxBus.gain.value = 1; sfxBus.connect(master);
+  master = ac.createGain(); master.gain.value = SETTINGS.master; master.connect(ac.destination);
+  sfxBus = ac.createGain(); sfxBus.gain.value = SETTINGS.sfx; sfxBus.connect(master);
   musicBus = ac.createGain(); musicBus.gain.value = 0; musicBus.connect(master);
   noiseBuf = ac.createBuffer(1, ac.sampleRate * 0.4, ac.sampleRate);
   const d = noiseBuf.getChannelData(0);
@@ -1070,7 +1259,7 @@ function music(track) {
 
 function setMusicGain() {
   if (!musicBus || !ac) return;
-  const want = muted ? 0 : app && app.pause ? 0.07 : 0.24;
+  const want = muted ? 0 : (app && app.pause ? 0.3 : 1) * SETTINGS.music;
   musicBus.gain.setTargetAtTime(want, ac.currentTime, 0.15);
 }
 function tone(f0, f1, dur, type, gain) {
@@ -1111,10 +1300,40 @@ const SFX = {
 };
 /* Event names carry the player index ("kick:0"), which is how a sound picks up
    the right class: Buba gores, Olek smashes, Puffy throws. */
+/* The kit has no voice lines, so the announcer is the browser's own speech
+   synthesis: a real voice saying the real thing, rather than a sting pretending
+   to be one. Off in settings for anyone who hates it. */
+let announcer = true;
+let voiceCache = null;
+function say(text) {
+  if (!announcer || muted || typeof speechSynthesis === "undefined") return;
+  try {
+    if (!voiceCache) {
+      const all = speechSynthesis.getVoices() || [];
+      voiceCache = all.find(v => /en[-_]GB/i.test(v.lang)) ||
+        all.find(v => /^en/i.test(v.lang)) || null;
+    }
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.rate = 1.08; u.pitch = 0.5; u.volume = 0.9;
+    if (voiceCache) u.voice = voiceCache;
+    speechSynthesis.speak(u);
+  } catch (e) { }
+}
+
+const ANNOUNCE = { fight: "Fight", trade: "Trade", time: "Time up", ward: "Blocked" };
+
 function playEv(name) {
   const bits = name.split(":");
   const ev = bits[0];
   const who = bits.length > 1 ? CHARS[app.m.p[+bits[1]].ch] : null;
+  /* announcer first: it is the loudest thing in the room */
+  if (ev === "round") say(app.m && app.m.round > 1 ? "Round " + app.m.round : "Round one");
+  else if (ev === "matchpoint") say("Match point");
+  else if (ev === "hit") say(app.m && app.m.result && app.m.result.head ? "Head shot" : "K O");
+  else if (ev === "spec" && who) say(who.spec.name);
+  else if (ANNOUNCE[ev]) say(ANNOUNCE[ev]);
+
   const gain = ev === "hit" || ev === "trade" ? 1 : ev === "land" ? 0.45 : 0.8;
   const len = SFX_LEN[ev];
   if (who && playSample(ev + "_" + who.sfx, gain, len)) return;
@@ -1569,7 +1788,7 @@ function drawArena(i) {
   return true;
 }
 
-const MENU_SCREENS = ["title", "mode", "select", "ladder", "draft", "runend", "stage", "story"];
+const MENU_SCREENS = ["title", "mode", "select", "ladder", "draft", "runend", "stage", "story", "augpick", "arc"];
 
 let starCache = null;
 function drawStage(s) {
@@ -1851,6 +2070,56 @@ function drawAxie(p, c, opt) {
   ctx.restore();
 }
 
+/* afterimages behind a special, and the ring it sets off - render only */
+const ghosts = [[], []];
+function pushGhost(i, p) {
+  if (p.st === "spec" && p.t < 34) {
+    ghosts[i].push({
+      ch: p.ch, c: p.c, x: p.x, y: p.y, st: p.st, t: p.t, facing: p.facing,
+      vx: p.vx, vy: p.vy, inflate: 0, spin: p.spin, dead: false, kf: 0,
+      tint: p.tint, augs: p.augs, hang: 0, aimT: p.aimT
+    });
+    if (ghosts[i].length > 8) ghosts[i].shift();
+  } else if (ghosts[i].length) ghosts[i].length = 0;
+}
+
+function drawGhosts(i) {
+  const g = ghosts[i];
+  if (g.length < 3) return;
+  for (let k = 0; k < g.length - 2; k += 3) {
+    ctx.save();
+    ctx.globalAlpha = 0.08 + 0.13 * (k / g.length);
+    drawAxie(g[k], g[k].c, {});
+    ctx.restore();
+  }
+}
+
+function drawSpecBurst(p) {
+  if (p.st !== "spec" || p.t > 30 || p.sx === undefined) return;
+  const k = p.t / 30, x = p.sx, y = sy(p.sy);
+  const col = p.c.trim;
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
+  for (let r = 0; r < 2; r++) {
+    const kk = Math.max(0, k - r * 0.22);
+    if (kk <= 0 || kk >= 1) continue;
+    ctx.strokeStyle = rgba(col, (1 - kk) * (r ? 0.35 : 0.8));
+    ctx.lineWidth = (1 - kk) * (r ? 5 : 9) + 1;
+    ctx.beginPath(); ctx.arc(x, y, 18 + kk * (r ? 250 : 180), 0, 7); ctx.stroke();
+  }
+  ctx.lineWidth = (1 - k) * 4 + 1;
+  ctx.strokeStyle = rgba("#FFFFFF", (1 - k) * 0.6);
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2 + k * 0.6;
+    const r0 = 26 + k * 90, r1 = r0 + 70 * (1 - k);
+    ctx.beginPath();
+    ctx.moveTo(x + Math.cos(a) * r0, y + Math.sin(a) * r0);
+    ctx.lineTo(x + Math.cos(a) * r1, y + Math.sin(a) * r1);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
 /* trails are render-side only; the sim never sees them */
 const trails = [[], []];
 function pushTrail(i, p) {
@@ -1910,6 +2179,12 @@ function drawStagePick(t) {
 }
 
 function startPickedMatch() {
+  if (app.vsAug) {
+    app.pick = { turn: 0, taken: [[], []], cur: 0, prev: IN_KICK };
+    app.screen = "augpick";
+    SFX.lock();
+    return;
+  }
   const sel = app.sel;
   app.m = newMatch(sel.cur[0], sel.cur[1], app.cpu, app.t);
   trails[0].length = 0; trails[1].length = 0;
@@ -1929,19 +2204,208 @@ function stagePickTick(inp) {
   else if (kick) startPickedMatch();
 }
 
+
+
+/* --- story cards ----------------------------------------------------------
+   A full-bleed arena, the Axie large and lit from its own class colour, and
+   the beat of the arc in type. Made out of first-party pieces rather than
+   stock art: the rig, the arena, and the palette the character already owns. */
+function drawArcCard(t) {
+  const c = CHARS[run.ch], kind = app.arc.kind;
+  const line = kind === "open" ? c.arc.open : kind === "mid" ? c.arc.mid : c.arc.end;
+  const im = bgReady(run.ch + 1);
+  if (im) {
+    const h = STAGE_H * 1.2, w = h * (im.naturalWidth / im.naturalHeight);
+    ctx.save();
+    ctx.globalAlpha = 0.5;
+    ctx.drawImage(im, (STAGE_W - w) / 2, -40, w, h);
+    ctx.restore();
+  } else { ctx.fillStyle = "#0B0916"; ctx.fillRect(0, 0, STAGE_W, STAGE_H); }
+
+  const wash = ctx.createLinearGradient(0, 0, STAGE_W, STAGE_H);
+  wash.addColorStop(0, rgba("#08070F", 0.92));
+  wash.addColorStop(0.55, rgba(c.col2, 0.4));
+  wash.addColorStop(1, rgba("#08070F", 0.94));
+  ctx.fillStyle = wash; ctx.fillRect(0, 0, STAGE_W, STAGE_H);
+
+  /* a slab of class colour behind the figure, like a poster */
+  ctx.save();
+  ctx.globalAlpha = 0.16;
+  ctx.fillStyle = c.col;
+  ctx.beginPath();
+  ctx.moveTo(596, 0); ctx.lineTo(STAGE_W, 0); ctx.lineTo(STAGE_W, STAGE_H); ctx.lineTo(520, STAGE_H);
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+
+  const bob = Math.sin(t * 0.04) * 5;
+  drawAxie(
+    { ch: run.ch, x: 0, y: 0, st: "stand", t: 30, facing: -1, inflate: 0, spin: 0, vx: 0, vy: 0, dead: false },
+    c, {
+      portrait: true, px: 760, py: STAGE_H - 70 + bob, scale: 2.1,
+      anim: kind === "end" ? c.anim.win : c.anim.idle, animT: t / 60
+    }
+  );
+
+  const fade = Math.min(1, app.arc.t / 30);
+  ctx.save();
+  ctx.globalAlpha = fade;
+  txt(c.name, 70, 116, 22, c.col, "left", FM, 8);
+  let ty = 172;
+  for (const l of wrapText(c.arc.title, 470, 46)) {
+    txt(l, 70, ty, 46, "#E7E3FB", "left", FD, 2);
+    ty += 50;
+  }
+  ctx.fillStyle = rgba(c.col, 0.9); ctx.fillRect(70, ty - 26, 84, 3);
+  ty += 24;
+  for (const l of wrapText(line, 470, 15)) {
+    txt(l, 70, ty, -15, rgba("#E7E3FB", 0.88), "left", FD);
+    ty += 21;
+  }
+  txt(kind === "open" ? "STAGE 1 OF 10" : kind === "mid" ? "HALFWAY" : "TEN FOR TEN",
+    70, STAGE_H - 62, -11, rgba(c.col, 0.9), "left", FM, 5);
+  ctx.restore();
+
+  if (app.arc.t > 40) {
+    drawHintButtons(174, STAGE_H - 32, [["KICK", kind === "end" ? "FINISH" : "CONTINUE"]],
+      [() => arcAdvance()]);
+  }
+}
+
+function arcAdvance() {
+  SFX.lock();
+  const kind = app.arc.kind;
+  if (kind === "end") { app.screen = "runend"; return; }
+  app.screen = "ladder";
+  run.prev = IN_KICK;
+}
+
+function arcTick(inp) {
+  app.arc.t++;
+  const m = inp[0] | inp[1];
+  const kick = (m & IN_KICK) && !(app.arc.prev & IN_KICK);
+  app.arc.prev = m;
+  if (app.arc.t > 20 && kick) arcAdvance();
+}
+
+function showArc(kind) {
+  app.arc = { kind, t: 0, prev: IN_KICK };
+  app.screen = "arc";
+}
+
+/* --- versus augment draft ------------------------------------------------
+   The whole pool on screen, two picks each, taken in turn. No randomness:
+   this is the mode where people build on purpose. */
+function drawAugPick(t) {
+  drawStage(null);
+  ctx.fillStyle = rgba("#08070F", 0.72); ctx.fillRect(0, 0, STAGE_W, STAGE_H);
+  const pk = app.pick, turn = pk.turn % 2;
+  const col = PCOL[turn];
+  txt("DRAFT YOUR AUGMENTS", STAGE_W / 2, 44, 28, "#E7E3FB", "center", FD, 8);
+  txt("P" + (turn + 1) + " PICKS  ·  " + (2 - pk.taken[turn].length) + " LEFT",
+    STAGE_W / 2, 66, 13, col, "center", FM, 4);
+
+  const COLS = 5, CW = 178, CH = 122, GX = 10, GY = 10;
+  const X0 = (STAGE_W - (CW * COLS + GX * (COLS - 1))) / 2, Y0 = 86;
+  for (let i = 0; i < AUGS.length; i++) {
+    const a = AUGS[i];
+    const x = X0 + (i % COLS) * (CW + GX), y = Y0 + Math.floor(i / COLS) * (CH + GY);
+    const taken = pk.taken[0].includes(a.id) || pk.taken[1].includes(a.id);
+    const on = pk.cur === i && !taken;
+    const TIER = ["#9FB4D8", "#7CF0B4", "#FFD98A"];
+    ctx.save();
+    if (taken) ctx.globalAlpha = 0.3;
+    ctx.fillStyle = rgba(on ? "#1D1740" : "#120E28", 0.95);
+    ctx.fillRect(x, y, CW, CH);
+    ctx.strokeStyle = rgba(on ? col : TIER[a.tier], on ? 1 : 0.3);
+    ctx.lineWidth = on ? 3 : 1;
+    ctx.strokeRect(x + 0.5, y + 0.5, CW - 1, CH - 1);
+    drawAugMedal(a.id, x + 34, y + CH / 2, 54);
+    txt(a.name, x + 66, y + 38, a.name.length > 12 ? 13 : 15, TIER[a.tier], "left", FD, 1);
+    let ly = y + 56;
+    for (const line of wrapText(a.line, CW - 76, 10.5)) {
+      if (ly > y + CH - 10) break;
+      txt(line, x + 66, ly, -10.5, rgba("#E7E3FB", 0.7), "left", FD);
+      ly += 13;
+    }
+    ctx.restore();
+    if (!taken) {
+      hot(x, y, CW, CH, () => { pk.cur = i; takeVsAug(a.id); }, () => { pk.cur = i; });
+    }
+  }
+
+  for (let pl = 0; pl < 2; pl++) {
+    const bx = pl === 0 ? 40 : STAGE_W - 40;
+    txt("P" + (pl + 1), bx, STAGE_H - 44, -12, PCOL[pl], pl ? "right" : "left", FM, 2);
+    for (let k = 0; k < 2; k++) {
+      const mx = pl === 0 ? 86 + k * 52 : STAGE_W - 86 - k * 52;
+      if (pk.taken[pl][k]) drawAugMedal(pk.taken[pl][k], mx, STAGE_H - 48, 46);
+      else {
+        ctx.strokeStyle = rgba(PCOL[pl], 0.3); ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.arc(mx, STAGE_H - 48, 18, 0, 7); ctx.stroke();
+      }
+    }
+  }
+  drawHints(STAGE_W / 2, STAGE_H - 12, [["DIVE", "MOVE"], ["KICK", "TAKE"]]);
+}
+
+function takeVsAug(id) {
+  const pk = app.pick, turn = pk.turn % 2;
+  if (pk.taken[0].includes(id) || pk.taken[1].includes(id)) return;
+  pk.taken[turn].push(id);
+  SFX.lock();
+  pk.turn++;
+  if (pk.taken[0].length === 2 && pk.taken[1].length === 2) startDraftedMatch();
+}
+
+function augPickTick(inp) {
+  const pk = app.pick;
+  const turn = pk.turn % 2;
+  const m = inp[turn] | (app.cpu !== null ? inp[1 - turn] : 0);
+  const dive = (m & IN_DIVE) && !(pk.prev & IN_DIVE);
+  const kick = (m & IN_KICK) && !(pk.prev & IN_KICK);
+  pk.prev = m;
+  if (dive) {
+    do { pk.cur = (pk.cur + 1) % AUGS.length; }
+    while (pk.taken[0].includes(AUGS[pk.cur].id) || pk.taken[1].includes(AUGS[pk.cur].id));
+    SFX.move();
+  } else if (kick) takeVsAug(AUGS[pk.cur].id);
+}
+
+function startDraftedMatch() {
+  const sel = app.sel;
+  app.m = newMatch(sel.cur[0], sel.cur[1], app.cpu, app.t,
+    { a0: app.pick.taken[0], a1: app.pick.taken[1] });
+  trails[0].length = 0; trails[1].length = 0;
+  if (app.stage.cur >= BG_IMGS.length) rollArena();
+  else app.bg = app.stage.cur;
+  app.screen = "match";
+}
+
 /* --- arcade story beats ---------------------------------------------------
    Two lines before each fight. Cheap words, and the only place the roster
    gets to be characters rather than stat blocks. */
+function pick(list, salt) {
+  return list[(run.level * 7 + salt * 3 + run.ch + run.foeCh) % list.length];
+}
+
 function storyLines() {
   const foe = CHARS[run.foeCh], you = CHARS[run.ch];
   const lv = run.level;
   if (LADDER[lv].ch === -2) {
-    return [[foe, you.taunt], [you, '"That is my line."']];
+    return [[foe, pick(you.taunts, 1)], [you, '"That is my line."']];
   }
-  if (lv === 0) return [[foe, foe.taunt], [you, you.reply]];
-  if (lv === 5) return [[foe, '"You have been picking things up off the floor, have you not."'], [you, you.reply]];
-  if (lv >= 6) return [[foe, '"Again? You beat one of us. There are ten."'], [you, you.reply]];
-  return [[foe, foe.taunt], [you, you.reply]];
+  if (lv === 5) {
+    return [[foe, '"You have been picking things up off the floor, have you not."'],
+      [you, pick(you.replies, 2)]];
+  }
+  if (lv === 8) {
+    return [[foe, '"Whatever you are carrying, we have all seen it by now."'],
+      [you, pick(you.replies, 4)]];
+  }
+  if (lv >= 6) {
+    return [[foe, '"Again? You beat one of us. There are ten."'], [you, pick(you.replies, 3)]];
+  }
+  return [[foe, pick(foe.taunts, 0)], [you, pick(you.replies, 0)]];
 }
 
 function drawStory(t) {
@@ -2182,8 +2646,12 @@ function drawMeter(p, c, side, tick) {
       g.addColorStop(0.55, rgba(hot, full ? pulse * 0.8 : 0.7));
       g.addColorStop(1, rgba(hot, full ? pulse : 0.95));
       ctx.fillStyle = g;
-      const fw = cw * k + Math.abs(lean);
-      ctx.fillRect(side === 0 ? at - Math.abs(lean) : at + cw - fw, y, fw, H);
+      /* the fill has to lean with the cell: an upright rectangle inside a
+         slanted one is short at the top on one side and overhangs on the
+         other, which is what made P1's bar look like it filled backwards */
+      const fw = cw * k;
+      skewPath(side === 0 ? at : at + cw - fw, y, fw, H, lean);
+      ctx.fill();
       /* a moving sheen, so a full cell reads as charged rather than painted */
       if (full) {
         const sx = at + ((tick * 3 + i * 90) % (cw + 90)) - 45;
@@ -2221,9 +2689,11 @@ function drawMeter(p, c, side, tick) {
     txt("KICK METER", lx, y - 10, -10, rgba("#E7E3FB", 0.45), align, FM, 3);
   }
 
-  if (p.kf) {
-    txt("KICK FACTOR x" + p.kf, lx, y + H + 15, -11,
-      "#FF8A5C", align, FM, 2);
+  const tags = [];
+  if (p.kf) tags.push(["KICK FACTOR x" + p.kf, "#FF8A5C"]);
+  if (p.rocked) tags.push(["ROCKED", "#FF5470"]);
+  for (let i = 0; i < tags.length; i++) {
+    txt(tags[i][0], lx, y + H + 15 + i * 14, -11, tags[i][1], align, FM, 2);
   }
 }
 
@@ -2327,14 +2797,16 @@ function drawBoxes(s) {
 /* --- match scene --- */
 function drawMatch(s) {
   ctx.save();
-  if (s.shake > 0) {
+  if (s.shake > 0 && SETTINGS.shake) {
     const k = s.shake / 22;
     ctx.translate(Math.sin(s.tick * 2.7) * 9 * k, Math.cos(s.tick * 3.1) * 6 * k);
   }
   drawStage(s);
   drawLine(s);
   for (let i = 0; i < 2; i++) drawTrail(i, s.p[i].c);
+  for (let i = 0; i < 2; i++) drawGhosts(i);
   for (let i = 0; i < 2; i++) drawAxie(s.p[i], s.p[i].c, {});
+  for (let i = 0; i < 2; i++) drawSpecBurst(s.p[i]);
   drawImpact(s);
   drawBoxes(s);
   ctx.restore();
@@ -2363,9 +2835,10 @@ function drawMatch(s) {
   if (s.phase === "ko" && s.result) {
     const r = s.result;
     const col = r.winner >= 0 ? CHARS[s.p[r.winner].ch].col : "#FF8A8A";
-    const main = r.kind === "ko" ? "K.O." : r.kind === "ward" ? "WARD BROKEN"
+    const main = r.head ? "HEAD SHOT" : r.kind === "ko" ? "K.O." : r.kind === "ward" ? "WARD BROKEN"
       : r.kind === "trade" ? "TRADE" : "TIME";
-    const sub = r.kind === "ward" ? "THE RUINS TAKE THAT ONE" :
+    const sub = r.head ? CHARS[s.p[1 - r.winner].ch].name + " IS ROCKED" :
+      r.kind === "ward" ? "THE RUINS TAKE THAT ONE" :
       r.kind === "trade" ? "NOBODY SCORES" :
       r.kind === "line" ? CHARS[s.p[r.winner].ch].name + " HELD THE LINE" :
         r.winner >= 0 ? CHARS[s.p[r.winner].ch].name : "";
@@ -2420,10 +2893,10 @@ function drawTitle(t) {
    Four panels, left to right, each one showing you what it is rather than
    describing it. VS CPU opens a difficulty rack underneath. */
 const MODES = [
-  { key: "versus", name: "LOCAL VERSUS", blurb: "Two players, one keyboard, one argument", col: "#E7E3FB", cast: [1, 0] },
+  { key: "versus", name: "LOCAL VERSUS", blurb: "Two players, one keyboard, one argument", col: "#E7E3FB", cast: [1, 0], rack: "versus" },
   { key: "net", name: "ONLINE VERSUS", blurb: "Two machines, two codes, no server between", col: "#7CF0B4", cast: [2, 5] },
-  { key: "arcade", name: "ARCADE RUN", blurb: "Ten fights, three things you find on the way", col: "#FFD98A", cast: [3] },
-  { key: "cpu", name: "VS CPU", blurb: "Pick your wall", col: "#FF6E7F", cast: [4] }
+  { key: "arcade", name: "STORY MODE", blurb: "Ten fights, one arc, three things you find", col: "#FFD98A", cast: [3] },
+  { key: "cpu", name: "VS CPU", blurb: "Pick your wall", col: "#FF6E7F", cast: [4], rack: "cpu" }
 ];
 
 function modePanelCast(m, x, y, w, h, t, i) {
@@ -2454,7 +2927,10 @@ function modePanelCast(m, x, y, w, h, t, i) {
     }
   }
   if (m.key === "cpu") {
-    txt(DIFFS[app.mode.subCur].name, x + w / 2, feet - 104, 20, m.col, "center", FD, 3);
+    txt(DIFFS[Math.min(app.mode.subCur, DIFFS.length - 1)].name, x + w / 2, feet - 104, 20, m.col, "center", FD, 3);
+  }
+  if (m.key === "versus" && app.mode.sub === "versus") {
+    txt(VS_RULES[app.mode.subCur % VS_RULES.length].name, x + w / 2, feet - 104, 18, m.col, "center", FD, 3);
   }
 }
 
@@ -2472,7 +2948,7 @@ function drawMode(cur, t) {
   for (let i = 0; i < MODES.length; i++) {
     const m = MODES[i], x = X0 + i * (PW + GAP);
     const on = cur === i && !app.mode.sub;
-    const dim = app.mode.sub && m.key !== "cpu";
+    const dim = app.mode.sub && m.rack !== app.mode.sub;
     ctx.save();
     if (dim) ctx.globalAlpha = 0.35;
 
@@ -2510,22 +2986,24 @@ function drawMode(cur, t) {
   }
 
   /* the difficulty rack slides in under VS CPU */
-  if (app.mode.sub === "cpu") {
+  if (app.mode.sub) {
+    const rows = rackRows();
     const RY = Y + PH + 18, RH = 76, RW = 760, RX = (STAGE_W - RW) / 2;
-    txt("HOW HARD", STAGE_W / 2, RY - 10, 12, rgba("#E7E3FB", 0.5), "center", FM, 5);
-    for (let i = 0; i < DIFFS.length; i++) {
+    txt(app.mode.sub === "cpu" ? "HOW HARD" : "HOW YOU FIGHT",
+      STAGE_W / 2, RY - 10, 12, rgba("#E7E3FB", 0.5), "center", FM, 5);
+    for (let i = 0; i < rows.length; i++) {
       const on = app.mode.subCur === i;
-      const w = (RW - 3 * 10) / DIFFS.length, x = RX + i * (w + 10);
-      const col = ["#7FD1A0", CHARS[1].col, CHARS[4].col, "#FF4D6D"][i];
+      const w = (RW - (rows.length - 1) * 10) / rows.length, x = RX + i * (w + 10);
+      const col = rows[i].col;
       ctx.fillStyle = rgba(on ? "#1B1540" : "#120E28", 0.96);
       ctx.fillRect(x, RY, w, RH);
       ctx.strokeStyle = rgba(col, on ? 1 : 0.25);
       ctx.lineWidth = on ? 2 : 1;
       ctx.strokeRect(x + 0.5, RY + 0.5, w - 1, RH - 1);
       ctx.fillStyle = rgba(col, on ? 0.9 : 0.3); ctx.fillRect(x, RY, w, 3);
-      txt(DIFFS[i].name, x + w / 2, RY + 30, 20, on ? col : rgba("#E7E3FB", 0.6), "center", FD, 2);
+      txt(rows[i].name, x + w / 2, RY + 30, 20, on ? col : rgba("#E7E3FB", 0.6), "center", FD, 2);
       let ly = RY + 48;
-      for (const line of wrapText(DIFFS[i].blurb, w - 20, 10.5, FM)) {
+      for (const line of wrapText(rows[i].blurb, w - 20, 10.5, FM)) {
         if (ly > RY + RH - 6) break;
         txt(line, x + w / 2, ly, -10.5, rgba("#E7E3FB", on ? 0.6 : 0.3), "center", FM);
         ly += 12;
@@ -2540,11 +3018,23 @@ function drawMode(cur, t) {
     rgba("#E7E3FB", 0.3), "center", FM, 4);
 }
 
+function rackRows() {
+  return app.mode.sub === "cpu"
+    ? DIFFS.map((d, i) => ({ name: d.name, blurb: d.blurb, col: ["#7FD1A0", CHARS[1].col, CHARS[4].col, "#FF4D6D"][i] }))
+    : VS_RULES.map((r, i) => ({ name: r.name, blurb: r.blurb, col: i ? "#FFD98A" : "#E7E3FB" }));
+}
+
 function modeConfirm(prev) {
   const m = MODES[app.mode.cur];
-  if (m.key === "cpu" && !app.mode.sub) { app.mode.sub = "cpu"; SFX.move(); return; }
+  if (m.rack && !app.mode.sub) {
+    app.mode.sub = m.rack;
+    app.mode.subCur = m.rack === "cpu" ? 1 : 0;
+    SFX.move();
+    return;
+  }
   if (m.key === "net") { netPanel(true); return; }
   app.arcade = m.key === "arcade";
+  app.vsAug = m.key === "versus" && app.mode.sub === "versus" && app.mode.subCur === 1;
   app.cpu = m.key === "cpu" ? app.mode.subCur : app.arcade ? 0 : null;
   app.mode.sub = null;
   app.sel = { cur: [0, 1], lock: [false, false], t: 0, cpuT: 0, prev: prev || [0, 0] };
@@ -2558,7 +3048,7 @@ function modeTick(inp) {
     const dive = (inp[i] & IN_DIVE) && !(md.prev[i] & IN_DIVE);
     const kick = (inp[i] & IN_KICK) && !(md.prev[i] & IN_KICK);
     if (dive) {
-      if (md.sub) md.subCur = (md.subCur + 1) % DIFFS.length;
+      if (md.sub) md.subCur = (md.subCur + 1) % rackRows().length;
       else md.cur = (md.cur + 1) % MODES.length;
       SFX.move();
     } else if (kick) { modeConfirm(inp.slice()); md.prev[i] = inp[i]; return; }
@@ -3090,95 +3580,95 @@ function netPanel(open) {
 const AUGS = [
   {
     id: "blade", item: "blade", tier: 0, name: "RONIN BLADE",
-    line: "Your weapon reaches a third further out",
+    line: "Your weapon reaches two thirds further out",
     lore: "Left in the ruins by somebody who stopped needing it.",
-    self: c => { c.reach *= 1.34; }
+    self: c => { c.reach *= 1.68; }
   },
   {
     id: "duel", item: "duel", tier: 0, name: "DUELIST'S MARK",
-    line: "Dive a third faster",
+    line: "Dive two thirds faster",
     lore: "Two crossed blades, scratched into every doorframe in Ronin.",
-    self: c => { c.kickSpd *= 1.32; }
+    self: c => { c.kickSpd *= 1.64; }
   },
   {
     id: "maul", item: "maul", tier: 0, name: "STONE MAUL",
-    line: "Hitbox two thirds bigger, dive a tenth slower",
+    line: "Hitbox more than doubled, dive a fifth slower",
     lore: "Heavier than it looks, which is the entire idea.",
-    self: c => { c.hitR *= 1.65; c.kickSpd *= 0.9; }
+    self: c => { c.hitR *= 2.3; c.kickSpd *= 0.8; }
   },
   {
     id: "moonshard", item: "moonshard", tier: 0, name: "MOONSHARD",
-    line: "You are a third smaller to hit",
+    line: "You are well under half the size to hit",
     lore: "A piece of the moon that fell during the Cataclysm, still cold.",
-    self: c => { c.rx *= 0.7; c.ry *= 0.7; }
+    self: c => { c.rx *= 0.4; c.ry *= 0.4; }
   },
   {
     id: "haste", item: "haste", tier: 0, name: "HASTENING DRAUGHT",
-    line: "Whiffing barely costs you anything",
+    line: "Whiffing costs you nothing worth counting",
     lore: "Tastes of citrus and regret.",
-    self: c => { c.kickRec = Math.max(6, c.kickRec - 14); }
+    self: c => { c.kickRec = Math.max(4, c.kickRec - 28); }
   },
   {
     id: "bloom", item: "bloom", tier: 0, name: "NIGHTBLOOM",
-    line: "Your arc flattens by 14° — far more ground, far worse up close",
+    line: "Your arc flattens by 28° — it crosses the stage, and it cannot hit anything close",
     lore: "Opens once a month, over the Mystic ruins, for nobody.",
-    self: c => { c.kickAng = Math.max(18, c.kickAng - 14); }
+    self: c => { c.kickAng = Math.max(12, c.kickAng - 28); }
   },
   {
     id: "wings", item: "wings", tier: 1, name: "PUFFBIRD WINGS",
-    line: "One extra jump, any time you are in the air",
+    line: "Two extra jumps, any time you are in the air",
     lore: "Shed at Puffbird Peak. They do not ask what you do with them.",
-    self: c => { c.airJumps = (c.airJumps || 0) + 1; }
+    self: c => { c.airJumps = (c.airJumps || 0) + 2; }
   },
   {
     id: "bramble", item: "bramble", tier: 1, name: "BRAMBLE RING",
-    line: "Your kickback swings on the way out",
+    line: "Your kickback swings huge, and keeps swinging",
     lore: "Worn by the door-guards of Barb Village. Rarely removed.",
-    self: c => { c.armedKB = true; }
+    self: c => { c.armedKB = true; c.kbHitR = 78; c.kbFrames = 22; }
   },
   {
     id: "plume", item: "plume", tier: 1, name: "FEATHERFALL PLUME",
-    line: "Hold DIVE at the apex to hang for a quarter of a second",
+    line: "Hold DIVE at the apex and hang for half a second",
     lore: "Falls slower than anything else on Lunacia, including snow.",
-    self: c => { c.floatMax = Math.max(c.floatMax || 0, 16); }
+    self: c => { c.floatMax = Math.max(c.floatMax || 0, 32); }
   },
   {
     id: "tide", item: "tide", tier: 1, name: "TIDECALLER'S DRAUGHT",
-    line: "Their dive is a quarter slower. Yours is not",
+    line: "Their dive is half speed. Yours is not",
     lore: "Poured into the sea at Puffy's Cove every solstice.",
-    foe: c => { c.kickSpd *= 0.76; }
+    foe: c => { c.kickSpd *= 0.52; }
   },
   {
     id: "helm", item: "helm", tier: 1, name: "IRONROOT HELM",
-    line: "A trade scores for you instead of nobody",
+    line: "A trade scores for you, and empties their meter",
     lore: "Grown, not forged. It disagrees with the idea of a draw.",
-    self: c => { c.ironroot = true; }
+    self: c => { c.ironroot = true; c.ironDrain = true; }
   },
   {
     id: "band", item: "band", tier: 1, name: "BANDIT'S BAND",
-    line: "Your first whiff each round costs you nothing at all",
+    line: "Your first two whiffs each round cost you nothing at all",
     lore: "Stolen. Obviously.",
-    self: c => { c.band = true; }
+    self: c => { c.band = 2; }
   },
   {
     id: "ward", item: "ward", tier: 2, name: "WARD OF THE RUINS",
-    line: "Survive the first hit of every fight",
+    line: "Survive the first two hits of every fight",
     lore: "It only works once, and it lets you know when it has.",
-    self: c => { c.wardStart = true; }
+    self: c => { c.wardStart = 2; }
   },
   {
     id: "elixir", item: "elixir", tier: 2, name: "SUNBURST ELIXIR",
-    line: "Two more lives, right now",
+    line: "Four more lives, right now",
     lore: "Brewed for the long climb. Drunk, almost always, too early.",
-    run: r => { r.lives += 2; }
+    run: r => { r.lives += 4; }
   },
   {
     id: "crown", item: "crown", tier: 2, name: "LUNACIAN CROWN",
-    line: "A fifth more reach, a fifth more speed, ten frames off recovery",
+    line: "Two fifths more reach and speed, twenty frames off recovery",
     lore: "Nobody agrees whose it was. Everybody agrees it fits.",
     self: c => {
-      c.reach *= 1.2; c.kickSpd *= 1.2;
-      c.kickRec = Math.max(6, c.kickRec - 10);
+      c.reach *= 1.4; c.kickSpd *= 1.4;
+      c.kickRec = Math.max(4, c.kickRec - 20);
     }
   }
 ];
@@ -3197,6 +3687,11 @@ const LADDER = [
   { ch: -1, win: 5, cpu: 2, foe: 4 },
   { ch: -1, win: 5, cpu: 3, foe: 5, draft: true },
   { ch: -2, win: 5, cpu: 3, foe: 0 }
+];
+
+const VS_RULES = [
+  { name: "SKILL ONLY", blurb: "Two buttons and nothing else" },
+  { name: "AUGMENTS", blurb: "Draft two Land items each before the bell" }
 ];
 
 const run = {
@@ -3219,7 +3714,7 @@ function arcadeStart(chIdx) {
   run.won = false;
   run.seed = (Date.now() ^ (chIdx * 7919)) & 0x7fffffff;
   arcadeSetup();
-  app.screen = "ladder";
+  showArc("open");
 }
 
 /* pick this level's opponent and what it is carrying */
@@ -3263,10 +3758,11 @@ function arcadeResolve() {
     return;
   }
   const lv = LADDER[run.level];
-  if (run.level >= LADDER.length - 1) { run.won = true; app.screen = "runend"; return; }
+  if (run.level >= LADDER.length - 1) { run.won = true; showArc("end"); return; }
   if (lv.draft) { arcadeOffer(); app.screen = "draft"; return; }
   run.level++;
   arcadeSetup();
+  if (run.level === 5) { showArc("mid"); return; }
   app.screen = "ladder";
 }
 
@@ -3291,6 +3787,7 @@ function arcadeTake(id) {
   if (a.run) a.run(run);
   run.level++;
   arcadeSetup();
+  if (run.level === 5) { showArc("mid"); return; }
   app.screen = "ladder";
 }
 
@@ -3322,7 +3819,7 @@ function drawLadder(t) {
   ctx.fillStyle = rgba("#08070F", 0.66); ctx.fillRect(0, 0, STAGE_W, STAGE_H);
   const lv = LADDER[run.level];
 
-  txt("ARCADE RUN", STAGE_W / 2, 52, 30, "#E7E3FB", "center", FD, 9);
+  txt(CHARS[run.ch].arc.title, STAGE_W / 2, 52, 26, CHARS[run.ch].col, "center", FD, 6);
   txt("LEVEL " + (run.level + 1) + " OF 10", STAGE_W / 2, 72, 11, rgba("#E7E3FB", 0.5), "center", FM, 4);
 
   /* the road */
@@ -3493,19 +3990,71 @@ function rollArena() {
   }
 }
 
+/* Settings live inside pause: one list, three tabs deep at most. */
+function volLabel(v) { return Math.round(v * 100) + "%"; }
+
+function settingsRows() {
+  return [
+    { label: "MASTER VOLUME", value: volLabel(SETTINGS.master), act: () => bump("master") },
+    { label: "MUSIC", value: volLabel(SETTINGS.music), act: () => bump("music") },
+    { label: "SOUND EFFECTS", value: volLabel(SETTINGS.sfx), act: () => bump("sfx") },
+    {
+      label: "ANNOUNCER", value: SETTINGS.announcer ? "ON" : "OFF",
+      act: () => { SETTINGS.announcer = !SETTINGS.announcer; applyAudioSettings(); saveSettings(); }
+    },
+    {
+      label: "SCREEN SHAKE", value: SETTINGS.shake ? "ON" : "OFF",
+      act: () => { SETTINGS.shake = !SETTINGS.shake; saveSettings(); }
+    },
+    { label: "CONTROLS", value: "›", act: () => { app.pause.tab = "controls"; app.pause.cur = 0; } },
+    { label: "BACK", value: "", act: () => { app.pause.tab = "main"; app.pause.cur = 0; } }
+  ];
+}
+
+function controlRows() {
+  const row = (label, key) => ({
+    label, value: app.pause.bind === key ? "PRESS A KEY" : keyName(BINDS[key]),
+    act: () => { app.pause.bind = key; }
+  });
+  return [
+    row("PLAYER 1 · DIVE", "p1dive"),
+    row("PLAYER 1 · KICK", "p1kick"),
+    row("PLAYER 2 · DIVE", "p2dive"),
+    row("PLAYER 2 · KICK", "p2kick"),
+    {
+      label: "RESET TO DEFAULTS", value: "",
+      act: () => { Object.assign(BINDS, DEFAULT_BINDS); rebuildKeymap(); saveSettings(); }
+    },
+    { label: "BACK", value: "", act: () => { app.pause.tab = "settings"; app.pause.cur = 0; } }
+  ];
+}
+
+function bump(k) {
+  SETTINGS[k] = Math.round((SETTINGS[k] + 0.1) * 10) / 10;
+  if (SETTINGS[k] > 1.001) SETTINGS[k] = 0;
+  applyAudioSettings();
+  saveSettings();
+}
+
+function pauseRows() {
+  if (app.pause.tab === "settings") return settingsRows();
+  if (app.pause.tab === "controls") return controlRows();
+  return pauseItems().map(label => ({ label, value: "", act: () => pauseChoose(label) }));
+}
+
 function pauseItems() {
   /* online, the match keeps running behind the menu (your inputs just read as
      nothing), so restarting unilaterally is not on the table */
-  if (net.on) return ["RESUME", "DISCONNECT"];
-  if (run.on) return ["RESUME", "ABANDON RUN"];
+  if (net.on) return ["RESUME", "SETTINGS", "DISCONNECT"];
+  if (run.on) return ["RESUME", "SETTINGS", "ABANDON STORY"];
   return app.screen === "match"
-    ? ["RESUME", "RESTART MATCH", "QUIT TO TITLE"]
-    : ["RESUME", "QUIT TO TITLE"];
+    ? ["RESUME", "SETTINGS", "RESTART MATCH", "QUIT TO TITLE"]
+    : ["RESUME", "SETTINGS", "QUIT TO TITLE"];
 }
 
 function openPause() {
   if (app.screen === "title") return;
-  app.pause = { cur: 0, prev: [0, 0], t: 0 };
+  app.pause = { cur: 0, prev: [0, 0], t: 0, tab: "main", bind: null };
   SFX.move();
   setMusicGain();
 }
@@ -3530,22 +4079,24 @@ function quitToTitle() {
 
 function pauseTick(inp) {
   const pz = app.pause;
-  const items = pauseItems();
   pz.t++;
+  if (pz.bind) return;                       /* waiting on a key press */
+  const rows = pauseRows();
   for (let i = 0; i < 2; i++) {
     const dive = (inp[i] & IN_DIVE) && !(pz.prev[i] & IN_DIVE);
     const kick = (inp[i] & IN_KICK) && !(pz.prev[i] & IN_KICK);
     pz.prev[i] = inp[i];
-    if (dive) { pz.cur = (pz.cur + 1) % items.length; SFX.move(); }
-    else if (kick) { pauseChoose(items[pz.cur]); return; }
+    if (dive) { pz.cur = (pz.cur + 1) % rows.length; SFX.move(); }
+    else if (kick) { SFX.lock(); rows[pz.cur].act(); return; }
   }
 }
 
 function pauseChoose(pick) {
   SFX.lock();
   if (pick === "RESUME") closePause();
+  else if (pick === "SETTINGS") { app.pause.tab = "settings"; app.pause.cur = 0; }
   else if (pick === "DISCONNECT") { netQuit(); quitToTitle(); }
-  else if (pick === "ABANDON RUN") { run.on = false; quitToTitle(); }
+  else if (pick === "ABANDON STORY") { run.on = false; quitToTitle(); }
   else if (pick === "RESTART MATCH") {
     app.m = newMatch(app.m.p[0].ch, app.m.p[1].ch, app.cpu, app.t);
     trails[0].length = 0; trails[1].length = 0;
@@ -3555,24 +4106,43 @@ function pauseChoose(pick) {
 }
 
 function drawPause() {
-  const items = pauseItems();
-  ctx.fillStyle = rgba("#08070F", 0.82);
+  const pz = app.pause;
+  const rows = pauseRows();
+  const title = pz.tab === "settings" ? "SETTINGS" : pz.tab === "controls" ? "CONTROLS" : "PAUSED";
+  ctx.fillStyle = rgba("#08070F", 0.86);
   ctx.fillRect(0, 0, STAGE_W, STAGE_H);
-  txt("PAUSED", STAGE_W / 2, 176, 44, "#E7E3FB", "center", FD, 12);
-  drawHints(STAGE_W / 2, 204, [["DIVE", "MOVE"], ["KICK", "CONFIRM"], ["ESC", "RESUME"]]);
+  txt(title, STAGE_W / 2, 122, 42, "#E7E3FB", "center", FD, 12);
+  drawHints(STAGE_W / 2, 150, pz.tab === "main"
+    ? [["DIVE", "MOVE"], ["KICK", "CONFIRM"], ["ESC", "RESUME"]]
+    : [["DIVE", "MOVE"], ["KICK", "CHANGE"], ["ESC", "BACK"]]);
 
-  const W = 340, X = (STAGE_W - W) / 2;
-  for (let i = 0; i < items.length; i++) {
-    const y = 250 + i * 56, on = app.pause.cur === i;
+  const W = 460, X = (STAGE_W - W) / 2, RH = 42, GAP = 8;
+  const top = Math.max(182, (STAGE_H - rows.length * (RH + GAP)) / 2 + 30);
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i], y = top + i * (RH + GAP), on = pz.cur === i;
     ctx.fillStyle = rgba(on ? "#1D1740" : "#120E28", on ? 0.98 : 0.7);
-    ctx.fillRect(X, y, W, 44);
+    ctx.fillRect(X, y, W, RH);
     ctx.strokeStyle = rgba(on ? "#E7E3FB" : "#8E7BD8", on ? 0.9 : 0.2);
     ctx.lineWidth = on ? 2 : 1;
-    ctx.strokeRect(X + 0.5, y + 0.5, W - 1, 43);
-    if (on) { ctx.fillStyle = "#F2D492"; ctx.fillRect(X, y, 4, 44); }
-    txt(items[i], STAGE_W / 2, y + 29, 19,
-      on ? "#E7E3FB" : rgba("#E7E3FB", 0.45), "center", FD, 3);
-    hot(X, y, W, 44, () => { app.pause.cur = i; pauseChoose(items[i]); }, () => { app.pause.cur = i; });
+    ctx.strokeRect(X + 0.5, y + 0.5, W - 1, RH - 1);
+    if (on) { ctx.fillStyle = "#F2D492"; ctx.fillRect(X, y, 4, RH); }
+    const mid = r.value === "";
+    txt(r.label, mid ? STAGE_W / 2 : X + 22, y + 27, 18,
+      on ? "#E7E3FB" : rgba("#E7E3FB", 0.5), mid ? "center" : "left", FD, 2.5);
+    if (r.value) {
+      const waiting = r.value === "PRESS A KEY";
+      txt(r.value, X + W - 22, y + 27, 17,
+        waiting ? "#FFD98A" : on ? "#F2D492" : rgba("#E7E3FB", 0.45), "right", FM, 2);
+    }
+    /* volume rows get a bar behind the number so the value reads at a glance */
+    if (/VOLUME|MUSIC|SOUND/.test(r.label)) {
+      const key = r.label === "MUSIC" ? "music" : r.label === "SOUND EFFECTS" ? "sfx" : "master";
+      const bw = 150, bx = X + W - 22 - 74 - bw;
+      ctx.fillStyle = rgba("#08070F", 0.7); ctx.fillRect(bx, y + 18, bw, 8);
+      ctx.fillStyle = rgba(on ? "#F2D492" : "#8E7BD8", 0.9);
+      ctx.fillRect(bx, y + 18, bw * SETTINGS[key], 8);
+    }
+    hot(X, y, W, RH, () => { pz.cur = i; SFX.lock(); r.act(); }, () => { if (!pz.bind) pz.cur = i; });
   }
 }
 
@@ -3581,6 +4151,9 @@ const app = {
   screen: "title", t: 0,
   cpu: null,                       /* null = local versus, else difficulty index */
   arcade: false,
+  vsAug: false,
+  arc: { kind: "open", t: 0, prev: 0 },
+  pick: null,
   mode: { cur: 0, prev: [0, 0], sub: null, subCur: 1 },
   pause: null,
   bg: 0,                           /* which Origins arena this match is fought in */
@@ -3674,6 +4247,10 @@ function runScreenTick(inp) {
     selectTick(inp);
   } else if (app.screen === "stage") {
     stagePickTick(inp);
+  } else if (app.screen === "augpick") {
+    augPickTick(inp);
+  } else if (app.screen === "arc") {
+    arcTick(inp);
   } else if (app.screen === "story") {
     storyTick(inp);
   } else if (app.screen === "ladder") {
@@ -3684,12 +4261,15 @@ function runScreenTick(inp) {
     runEndTick(inp);
   } else if (app.screen === "match") {
     const s = app.m;
-    if (s.phase === "matchend") endTick(inp);
-    else {
+    if (s.phase === "matchend") {
+      if (s.announce) { say(s.announce); s.announce = null; }
+      endTick(inp);
+    } else {
       const in1 = s.cpu ? cpuInput(s) : inp[1];
       for (const e of step(s, inp[0], in1)) playEv(e);
     }
     pushTrail(0, s.p[0]); pushTrail(1, s.p[1]);
+    pushGhost(0, s.p[0]); pushGhost(1, s.p[1]);
   }
 }
 
@@ -3710,7 +4290,10 @@ function frame(now) {
 
     if (escEdge) {
       escEdge = false;
-      if (app.screen === "mode" && app.mode.sub) { app.mode.sub = null; SFX.move(); }
+      if (app.pause && app.pause.bind) { app.pause.bind = null; }
+      else if (app.pause && app.pause.tab === "controls") { app.pause.tab = "settings"; app.pause.cur = 0; }
+      else if (app.pause && app.pause.tab === "settings") { app.pause.tab = "main"; app.pause.cur = 0; }
+      else if (app.screen === "mode" && app.mode.sub) { app.mode.sub = null; SFX.move(); }
       else if (app.pause) closePause();
       else openPause();
     }
@@ -3746,6 +4329,8 @@ function frame(now) {
   else if (app.screen === "mode") drawMode(app.mode.cur, app.t);
   else if (app.screen === "select") drawSelect(app.sel, app.t);
   else if (app.screen === "stage") drawStagePick(app.t);
+  else if (app.screen === "augpick") drawAugPick(app.t);
+  else if (app.screen === "arc") drawArcCard(app.t);
   else if (app.screen === "story") drawStory(app.t);
   else if (app.screen === "ladder") drawLadder(app.t);
   else if (app.screen === "draft") drawDraft(app.t);
@@ -3763,6 +4348,8 @@ function frame(now) {
     txt("tick " + (app.m ? app.m.tick : app.t), 16, STAGE_H - 14, -11, "#7CF0B4", "left", FM);
   }
 }
+loadSettings();
+rebuildKeymap();
 rollArena();
 requestAnimationFrame(frame);
 if (!document.hasFocus()) nag.classList.add("on");

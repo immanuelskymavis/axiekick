@@ -41,8 +41,11 @@ There is no walking; all movement comes from jumping, kicking and kicking back.
 
 ## Modes
 
-From the title screen: **local versus**, **play online**, **arcade run**, or **vs CPU**
-at three difficulties.
+From the title screen: **local versus** (skill only, or with a drafted augment each
+side), **online versus**, **story mode**, or **vs CPU** at four difficulties.
+
+`Esc` → **SETTINGS** for master/music/SFX volume, the announcer, screen shake, and
+rebindable controls with a reset. Everything persists.
 
 ### Stages
 
@@ -50,9 +53,12 @@ Local versus and VS CPU pick their arena on a stage screen — nine Origins clas
 by name, plus RANDOM. Online rolls a shared arena from the connection seed (both sides
 have to land in the same place) and Arcade keeps the surprise.
 
-### Arcade
+### Story mode
 
-Ten fights, three choices, three lives. Stages 1–3 are single rounds, 4–6 first to 3,
+Ten fights, three choices, three lives, and an arc. Each Axie has its own — a title
+card before stage 1, a midpoint card at stage 6, and a finale if you clear all ten, set
+over their class arena in their own colours. Two lines of dialogue open every stage,
+drawn from a bank of four taunts and four replies per character. Stages 1–3 are single rounds, 4–6 first to 3,
 7–10 first to 5; the CPU climbs Rookie → Veteran → Lunacian → Nightmare, and from stage 4
 the opponent is drafting augments of its own — two at first, five by stage 9.
 Win stages 3, 6 and 9 and you pick one of three **Land items** — real items from the
@@ -64,9 +70,6 @@ that score for you, a first whiff with no recovery at all); three are legendary 
 appear in the last draft (survive the first hit of every fight, two extra lives, or all
 of it at once). Hover any medallion — on the ladder or mid-fight — to see what it does.
 
-Every stage opens with two lines of dialogue: the opponent says something, your Axie
-answers. Stage 10 answers itself.
-
 **Level 10 is your Reflection**: the Axie you beat on level 1, carrying the exact three
 augments you drafted. Whatever you decided was strong, you have to beat.
 
@@ -76,9 +79,10 @@ needed a flag in the round-end path. Full design in
 **[docs/ARCADE-PRD.html](docs/ARCADE-PRD.html)**.
 
 Tuned against a sparring bot with a human-shaped 12-frame reaction delay over 18 runs:
-median run ends at stage 4, three of eighteen clear all ten. That bot never uses a ground
-special and only half-uses air ones, so it understates two of the six Axies — a person
-who spends meter should get further.
+median run ends at stage 4, two of eighteen clear all ten. Augments are deliberately
+enormous now — Buba with Blade, Duel and Crown goes from reach 50 to 118 and dive speed
+14 to 32 — and the opponents draft from the same pool, so doubling them made fights
+swingier rather than easier.
 
 | | Reacts in | Kick window | Punishes a whiff |
 |---|---|---|---|
@@ -98,7 +102,7 @@ removed: it dodges what is genuinely aimed at it
 and then attacks in every other situation, so there is no neutral to hide in.
 
 Measured against a sparring bot with a human-shaped 12-frame reaction delay, over 24
-matches, with both sides using meter: Rookie 0, Veteran 6, Lunacian 9, **Nightmare 12**
+matches, with both sides using meter: Rookie 2, Veteran 6, Lunacian 9, **Nightmare 11**
 out of 12. All 36 character pairings finish without stalling, and two Lunacians against
 each other still resolve.
 
@@ -130,6 +134,10 @@ first press started). One per Axie, and each one is that character's idea taken 
 | Pomodoro | **SPLIT** | fires the angle he was aiming at, half again as fast |
 | Venoki | **COIL** | leaves, and takes the whole doorway with him |
 | Momo | **DIVEBOMB** | turns the second wind into a stoop |
+
+**Head Shot**: catch them above the waistline and the round ends with a bigger bang and
+they start the next one **ROCKED** — slower, lower, longer to recover. It wears off after
+that round.
 
 **Kick Factor** is the comeback rule: fall two rounds behind and you get faster, jump
 higher and recover quicker, a little more for every round after that, up to three. It
