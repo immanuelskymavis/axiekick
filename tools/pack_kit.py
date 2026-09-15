@@ -57,17 +57,14 @@ MUSIC = {"battle": "pvp.wav", "menu": "pve_1.wav"}
 # so it is cropped to what the game actually uses and nothing else.
 UI = {
     "star": "PvE/UI/Frames/star.png",              # round-win pips
-    "frame": "PvE/UI/Frames/frame_border.png",     # 9-sliced panel border
     "avatar": "PvE/UI/InBattle/avatar_frame.png",  # augment medallions
     "node_now": "PvE/UI/Nodes/node_current.png",   # arcade ladder
     "node_next": "PvE/UI/Nodes/node_default.png",
     "node_win": "PvE/UI/Nodes/node_win.png",
     "node_lost": "PvE/UI/Nodes/node_lose.png",
-    "panel": "PvE/UI/Frames/frame_back.png",       # parchment panel fill
     "stage_n": "PvE/UI/Chapter/icon_stage_normal.png",
     "stage_e": "PvE/UI/Chapter/icon_stage_elite.png",
     "stage_b": "PvE/UI/Chapter/icon_stage_boss.png",
-    "sep": "PvE/UI/Lobby/rougelike_bg_seperator.png",
 }
 
 # Land items, by (row, col) on the 16x64px grid of gtk2d's images/land-item.png.
@@ -181,7 +178,7 @@ def main():
 
     print("ui")
     for key, rel in UI.items():
-        blob = as_png(grab(rel, offline), cap=256 if key in ("panel", "sep") else 192)
+        blob = as_png(grab(rel, offline), cap=192)
         out["ui"][key] = uri("image/png", blob)
         total += len(blob)
         print(f"  {key:<12} {len(blob) // 1024:>4} KB")

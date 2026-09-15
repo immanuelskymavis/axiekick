@@ -75,7 +75,7 @@ const expose = `
   save, CHALLENGES, COSTUMES, TIERS, activeChallenges, rollChallenges, track,
   trackStoryChar, buyPass, charLocked, prizePool, drawPass, drawTutorial,
   tutStart, tutorialTick, progressOf, checkChallenges, TUT_STEPS, PAIR_TALK,
-  say, ANNOUNCE, claimTiers, drawSkins, ownedCostumes, woodPanel, nineSlice
+  say, ANNOUNCE, claimTiers, drawSkins, ownedCostumes, woodPanel
 };`;
 
 const ctxv = vm.createContext(win);

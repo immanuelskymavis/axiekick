@@ -176,10 +176,12 @@ prize pool is a mock, and there is no payment code.
 - **Prize pool** on the main menu, ticking upward, captioned *leaderboard coming soon*.
   It is a seeded number plus whatever this machine "spent"; the code says so.
 
-The menu header's three plates are flat slabs rather than the Origins parchment frame.
-The frame art leaves only about half an 80px plate clear once its border is drawn, which
-is the wrong trade in a dense info strip — everywhere the frame has room to breathe
-(mode panels, the reward track, the ladder, the draft) it is still the parchment.
+Menus are flat: a dark slab, a hairline rim in the thing's own colour, and a soft pulse
+on whatever is selected. There was an Origins parchment-and-stone nine-slice behind all
+of this for a while; it read as clutter at menu density, and its border covered about
+19px of every panel edge against the 13 the layouts were told about, so half the screens
+were quietly fighting their own frame. The Origins art that carries meaning stays — the
+ladder nodes, the augment medallions and their avatar rings, the Nightmare Key.
 
 Ranked matchmaking does not exist, so for the demo a CPU match counts as ranked. That is
 a deliberate cheat and the only one.
