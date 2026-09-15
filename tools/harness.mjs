@@ -71,7 +71,11 @@ const expose = `
   drawMode, drawSelect, drawStagePick, drawAugPick, drawArcCard, drawStory,
   drawLadder, drawDraft, drawRunEnd, drawPause, drawMatch, drawTitle,
   drawMeter, drawTip, drawHUD, openPause, pauseRows, showArc, rackRows,
-  settingsRows, controlRows, storyLines, SETTINGS, BINDS, VS_RULES
+  settingsRows, controlRows, storyLines, SETTINGS, BINDS, VS_RULES,
+  save, CHALLENGES, COSTUMES, TIERS, activeChallenges, rollChallenges, track,
+  trackStoryChar, buyPass, charLocked, prizePool, drawPass, drawTutorial,
+  tutStart, tutorialTick, progressOf, checkChallenges, TUT_STEPS, PAIR_TALK,
+  say, ANNOUNCE, claimTiers
 };`;
 
 const ctxv = vm.createContext(win);

@@ -469,20 +469,6 @@ function applyKickFactor(s) {
   }
 }
 
-/* A head shot costs the loser the round after it: slower, lower, and longer to
-   recover. It wears off on its own. */
-function applyRocked(s) {
-  for (let i = 0; i < 2; i++) {
-    if (!s.rocked[i]) { s.p[i].rocked = 0; continue; }
-    s.rocked[i]--;
-    s.p[i].rocked = 1;
-    const c = s.p[i].c;
-    c.kickSpd *= 0.85;
-    c.jumpV *= 0.92;
-    c.kickRec += 6;
-  }
-}
-
 /* a few augments modify the other fighter, so they are applied once both
    stat blocks exist */
 /* two of the same Axie is unreadable, so the second one is recoloured */
@@ -503,12 +489,13 @@ function linkAugs(ps) {
 
 function mkPlayer(chIdx, x, facing, augs) {
   const cs = statsFor(chIdx, augs);
+  const cos = costumeFor(chIdx);
   return {
-    ch: chIdx, c: cs, augs: augs || [],
+    ch: chIdx, c: cs, augs: augs || [], cos: cos ? cos.id : null,
     x, y: 0, vx: 0, vy: 0,
     st: "stand", t: 0, facing,
     prevIn: 0, floatUsed: 0, inflate: 0, jumps: 0, hang: 0, aimT: 0,
-    meter: 0, kf: 0, rocked: 0, dvT: -1, kkT: -1, specT: 0, tint: false,
+    meter: 0, kf: 0, dvT: -1, kkT: -1, specT: 0, tint: false,
     wx: x, wy: 0, pwx: x, pwy: 0,   // weapon point, current + previous tick
     spin: 0, hit: false, dead: false, ward: cs.wardStart || 0, band: 0
   };
@@ -529,7 +516,6 @@ function newMatch(c0, c1, cpu, seed, opt) {
     score: [0, 0],
     timer: ROUND_TICKS,
     result: null,              // {winner:-1|0|1, kind:"ko"|"trade"|"time"|"line"}
-    rocked: [0, 0],            // a head shot follows you into the next round
     p: mirrorMark(linkAugs([mkPlayer(c0, 240, 1, opt.a0), mkPlayer(c1, 760, -1, opt.a1)])),
     shake: 0, flash: 0
   };
@@ -546,7 +532,6 @@ function resetRound(s) {
   mirrorMark(s.p);
   linkAugs(s.p);
   applyKickFactor(s);
-  applyRocked(s);
   s.timer = ROUND_TICKS;
   s.result = null;
   s.phase = "intro";
@@ -800,7 +785,14 @@ function step(s, in0, in1) {
     if (s.pt >= KO_FREEZE + KO_RESET) {
       if (s.score[0] >= s.win || s.score[1] >= s.win) {
         s.phase = "matchend"; s.pt = 0;
-        s.announce = (s.score[0] >= s.win ? s.p[0] : s.p[1]).c.name + " wins";
+        if (s.score[0] > s.score[1]) {
+          if (s.score[1] === 0) track("flawless");
+          if (!run.on && s.cpu) {
+            track("ranked");                       /* CPU matches count as ranked here */
+            if (s.cpu.diff === DIFFS.length - 1) track("nmCpu");
+          }
+        }
+        s.announce = (s.score[0] >= s.win ? s.p[0] : s.p[1]).c.name + " wins!";
       }
       else { s.round++; resetRound(s); }
     }
@@ -822,10 +814,6 @@ function step(s, in0, in1) {
     segHitsBox(s.p[0].pwx, s.p[0].pwy, s.p[0].wx, s.p[0].wy, h1, hitRadius(s.p[0], c0));
   const p1hits = s.p[1].hit &&
     segHitsBox(s.p[1].pwx, s.p[1].pwy, s.p[1].wx, s.p[1].wy, h0, hitRadius(s.p[1], c1));
-  /* where it landed matters: catch them above the waistline and it rocks them
-     into the next round */
-  s.head = p0hits ? s.p[0].wy > h1[1] + h1[3] * 0.18
-    : p1hits ? s.p[1].wy > h0[1] + h0[3] * 0.18 : false;
 
   if (p0hits && p1hits) { endRound(s, -1, "trade", ev); return ev; }
   if (p0hits) { endRound(s, 0, "ko", ev); return ev; }
@@ -863,13 +851,15 @@ function endRound(s, winner, kind, ev) {
     else if (i1 && !i0) { winner = 1; kind = "ko"; }
     if (winner >= 0 && s.p[winner].c.ironDrain) s.p[1 - winner].meter = 0;
   }
-  const head = kind === "ko" && s.head && winner >= 0;
-  s.result = { winner, kind, head };
+  s.result = { winner, kind };
   s.phase = "ko"; s.pt = 0;
-  s.shake = head ? 36 : kind === "ko" ? 22 : 10;
-  s.flash = head ? 18 : 10;
-  if (head) s.rocked[1 - winner] = 2;
-  if (winner >= 0) { s.score[winner]++; s.p[1 - winner].dead = true; }
+  s.shake = kind === "ko" ? 22 : 10;
+  s.flash = 10;
+  if (winner >= 0) {
+    s.score[winner]++;
+    s.p[1 - winner].dead = true;
+    if (winner === 0) track("rounds");
+  }
   else { s.p[0].dead = true; s.p[1].dead = true; }
   ev.push(kind === "ko" ? "hit:" + winner : kind === "trade" ? "trade" : "time");
 }
@@ -1304,34 +1294,63 @@ const SFX = {
    synthesis: a real voice saying the real thing, rather than a sting pretending
    to be one. Off in settings for anyone who hates it. */
 let announcer = true;
-let voiceCache = null;
-function say(text) {
-  if (!announcer || muted || typeof speechSynthesis === "undefined") return;
-  try {
-    if (!voiceCache) {
-      const all = speechSynthesis.getVoices() || [];
-      voiceCache = all.find(v => /en[-_]GB/i.test(v.lang)) ||
-        all.find(v => /^en/i.test(v.lang)) || null;
-    }
-    speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    u.rate = 1.08; u.pitch = 0.5; u.volume = 0.9;
-    if (voiceCache) u.voice = voiceCache;
-    speechSynthesis.speak(u);
-  } catch (e) { }
+let voiceCache = null, sayAt = 0, sayPri = 0;
+
+/* Browser voices vary wildly, so go looking for one of the deep, unhurried
+   ones by name before falling back to whatever English is installed. */
+const VOICE_WANTED = [
+  "Daniel", "Google UK English Male", "Arthur", "Alex", "Oliver", "Fred",
+  "Microsoft Guy", "Microsoft Ryan", "Rishi", "Google US English"
+];
+
+function pickVoice() {
+  const all = (speechSynthesis.getVoices && speechSynthesis.getVoices()) || [];
+  if (!all.length) return null;
+  for (const want of VOICE_WANTED) {
+    const v = all.find(v => v.name.indexOf(want) === 0 || v.name === want);
+    if (v) return v;
+  }
+  return all.find(v => /en[-_]GB/i.test(v.lang)) || all.find(v => /^en/i.test(v.lang)) || null;
 }
 
-const ANNOUNCE = { fight: "Fight", trade: "Trade", time: "Time up", ward: "Blocked" };
+/* priority 2 lines (the KO, the winner) cut off priority 1 chatter; the
+   reverse is not allowed, so a callout never eats the important one */
+function say(text, pri) {
+  if (!announcer || muted || typeof speechSynthesis === "undefined") return;
+  pri = pri || 1;
+  const now = Date.now();
+  if (now < sayAt && pri <= sayPri) return;
+  try {
+    if (!voiceCache) voiceCache = pickVoice();
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.rate = 0.92;
+    u.pitch = 0.35;
+    u.volume = Math.min(1, SETTINGS.master + 0.35);
+    if (voiceCache) u.voice = voiceCache;
+    speechSynthesis.speak(u);
+    sayPri = pri;
+    sayAt = now + 260 + text.length * 62;
+  } catch (e) { }
+}
+if (typeof speechSynthesis !== "undefined") {
+  try { speechSynthesis.onvoiceschanged = () => { voiceCache = pickVoice(); }; } catch (e) { }
+}
+
+const ANNOUNCE = { fight: "Fight!", trade: "Double K O", time: "Time up", ward: "Blocked!" };
 
 function playEv(name) {
   const bits = name.split(":");
   const ev = bits[0];
   const who = bits.length > 1 ? CHARS[app.m.p[+bits[1]].ch] : null;
   /* announcer first: it is the loudest thing in the room */
-  if (ev === "round") say(app.m && app.m.round > 1 ? "Round " + app.m.round : "Round one");
-  else if (ev === "matchpoint") say("Match point");
-  else if (ev === "hit") say(app.m && app.m.result && app.m.result.head ? "Head shot" : "K O");
-  else if (ev === "spec" && who) say(who.spec.name);
+  if (ev === "kick" && bits[1] === "0") track("kicks");
+  if (ev === "spec" && bits[1] === "0") track("specials");
+
+  if (ev === "round") say(app.m && app.m.round > 1 ? "Round " + app.m.round : "Round one", 2);
+  else if (ev === "matchpoint") say("Match point!", 2);
+  else if (ev === "hit") say("Kay Oh!", 2);
+  else if (ev === "spec" && who) say(who.spec.name + "!", 1);
   else if (ANNOUNCE[ev]) say(ANNOUNCE[ev]);
 
   const gain = ev === "hit" || ev === "trade" ? 1 : ev === "land" ? 0.45 : 0.8;
@@ -1518,6 +1537,10 @@ class Spine {
         const t = anim.slots[s.name];
         if (t && t.attachment) s.att = trackName(t.attachment, time, s.setup);
       }
+    }
+    /* a costume swaps the face for one of the rig's own alternates */
+    if (this.face) {
+      for (const s of this.slots) if (this.face[s.name]) s.att = this.face[s.name];
     }
   }
 
@@ -1788,7 +1811,7 @@ function drawArena(i) {
   return true;
 }
 
-const MENU_SCREENS = ["title", "mode", "select", "ladder", "draft", "runend", "stage", "story", "augpick", "arc"];
+const MENU_SCREENS = ["title", "mode", "select", "ladder", "draft", "runend", "stage", "story", "augpick", "arc", "pass"];
 
 let starCache = null;
 function drawStage(s) {
@@ -2036,6 +2059,9 @@ function drawAxie(p, c, opt) {
     ctx.fill();
   }
 
+  const cos = p.cos ? COS[p.cos] : null;
+  sp.face = cos ? { eyes: cos.eyes, mouth: cos.mouth } : null;
+
   let anim, at;
   if (opt.anim) { anim = opt.anim; at = (opt.animT || 0) % sp.dur[anim]; }
   else if (p.dead) { anim = c.anim.dead; at = Math.min(sp.dur[c.anim.dead], p.t / 60); }
@@ -2057,6 +2083,7 @@ function drawAxie(p, c, opt) {
 
   ctx.save();
   if (p.tint) ctx.filter = "hue-rotate(155deg) saturate(1.2)";
+  else if (cos) ctx.filter = "hue-rotate(" + cos.hue + "deg) saturate(" + (cos.sat || 1) + ")";
   ctx.translate(px, feet);
   ctx.scale(p.facing, 1);
   ctx.translate(0, -c.bodyY);
@@ -2077,7 +2104,7 @@ function pushGhost(i, p) {
     ghosts[i].push({
       ch: p.ch, c: p.c, x: p.x, y: p.y, st: p.st, t: p.t, facing: p.facing,
       vx: p.vx, vy: p.vy, inflate: 0, spin: p.spin, dead: false, kf: 0,
-      tint: p.tint, augs: p.augs, hang: 0, aimT: p.aimT
+      tint: p.tint, cos: p.cos, augs: p.augs, hang: 0, aimT: p.aimT
     });
     if (ghosts[i].length > 8) ghosts[i].shift();
   } else if (ghosts[i].length) ghosts[i].length = 0;
@@ -2205,6 +2232,235 @@ function stagePickTick(inp) {
 }
 
 
+
+
+/* --- who says what to whom -------------------------------------------------
+   Every matchup has its own exchange, both directions, mirrors included. The
+   opponent speaks first and your Axie answers, so a run is 10 different
+   conversations rather than 10 rolls of the same dice. */
+const PAIR_TALK = {
+  "olek|buba": ['"Slow down. Just once, for me."', '"That is the opposite of the plan."'],
+  "buba|olek": ['"You are going to tell me to slow down."', '"I was going to. Now I will not bother."'],
+  "olek|puffy": ['"Come down here where the fight is."', '"The fight is where I am."'],
+  "puffy|olek": ['"You cannot reach me up here, old man."', '"I have never needed to reach. Only to wait."'],
+  "olek|pomodoro": ['"Decide, and I will answer it."', '"That is exactly why I am not deciding."'],
+  "pomodoro|olek": ['"You are waiting for me to move."', '"I am waiting for you to be wrong."'],
+  "olek|venoki": ['"Step aside, guard. I taught this."', '"Then you know why I will not."'],
+  "venoki|olek": ['"The door is shut, teacher."', '"There has never been a door, Venoki."'],
+  "olek|momo": ['"Land, and I will show you something."', '"Show me from down there."'],
+  "momo|olek": ['"You are the one who never leaves the ground."', '"I leave it exactly once per fight."'],
+  "buba|puffy": ['"You float, I hit. Simple."', '"You hit where I was."'],
+  "puffy|buba": ['"Hold still, Buba."', '"That is the one thing I have never done."'],
+  "buba|pomodoro": ['"Just go! Why do you hang there!"', '"Because it makes you say that."'],
+  "pomodoro|buba": ['"You will go first. You always go first."', '"And it always works! Mostly!"'],
+  "buba|venoki": ['"Move, big lad, I am coming through."', '"They all say that."'],
+  "venoki|buba": ['"You will not get past."', '"I am not going to stop to check."'],
+  "buba|momo": ['"Get down here and fight properly."', '"This IS properly."'],
+  "momo|buba": ['"You are so easy to read from above."', '"Then read this."'],
+  "puffy|pomodoro": ['"We both wait. One of us is better at it."', '"It is not going to be you."'],
+  "pomodoro|puffy": ['"You hang. I hang. Someone has to blink."', '"I do not blink. I inflate."'],
+  "puffy|venoki": ['"I will just go over the door."', '"Nobody goes over the door."'],
+  "venoki|puffy": ['"There is no over. There is only through."', '"Watch me."'],
+  "puffy|momo": ['"Two of us up here is one too many."', '"Then come down."'],
+  "momo|puffy": ['"You hover. I fly. Not the same."', '"Mine works."'],
+  "pomodoro|venoki": ['"I can wait longer than your shift."', '"My shift is eleven years long."'],
+  "venoki|pomodoro": ['"Nothing gets through by standing still."', '"Watch what standing still does."'],
+  "pomodoro|momo": ['"You will run out of air before I run out of patience."', '"I have three airs."'],
+  "momo|pomodoro": ['"Hanging is not flying, tomato."', '"Neither is falling, bird."'],
+  "venoki|momo": ['"Doors have tops. I have thought about this."', '"Eleven years and that is the thought?"'],
+  "momo|venoki": ['"I can simply go over you."', '"People have tried the top."'],
+  "olek|olek": ['"So. One of us is the student."', '"It was always going to come to this."'],
+  "buba|buba": ['"Oh no. He has no plan either."', '"Two of us. This is going to be incredible."'],
+  "puffy|puffy": ['"Neither of us is going to land."', '"Then neither of us can lose."'],
+  "pomodoro|pomodoro": ['"Neither of us is going to commit."', '"The clock will decide. It usually does."'],
+  "venoki|venoki": ['"Two guards. One doorway."', '"There is no doorway."'],
+  "momo|momo": ['"Six jumps between us."', '"And one floor."']
+};
+
+function pairTalk(foe, you) {
+  return PAIR_TALK[foe.id + "|" + you.id] || null;
+}
+
+
+/* --- season pass screen --------------------------------------------------- */
+function drawPass(t) {
+  drawStage(null);
+  ctx.fillStyle = rgba("#08070F", 0.8); ctx.fillRect(0, 0, STAGE_W, STAGE_H);
+  txt("SEASON ONE", STAGE_W / 2, 44, 28, "#FFD98A", "center", FD, 9);
+  txt(seasonDaysLeft() + " DAYS LEFT  ·  " + save.points + " PTS  ·  " + save.keys + " KEYS",
+    STAGE_W / 2, 64, 11, rgba("#E7E3FB", 0.6), "center", FM, 4);
+
+  /* the tier track */
+  const TX = 40, TY = 88, TW = STAGE_W - 80;
+  ctx.strokeStyle = rgba("#E7E3FB", 0.16); ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(TX, TY + 30); ctx.lineTo(TX + TW, TY + 30); ctx.stroke();
+  for (let i = 0; i < TIERS.length; i++) {
+    const tier = TIERS[i], x = TX + (i + 0.5) * (TW / TIERS.length);
+    const got = (save.claimed || []).includes(i);
+    const reach = save.points >= tier.at;
+    if (tier.costume) {
+      drawAugMedalLike(x, TY + 30, 44, got ? "#FFD98A" : reach ? "#7CF0B4" : "#3B3560", "C");
+    } else {
+      drawAugMedalLike(x, TY + 30, 38, got ? "#FFD98A" : "#3B3560", String(tier.keys));
+    }
+    txt(String(tier.at), x, TY + 66, -10, rgba(reach ? "#FFD98A" : "#E7E3FB", reach ? 0.9 : 0.35),
+      "center", FM, 1.5);
+    txt(tier.costume ? COS[tier.costume].name : "KEYS", x, TY + 4, -8.5,
+      rgba("#E7E3FB", got ? 0.8 : 0.35), "center", FM, 1);
+  }
+
+  /* challenges */
+  txt("CHALLENGES", 40, 186, 16, "#E7E3FB", "left", FD, 6);
+  const CH = 52;
+  for (let i = 0; i < activeChallenges.length; i++) {
+    const c = activeChallenges[i];
+    if (!c) continue;
+    const y = 200 + i * (CH + 6), done = (save.done || []).includes(c.id);
+    const prog = Math.min(progressOf(c), c.goal);
+    ctx.fillStyle = rgba(done ? "#16301F" : "#120E28", 0.9);
+    ctx.fillRect(40, y, 600, CH);
+    ctx.strokeStyle = rgba(done ? "#7CF0B4" : "#8E7BD8", done ? 0.8 : 0.25);
+    ctx.lineWidth = 1; ctx.strokeRect(40.5, y + 0.5, 599, CH - 1);
+    const hardCol = c.hard === "EASY" ? "#7CF0B4" : c.hard === "MEDIUM" ? "#FFD98A" : "#FF6E7F";
+    ctx.fillStyle = rgba(hardCol, 0.9); ctx.fillRect(40, y, 3, CH);
+    txt(c.kind + " · " + c.hard, 56, y + 18, -9.5, rgba(hardCol, 0.9), "left", FM, 2);
+    txt(c.text, 56, y + 38, -14, rgba("#E7E3FB", done ? 0.6 : 0.95), "left", FD);
+    txt(done ? "DONE" : prog + " / " + c.goal, 626, y + 22, -12,
+      done ? "#7CF0B4" : rgba("#E7E3FB", 0.6), "right", FM, 1.5);
+    txt("+" + c.pts, 626, y + 40, -13, "#FFD98A", "right", FM, 1.5);
+  }
+
+  /* the pitch */
+  const PX = 664, PW = STAGE_W - PX - 40;
+  ctx.fillStyle = rgba("#150F2C", 0.94); ctx.fillRect(PX, 200, PW, 214);
+  ctx.strokeStyle = rgba("#FFD98A", save.pass ? 0.8 : 0.4); ctx.lineWidth = 2;
+  ctx.strokeRect(PX + 0.5, 200.5, PW - 1, 213);
+  txt(save.pass ? "PASS ACTIVE" : "SEASON PASS", PX + PW / 2, 232, 22,
+    save.pass ? "#7CF0B4" : "#FFD98A", "center", FD, 3);
+  let py = 258;
+  const sell = save.pass
+    ? ["Momo is on the roster.", "Challenges pay points.", "Costumes and keys unlock as you climb."]
+    : ["Unlocks Momo immediately.", "Challenges start paying points.", "Costumes and Nightmare Keys as you climb."];
+  for (const line of sell) {
+    for (const l of wrapText(line, PW - 30, 12)) {
+      txt(l, PX + 16, py, -12, rgba("#E7E3FB", 0.75), "left", FD); py += 16;
+    }
+  }
+  if (!save.pass) {
+    const bx = PX + 16, by = 356, bw = PW - 32, bh = 42;
+    const over = hovered(bx, by, bw, bh);
+    ctx.fillStyle = rgba(over ? "#FFD98A" : "#2A2247", 0.95);
+    ctx.fillRect(bx, by, bw, bh);
+    ctx.strokeStyle = "#FFD98A"; ctx.lineWidth = 2; ctx.strokeRect(bx + 0.5, by + 0.5, bw - 1, bh - 1);
+    txt("$" + PASS_PRICE + "  ·  FREE IN DEMO", bx + bw / 2, by + 27, 16,
+      over ? "#17110A" : "#FFD98A", "center", FD, 2);
+    hot(bx, by, bw, bh, () => buyPass());
+  } else {
+    txt("THANK YOU", PX + PW / 2, 378, 14, rgba("#7CF0B4", 0.8), "center", FM, 4);
+  }
+
+  /* prize pool */
+  ctx.fillStyle = rgba("#0E0A20", 0.9); ctx.fillRect(PX, 426, PW, 62);
+  ctx.fillStyle = rgba("#FFD98A", 0.85); ctx.fillRect(PX, 426, 3, 62);
+  txt("SEASON PRIZE POOL", PX + 16, 448, -10, rgba("#E7E3FB", 0.5), "left", FM, 3);
+  txt(money(prizePool()), PX + 16, 476, 26, "#FFD98A", "left", FM, 2);
+  txt("LEADERBOARD · COMING SOON", PX + 16, 500, -9, rgba("#E7E3FB", 0.35), "left", FM, 2);
+
+  /* keys */
+  ctx.fillStyle = rgba("#0E0A20", 0.9); ctx.fillRect(40, 500, 600, 44);
+  txt("NIGHTMARE KEYS", 56, 520, -10, rgba("#E7E3FB", 0.5), "left", FM, 3);
+  txt(String(save.keys), 56, 540, 18, "#FF6E7F", "left", FM, 2);
+  txt("BUY MORE · COMING SOON", 626, 528, -10, rgba("#E7E3FB", 0.35), "right", FM, 2);
+
+  drawHintButtons(STAGE_W / 2, STAGE_H - 12, [["KICK", "BACK"]], [() => { app.screen = "mode"; SFX.move(); }]);
+}
+
+/* a medallion-shaped chip for things that have no item art */
+function drawAugMedalLike(cx, cy, size, col, glyph) {
+  ctx.save();
+  ctx.fillStyle = rgba("#0B0916", 0.85);
+  ctx.beginPath(); ctx.arc(cx, cy, size * 0.42, 0, 7); ctx.fill();
+  ctx.strokeStyle = col; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(cx, cy, size * 0.42, 0, 7); ctx.stroke();
+  ctx.restore();
+  txt(glyph, cx, cy + 5, -14, col, "center", FM, 1);
+}
+
+function passTick(inp) {
+  const m = inp[0] | inp[1];
+  const kick = (m & IN_KICK) && !(app.passPrev & IN_KICK);
+  const dive = (m & IN_DIVE) && !(app.passPrev & IN_DIVE);
+  app.passPrev = m;
+  if (dive && !save.pass) buyPass();
+  else if (kick) { app.screen = "mode"; SFX.move(); }
+}
+
+/* --- tutorial ------------------------------------------------------------
+   Four prompts, twenty seconds, and then you know the game. */
+const TUT_STEPS = [
+  { key: "p1dive", text: "JUMP", sub: "the only way forward is up", done: p => p.st === "rise" },
+  { key: "p1kick", text: "DIVEKICK", sub: "in the air, kick commits — no steering", done: p => p.st === "kick" },
+  { key: "p1kick", text: "KICKBACK", sub: "on the ground, kick hops you backwards", done: p => p.st === "kb" },
+  { key: null, text: "NOW HIT HIM", sub: "one hit wins the round. that is the whole game", done: null }
+];
+
+function tutStart() {
+  app.cpu = null; app.arcade = false; app.vsAug = false; run.on = false;
+  app.m = newMatch(1, 0, null, 0, { win: 1 });
+  app.m.phase = "fight"; app.m.pt = 0;
+  trails[0].length = 0; trails[1].length = 0;
+  app.tut = { step: 0, t: 0, done: false };
+  app.bg = BG_MENU;
+  app.screen = "tutorial";
+}
+
+function tutorialTick(inp) {
+  const s = app.m, tut = app.tut;
+  tut.t++;
+  s.timer = ROUND_TICKS;                    /* no clock pressure while learning */
+  if (tut.done) {
+    const m = inp[0] | inp[1];
+    if ((m & IN_KICK) && !(tut.prev & IN_KICK)) { app.screen = "mode"; SFX.move(); }
+    tut.prev = m;
+    return;
+  }
+  for (const e of step(s, inp[0], 0)) playEv(e);
+  pushTrail(0, s.p[0]); pushTrail(1, s.p[1]);
+  pushGhost(0, s.p[0]); pushGhost(1, s.p[1]);
+  const stepDef = TUT_STEPS[tut.step];
+  if (tut.step < 3) {
+    if (stepDef.done(s.p[0])) { tut.step++; tut.t = 0; SFX.lock(); }
+  } else if (s.phase !== "fight") {
+    tut.done = true; tut.prev = IN_KICK;
+    say("Well done", 2);
+  }
+  if (s.phase === "ko" && !tut.done) { tut.done = true; tut.prev = IN_KICK; }
+}
+
+function drawTutorial(t) {
+  drawMatch(app.m);
+  const tut = app.tut;
+  ctx.fillStyle = rgba("#08070F", 0.72);
+  ctx.fillRect(0, 120, STAGE_W, 96);
+  if (tut.done) {
+    txt("THAT IS THE WHOLE GAME", STAGE_W / 2, 164, 34, "#FFD98A", "center", FD, 6);
+    txt("two buttons · one hit · first to five", STAGE_W / 2, 190, 13,
+      rgba("#E7E3FB", 0.7), "center", FM, 3);
+    drawHintButtons(STAGE_W / 2, STAGE_H - 12, [["KICK", "BACK TO MENU"]],
+      [() => { app.screen = "mode"; SFX.move(); }]);
+    return;
+  }
+  const d = TUT_STEPS[tut.step];
+  const flash = 0.7 + 0.3 * Math.sin(t * 0.16);
+  txt(d.text, STAGE_W / 2, 164, 36, rgba("#FFD98A", flash), "center", FD, 8);
+  txt(d.sub, STAGE_W / 2, 190, 13, rgba("#E7E3FB", 0.75), "center", FM, 3);
+  if (d.key) drawHints(STAGE_W / 2, 212, [[keyName(BINDS[d.key]), "PRESS"]]);
+  for (let i = 0; i < TUT_STEPS.length; i++) {
+    const x = STAGE_W / 2 - (TUT_STEPS.length - 1) * 11 + i * 22;
+    ctx.fillStyle = i < tut.step ? "#7CF0B4" : i === tut.step ? "#FFD98A" : rgba("#E7E3FB", 0.2);
+    ctx.beginPath(); ctx.arc(x, 134, 5, 0, 7); ctx.fill();
+  }
+}
 
 /* --- story cards ----------------------------------------------------------
    A full-bleed arena, the Axie large and lit from its own class colour, and
@@ -2394,16 +2650,12 @@ function storyLines() {
   if (LADDER[lv].ch === -2) {
     return [[foe, pick(you.taunts, 1)], [you, '"That is my line."']];
   }
+  /* the matchup's own exchange, with the character's generic bank as backup */
+  const pair = pairTalk(foe, you);
+  if (pair && lv !== 5) return [[foe, pair[0]], [you, pair[1]]];
   if (lv === 5) {
     return [[foe, '"You have been picking things up off the floor, have you not."'],
       [you, pick(you.replies, 2)]];
-  }
-  if (lv === 8) {
-    return [[foe, '"Whatever you are carrying, we have all seen it by now."'],
-      [you, pick(you.replies, 4)]];
-  }
-  if (lv >= 6) {
-    return [[foe, '"Again? You beat one of us. There are ten."'], [you, pick(you.replies, 3)]];
   }
   return [[foe, pick(foe.taunts, 0)], [you, pick(you.replies, 0)]];
 }
@@ -2691,7 +2943,6 @@ function drawMeter(p, c, side, tick) {
 
   const tags = [];
   if (p.kf) tags.push(["KICK FACTOR x" + p.kf, "#FF8A5C"]);
-  if (p.rocked) tags.push(["ROCKED", "#FF5470"]);
   for (let i = 0; i < tags.length; i++) {
     txt(tags[i][0], lx, y + H + 15 + i * 14, -11, tags[i][1], align, FM, 2);
   }
@@ -2835,10 +3086,9 @@ function drawMatch(s) {
   if (s.phase === "ko" && s.result) {
     const r = s.result;
     const col = r.winner >= 0 ? CHARS[s.p[r.winner].ch].col : "#FF8A8A";
-    const main = r.head ? "HEAD SHOT" : r.kind === "ko" ? "K.O." : r.kind === "ward" ? "WARD BROKEN"
+    const main = r.kind === "ko" ? "K.O." : r.kind === "ward" ? "WARD BROKEN"
       : r.kind === "trade" ? "TRADE" : "TIME";
-    const sub = r.head ? CHARS[s.p[1 - r.winner].ch].name + " IS ROCKED" :
-      r.kind === "ward" ? "THE RUINS TAKE THAT ONE" :
+    const sub = r.kind === "ward" ? "THE RUINS TAKE THAT ONE" :
       r.kind === "trade" ? "NOBODY SCORES" :
       r.kind === "line" ? CHARS[s.p[r.winner].ch].name + " HELD THE LINE" :
         r.winner >= 0 ? CHARS[s.p[r.winner].ch].name : "";
@@ -2895,7 +3145,7 @@ function drawTitle(t) {
 const MODES = [
   { key: "versus", name: "LOCAL VERSUS", blurb: "Two players, one keyboard, one argument", col: "#E7E3FB", cast: [1, 0], rack: "versus" },
   { key: "net", name: "ONLINE VERSUS", blurb: "Two machines, two codes, no server between", col: "#7CF0B4", cast: [2, 5] },
-  { key: "arcade", name: "STORY MODE", blurb: "Ten fights, one arc, three things you find", col: "#FFD98A", cast: [3] },
+  { key: "arcade", name: "STORY MODE", blurb: "Ten fights, one arc, three things you find", col: "#FFD98A", cast: [3], rack: "story" },
   { key: "cpu", name: "VS CPU", blurb: "Pick your wall", col: "#FF6E7F", cast: [4], rack: "cpu" }
 ];
 
@@ -2932,18 +3182,52 @@ function modePanelCast(m, x, y, w, h, t, i) {
   if (m.key === "versus" && app.mode.sub === "versus") {
     txt(VS_RULES[app.mode.subCur % VS_RULES.length].name, x + w / 2, feet - 104, 18, m.col, "center", FD, 3);
   }
+  if (m.key === "arcade" && app.mode.sub === "story") {
+    const r = STORY_RULES[app.mode.subCur % STORY_RULES.length];
+    txt(r.name, x + w / 2, feet - 104, 18, app.mode.subCur ? "#FF4D6D" : m.col, "center", FD, 3);
+  }
 }
 
 function drawMode(cur, t) {
   drawStage(null);
   ctx.fillStyle = rgba("#08070F", 0.62); ctx.fillRect(0, 0, STAGE_W, STAGE_H);
-  txt("SELECT MODE", STAGE_W / 2, 56, 32, "#E7E3FB", "center", FD, 10);
-  drawHints(STAGE_W / 2, 80, app.mode.sub
+  /* the live-service furniture: what the season is worth, what you hold, and
+     the two doors that are not fights */
+  ctx.fillStyle = rgba("#0E0A20", 0.85); ctx.fillRect(0, 0, STAGE_W, 34);
+  ctx.fillStyle = rgba("#FFD98A", 0.7); ctx.fillRect(0, 33, STAGE_W, 1);
+  txt("PRIZE POOL", 20, 15, -9, rgba("#E7E3FB", 0.45), "left", FM, 3);
+  txt(money(prizePool()), 20, 28, 15, "#FFD98A", "left", FM, 1.5);
+  txt("LEADERBOARD COMING SOON", 132, 27, -9, rgba("#E7E3FB", 0.3), "left", FM, 2);
+
+  const chips = [
+    { label: save.pass ? "SEASON PASS · " + save.points + " PTS" : "SEASON PASS · $5 FREE",
+      col: save.pass ? "#7CF0B4" : "#FFD98A", act: () => { app.passPrev = IN_KICK; app.screen = "pass"; SFX.lock(); } },
+    { label: "TUTORIAL · 20s", col: "#9FB4D8", act: () => { SFX.lock(); tutStart(); } },
+    { label: save.keys + " KEYS", col: "#FF6E7F", act: null }
+  ];
+  let cx = STAGE_W - 20;
+  for (const chip of chips) {
+    ctx.save();
+    ctx.font = '600 11px ' + FM;
+    const w = ctx.measureText(chip.label).width + 24;
+    ctx.restore();
+    const x = cx - w, over = chip.act && hovered(x, 5, w, 24);
+    ctx.fillStyle = rgba(over ? chip.col : "#1A1436", over ? 0.9 : 0.9);
+    ctx.fillRect(x, 5, w, 24);
+    ctx.strokeStyle = rgba(chip.col, 0.7); ctx.lineWidth = 1;
+    ctx.strokeRect(x + 0.5, 5.5, w - 1, 23);
+    txt(chip.label, x + w / 2, 21, -11, over ? "#17110A" : chip.col, "center", FM, 1.2);
+    if (chip.act) hot(x, 5, w, 24, chip.act);
+    cx = x - 8;
+  }
+
+  txt("SELECT MODE", STAGE_W / 2, 62, 30, "#E7E3FB", "center", FD, 10);
+  drawHints(STAGE_W / 2, 84, app.mode.sub
     ? [["DIVE", "MOVE"], ["KICK", "START"], ["ESC", "BACK"]]
     : [["DIVE", "MOVE"], ["KICK", "CONFIRM"]]);
 
   const PW = 230, GAP = 16, X0 = (STAGE_W - (PW * 4 + GAP * 3)) / 2;
-  const Y = 108, PH = app.mode.sub ? 250 : 316;
+  const Y = 112, PH = app.mode.sub ? 246 : 312;
 
   for (let i = 0; i < MODES.length; i++) {
     const m = MODES[i], x = X0 + i * (PW + GAP);
@@ -3019,9 +3303,21 @@ function drawMode(cur, t) {
 }
 
 function rackRows() {
-  return app.mode.sub === "cpu"
-    ? DIFFS.map((d, i) => ({ name: d.name, blurb: d.blurb, col: ["#7FD1A0", CHARS[1].col, CHARS[4].col, "#FF4D6D"][i] }))
-    : VS_RULES.map((r, i) => ({ name: r.name, blurb: r.blurb, col: i ? "#FFD98A" : "#E7E3FB" }));
+  if (app.mode.sub === "cpu") {
+    return DIFFS.map((d, i) => ({
+      name: d.name, blurb: d.blurb,
+      col: ["#7FD1A0", CHARS[1].col, CHARS[4].col, "#FF4D6D"][i]
+    }));
+  }
+  if (app.mode.sub === "story") {
+    return STORY_RULES.map((r, i) => ({
+      name: r.name,
+      blurb: i === 1 ? r.blurb + "  ·  " + save.keys + " HELD" : r.blurb,
+      col: i ? "#FF4D6D" : "#FFD98A",
+      locked: i === 1 && save.keys < 1
+    }));
+  }
+  return VS_RULES.map((r, i) => ({ name: r.name, blurb: r.blurb, col: i ? "#FFD98A" : "#E7E3FB" }));
 }
 
 function modeConfirm(prev) {
@@ -3034,6 +3330,8 @@ function modeConfirm(prev) {
   }
   if (m.key === "net") { netPanel(true); return; }
   app.arcade = m.key === "arcade";
+  app.nightmare = m.key === "arcade" && app.mode.subCur === 1;
+  if (app.nightmare && save.keys < 1) { app.mode.subCur = 0; app.nightmare = false; }
   app.vsAug = m.key === "versus" && app.mode.sub === "versus" && app.mode.subCur === 1;
   app.cpu = m.key === "cpu" ? app.mode.subCur : app.arcade ? 0 : null;
   app.mode.sub = null;
@@ -3086,9 +3384,27 @@ function drawSelect(sel, t) {
       ctx.strokeRect(x + (on1 ? 5 : 1), y + (on1 ? 5 : 1), CW - (on1 ? 10 : 2), CH - (on1 ? 10 : 2));
     }
     ctx.fillStyle = rgba(c.col, 0.16); ctx.fillRect(x, y, CW, 3);
-    hot(x, y, CW, CH,
-      () => { if (!sel.lock[0]) { sel.cur[0] = i; sel.lock[0] = true; SFX.lock(); } },
-      () => { if (!sel.lock[0]) sel.cur[0] = i; });
+
+    if (charLocked(i)) {
+      ctx.fillStyle = rgba("#08070F", 0.72); ctx.fillRect(x, y, CW, CH);
+      txt("SEASON PASS", x + CW / 2, y + CH / 2 - 4, 16, "#FFD98A", "center", FD, 4);
+      txt("UNLOCKS MOMO", x + CW / 2, y + CH / 2 + 16, -11, rgba("#E7E3FB", 0.6), "center", FM, 2);
+      hot(x, y, CW, CH, () => { app.passPrev = IN_KICK; app.screen = "pass"; SFX.lock(); });
+    } else {
+      hot(x, y, CW, CH,
+        () => { if (!sel.lock[0]) { sel.cur[0] = i; sel.lock[0] = true; SFX.lock(); } },
+        () => { if (!sel.lock[0]) sel.cur[0] = i; });
+      const own = COSTUMES.find(k => k.ch === i && save.costumes.includes(k.id));
+      if (own) {
+        const chipW = 96, chipX = x + CW - chipW - 6, chipY = y + CH - 20;
+        const on = app.cosOn;
+        ctx.fillStyle = rgba(on ? c.col : "#1A1436", 0.9);
+        ctx.fillRect(chipX, chipY, chipW, 15);
+        txt(on ? own.name : "DEFAULT", chipX + chipW / 2, chipY + 11, -9,
+          on ? "#17110A" : rgba("#E7E3FB", 0.6), "center", FM, 1);
+        hot(chipX, chipY, chipW, 15, () => { app.cosOn = !app.cosOn; SFX.move(); });
+      }
+    }
 
     const bob = Math.sin(t * 0.05 + i * 1.3) * 4;
     const ringY = y + CH / 2 + 4;
@@ -3571,6 +3887,192 @@ function netPanel(open) {
 })();
 
 
+
+/* =========================== SAVE ======================================
+   One localStorage blob: keys, the pass, points, what has been claimed and
+   what the challenges have seen. Shallow on purpose - this is a jam
+   prototype of an economy, not an economy.
+   ====================================================================== */
+const SAVE_KEY = "axiekick.save";
+const SEASON_DAYS = 30;
+const save = {
+  keys: 100,                 /* Nightmare Keys, handed out freely for the demo */
+  pass: false,
+  points: 0,
+  spent: 0,                  /* real money this machine has "put in" */
+  costumes: [],
+  claimed: [],
+  seasonStart: 0,
+  counters: {},
+  storyChars: [],
+  seen: { daily: 0, weekly: 0 }
+};
+
+function loadSave() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(SAVE_KEY) || "{}");
+    Object.assign(save, raw);
+  } catch (e) { }
+  if (!save.seasonStart) save.seasonStart = Date.now();
+  if (typeof save.keys !== "number") save.keys = 100;
+  writeSave();
+}
+function writeSave() {
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) { }
+}
+function seasonDaysLeft() {
+  const gone = (Date.now() - save.seasonStart) / 86400000;
+  return Math.max(0, Math.ceil(SEASON_DAYS - gone));
+}
+
+/* The prize pool is a mock: a plausible starting number that creeps upward
+   while you watch, plus whatever this machine actually put in. Nothing here
+   talks to a payment system - there isn't one. */
+const POOL_BASE = 12480, POOL_RATE = 0.37;   /* dollars per second */
+function prizePool() {
+  return POOL_BASE + (Date.now() - 1757000000000) / 1000 * POOL_RATE * 0.0004 + save.spent;
+}
+function money(n) {
+  return "$" + Math.floor(n).toLocaleString("en-US");
+}
+
+
+/* =========================== SEASON PASS ===============================
+   A shallow prototype of a live-service loop: ten challenges, one pass, one
+   thirty-day season. Nothing here charges anybody - the pass is free in this
+   build and the prize pool is a mock. It exists to show the shape.
+   ====================================================================== */
+const PASS_PRICE = 5;
+
+const CHALLENGES = [
+  { id: "d1", kind: "DAILY", hard: "EASY", pts: 5, goal: 3, stat: "rounds", text: "Win 3 rounds" },
+  { id: "d2", kind: "DAILY", hard: "EASY", pts: 5, goal: 1, stat: "specials", text: "Land a special" },
+  { id: "d3", kind: "DAILY", hard: "MEDIUM", pts: 10, goal: 1, stat: "story", text: "Complete Story Mode with any Axie" },
+  { id: "d4", kind: "DAILY", hard: "MEDIUM", pts: 10, goal: 6, stat: "stage", text: "Reach stage 6 of Story Mode" },
+  { id: "w1", kind: "WEEKLY", hard: "HARD", pts: 100, goal: 1, stat: "nightmare", text: "Complete Nightmare Story Mode" },
+  { id: "w2", kind: "WEEKLY", hard: "MEDIUM", pts: 25, goal: 10, stat: "ranked", text: "Win 10 ranked matches" },
+  { id: "w3", kind: "WEEKLY", hard: "EASY", pts: 15, goal: 25, stat: "kicks", text: "Land 25 divekicks" },
+  { id: "s1", kind: "SEASON", hard: "HARD", pts: 60, goal: 3, stat: "storyChars", text: "Clear Story Mode with three different Axies" },
+  { id: "s2", kind: "SEASON", hard: "MEDIUM", pts: 30, goal: 1, stat: "flawless", text: "Win a match without dropping a round" },
+  { id: "s3", kind: "SEASON", hard: "HARD", pts: 50, goal: 1, stat: "nmCpu", text: "Beat a Nightmare CPU in versus" }
+];
+
+const COSTUMES = [
+  { id: "ember", name: "EMBER", ch: 1, hue: -38, sat: 1.5, eyes: "eyes-angry", mouth: "mouth-bite" },
+  { id: "tide", name: "TIDEWALKER", ch: 2, hue: 62, sat: 1.2, eyes: "eyes-happy", mouth: "mouth-smile" },
+  { id: "bloom", name: "NIGHTBLOOM", ch: 3, hue: 148, sat: 1.3, eyes: "eyes-angry", mouth: "mouth-open" },
+  { id: "warden", name: "RUIN WARDEN", ch: 4, hue: 76, sat: 0.7, eyes: "eyes-shut", mouth: "mouth" },
+  { id: "moonlit", name: "MOONLIT", ch: 0, hue: 186, sat: 1.1, eyes: "eyes-happy", mouth: "mouth-smile" }
+];
+const COS = {};
+for (const c of COSTUMES) COS[c.id] = c;
+
+const TIERS = [
+  { at: 10, keys: 3 }, { at: 25, costume: "ember" }, { at: 45, keys: 5 },
+  { at: 70, costume: "tide" }, { at: 100, keys: 10 }, { at: 140, costume: "bloom" },
+  { at: 190, keys: 10 }, { at: 250, costume: "warden" }, { at: 320, keys: 15 },
+  { at: 400, costume: "moonlit" }
+];
+
+/* which challenges are live right now; the pool is ten and the rotation is a
+   function of the date, so it moves without a server */
+let activeChallenges = [];
+function rollChallenges() {
+  const day = Math.floor(Date.now() / 86400000);
+  const week = Math.floor(day / 7);
+  const of = kind => CHALLENGES.filter(c => c.kind === kind);
+  const d = of("DAILY"), w = of("WEEKLY"), se = of("SEASON");
+  activeChallenges = [
+    d[day % d.length], d[(day + 1) % d.length],
+    w[week % w.length], w[(week + 1) % w.length],
+    se[0], se[1]
+  ];
+  if (save.seen.daily !== day) {
+    for (const c of of("DAILY")) delete save.counters[c.stat];
+    save.seen.daily = day;
+  }
+  if (save.seen.weekly !== week) {
+    for (const c of of("WEEKLY")) delete save.counters[c.stat];
+    save.seen.weekly = week;
+  }
+  save.done = save.done || [];
+  writeSave();
+}
+
+function progressOf(c) {
+  if (c.stat === "storyChars") return (save.storyChars || []).length;
+  return save.counters[c.stat] || 0;
+}
+
+/* every counter the challenges read, in one place */
+function track(stat, n, mode) {
+  const cur = save.counters[stat] || 0;
+  save.counters[stat] = mode === "max" ? Math.max(cur, n) : cur + (n === undefined ? 1 : n);
+  checkChallenges();
+  writeSave();
+}
+function trackStoryChar(ch) {
+  save.storyChars = save.storyChars || [];
+  if (!save.storyChars.includes(ch)) save.storyChars.push(ch);
+  checkChallenges();
+  writeSave();
+}
+
+let passToast = null;
+function checkChallenges() {
+  save.done = save.done || [];
+  save.nagged = save.nagged || [];
+  for (const c of activeChallenges) {
+    if (!c || save.done.includes(c.id)) continue;
+    if (progressOf(c) < c.goal) continue;
+    if (!save.pass) {
+      /* finished, but unpaid: leave it unclaimed so buying the pass still
+         pays out rather than swallowing the work */
+      if (!save.nagged.includes(c.id)) {
+        save.nagged.push(c.id);
+        passToast = { text: c.text + "  ·  needs the season pass", t: 0 };
+      }
+      continue;
+    }
+    save.done.push(c.id);
+    save.points += c.pts;
+    passToast = { text: c.text + "  +" + c.pts + " PTS", t: 0 };
+    claimTiers();
+  }
+}
+
+function claimTiers() {
+  save.claimed = save.claimed || [];
+  for (let i = 0; i < TIERS.length; i++) {
+    const t = TIERS[i];
+    if (save.points < t.at || save.claimed.includes(i)) continue;
+    save.claimed.push(i);
+    if (t.keys) save.keys += t.keys;
+    if (t.costume && !save.costumes.includes(t.costume)) save.costumes.push(t.costume);
+  }
+  writeSave();
+}
+
+function buyPass() {
+  if (save.pass) return;
+  save.pass = true;
+  save.spent += PASS_PRICE;    /* the demo does not charge; the pool still counts it */
+  save.nagged = [];
+  checkChallenges();           /* anything already finished pays out now */
+  claimTiers();
+  writeSave();
+  SFX.lock();
+  passToast = { text: "SEASON PASS UNLOCKED  ·  MOMO JOINS THE ROSTER", t: 0 };
+}
+
+function charLocked(i) { return CHARS[i].id === "momo" && !save.pass; }
+
+function costumeFor(chIdx) {
+  if (!app.cosOn) return null;
+  const c = COSTUMES.find(c => c.ch === chIdx && save.costumes.includes(c.id));
+  return c || null;
+}
+
 /* =========================== ARCADE ====================================
    Ten fights, three choices. The run is a wrapper: augments are a modifier
    table applied when a match is created, so the simulation never learns what
@@ -3689,6 +4191,11 @@ const LADDER = [
   { ch: -2, win: 5, cpu: 3, foe: 0 }
 ];
 
+const STORY_RULES = [
+  { name: "STORY", blurb: "Ten fights, one arc, three things you find" },
+  { name: "NIGHTMARE", blurb: "Same ten, all of them worse. Costs one key" }
+];
+
 const VS_RULES = [
   { name: "SKILL ONLY", blurb: "Two buttons and nothing else" },
   { name: "AUGMENTS", blurb: "Draft two Land items each before the bell" }
@@ -3705,6 +4212,8 @@ function runRand() {
 }
 
 function arcadeStart(chIdx) {
+  run.nightmare = !!app.nightmare;
+  if (run.nightmare) { save.keys = Math.max(0, save.keys - 1); writeSave(); }
   run.on = true;
   run.ch = chIdx;
   run.level = 0;
@@ -3726,9 +4235,11 @@ function arcadeSetup() {
   } else {
     run.foeCh = lv.ch >= 0 ? lv.ch : Math.floor(runRand() * CHARS.length);
     if (run.foeCh === run.ch && lv.ch < 0) run.foeCh = (run.foeCh + 1) % CHARS.length;
+    while (charLocked(run.foeCh)) run.foeCh = (run.foeCh + 1) % CHARS.length;
     const pool = AUGS.filter(a => a.tier < 2 && !run.augs.includes(a.id));
     run.foeAugs = [];
-    for (let i = 0; i < lv.foe && pool.length; i++) {
+    const count = lv.foe + (run.nightmare ? 2 : 0);
+    for (let i = 0; i < count && pool.length; i++) {
       run.foeAugs.push(pool.splice(Math.floor(runRand() * pool.length), 1)[0].id);
     }
   }
@@ -3736,8 +4247,8 @@ function arcadeSetup() {
 
 function arcadeFight() {
   const lv = LADDER[run.level];
-  app.cpu = lv.cpu;
-  app.m = newMatch(run.ch, run.foeCh, lv.cpu, run.level * 31 + 7,
+  app.cpu = run.nightmare ? Math.min(DIFFS.length - 1, lv.cpu + 1) : lv.cpu;
+  app.m = newMatch(run.ch, run.foeCh, app.cpu, run.level * 31 + 7,
     { win: lv.win, a0: run.augs, a1: run.foeAugs });
   trails[0].length = 0; trails[1].length = 0;
   rollArena();
@@ -3750,6 +4261,7 @@ function arcadeResolve() {
   const won = s.score[0] > s.score[1];
   run.rounds[0] += s.score[0];
   run.rounds[1] += s.score[1];
+  track("stage", run.level + 1, "max");
   if (!won) {
     run.lives--;
     if (run.lives <= 0) { run.won = false; app.screen = "runend"; return; }
@@ -3758,7 +4270,13 @@ function arcadeResolve() {
     return;
   }
   const lv = LADDER[run.level];
-  if (run.level >= LADDER.length - 1) { run.won = true; showArc("end"); return; }
+  if (run.level >= LADDER.length - 1) {
+    run.won = true;
+    track(run.nightmare ? "nightmare" : "story");
+    trackStoryChar(run.ch);
+    showArc("end");
+    return;
+  }
   if (lv.draft) { arcadeOffer(); app.screen = "draft"; return; }
   run.level++;
   arcadeSetup();
@@ -4153,6 +4671,10 @@ const app = {
   arcade: false,
   vsAug: false,
   arc: { kind: "open", t: 0, prev: 0 },
+  cosOn: true,
+  tut: null,
+  passPrev: 0,
+  nightmare: false,
   pick: null,
   mode: { cur: 0, prev: [0, 0], sub: null, subCur: 1 },
   pause: null,
@@ -4174,7 +4696,10 @@ function selectTick(inp) {
   } else if (app.cpu !== null) {
     sel.cpuT++;
     if (!sel.lock[1]) {
-      if (sel.cpuT % 9 === 0) { sel.cur[1] = (sel.cur[1] + 1) % CHARS.length; SFX.move(); }
+      if (sel.cpuT % 9 === 0) {
+        do { sel.cur[1] = (sel.cur[1] + 1) % CHARS.length; } while (charLocked(sel.cur[1]));
+        SFX.move();
+      }
       if (sel.lock[0] && sel.cpuT > 52) { sel.lock[1] = true; SFX.lock(); }
     }
   }
@@ -4183,7 +4708,10 @@ function selectTick(inp) {
     const kick = (inp[i] & IN_KICK) && !(sel.prev[i] & IN_KICK);
     if (dive) {
       if (sel.lock[i]) { sel.lock[i] = false; SFX.move(); }
-      else { sel.cur[i] = (sel.cur[i] + 1) % CHARS.length; SFX.move(); }
+      else {
+        do { sel.cur[i] = (sel.cur[i] + 1) % CHARS.length; } while (charLocked(sel.cur[i]));
+        SFX.move();
+      }
       sel.t = 0;
     } else if (kick && !sel.lock[i]) { sel.lock[i] = true; SFX.lock(); sel.t = 0; }
     sel.prev[i] = inp[i];
@@ -4251,6 +4779,10 @@ function runScreenTick(inp) {
     augPickTick(inp);
   } else if (app.screen === "arc") {
     arcTick(inp);
+  } else if (app.screen === "pass") {
+    passTick(inp);
+  } else if (app.screen === "tutorial") {
+    tutorialTick(inp);
   } else if (app.screen === "story") {
     storyTick(inp);
   } else if (app.screen === "ladder") {
@@ -4262,7 +4794,7 @@ function runScreenTick(inp) {
   } else if (app.screen === "match") {
     const s = app.m;
     if (s.phase === "matchend") {
-      if (s.announce) { say(s.announce); s.announce = null; }
+      if (s.announce) { say(s.announce, 3); s.announce = null; }
       endTick(inp);
     } else {
       const in1 = s.cpu ? cpuInput(s) : inp[1];
@@ -4331,6 +4863,8 @@ function frame(now) {
   else if (app.screen === "stage") drawStagePick(app.t);
   else if (app.screen === "augpick") drawAugPick(app.t);
   else if (app.screen === "arc") drawArcCard(app.t);
+  else if (app.screen === "pass") drawPass(app.t);
+  else if (app.screen === "tutorial") drawTutorial(app.t);
   else if (app.screen === "story") drawStory(app.t);
   else if (app.screen === "ladder") drawLadder(app.t);
   else if (app.screen === "draft") drawDraft(app.t);
@@ -4338,6 +4872,20 @@ function frame(now) {
   else drawMatch(app.m);
 
   drawNetHUD();
+  if (passToast) {
+    passToast.t++;
+    if (passToast.t > 200) passToast = null;
+    else {
+      const a = Math.min(1, passToast.t / 14) * Math.min(1, (200 - passToast.t) / 30);
+      ctx.save(); ctx.globalAlpha = a;
+      ctx.fillStyle = rgba("#0E0A20", 0.95);
+      ctx.fillRect(STAGE_W / 2 - 230, 44, 460, 34);
+      ctx.fillStyle = "#FFD98A"; ctx.fillRect(STAGE_W / 2 - 230, 44, 3, 34);
+      txt("CHALLENGE", STAGE_W / 2 - 214, 58, -9, rgba("#FFD98A", 0.8), "left", FM, 2.5);
+      txt(passToast.text, STAGE_W / 2 - 214, 72, -12, "#E7E3FB", "left", FD);
+      ctx.restore();
+    }
+  }
   if (app.pause) drawPause();
   drawTip();
 
@@ -4349,6 +4897,8 @@ function frame(now) {
   }
 }
 loadSettings();
+loadSave();
+rollChallenges();
 rebuildKeymap();
 rollArena();
 requestAnimationFrame(frame);

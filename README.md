@@ -53,6 +53,11 @@ Local versus and VS CPU pick their arena on a stage screen — nine Origins clas
 by name, plus RANDOM. Online rolls a shared arena from the connection seed (both sides
 have to land in the same place) and Arcade keeps the surprise.
 
+### Tutorial
+
+Four prompts, about twenty seconds: jump, divekick, kickback, land a hit. On the mode
+screen next to the season pass chip.
+
 ### Story mode
 
 Ten fights, three choices, three lives, and an arc. Each Axie has its own — a title
@@ -70,6 +75,14 @@ that score for you, a first whiff with no recovery at all); three are legendary 
 appear in the last draft (survive the first hit of every fight, two extra lives, or all
 of it at once). Hover any medallion — on the ladder or mid-fight — to see what it does.
 
+Every stage opens with an exchange written for **that matchup** — all 36 pairs,
+mirrors included, both directions. Momo needling Venoki about going over the door gets
+a different answer than Buba trying to barge through it.
+
+**Nightmare Story** is the same ten stages with every opponent a difficulty tier higher
+and carrying two more augments. It costs one **Nightmare Key**; the demo starts you with
+100.
+
 **Level 10 is your Reflection**: the Axie you beat on level 1, carrying the exact three
 augments you drafted. Whatever you decided was strong, you have to beat.
 
@@ -79,7 +92,7 @@ needed a flag in the round-end path. Full design in
 **[docs/ARCADE-PRD.html](docs/ARCADE-PRD.html)**.
 
 Tuned against a sparring bot with a human-shaped 12-frame reaction delay over 18 runs:
-median run ends at stage 4, two of eighteen clear all ten. Augments are deliberately
+median run ends at stage 5, one of eighteen clears all ten. Augments are deliberately
 enormous now — Buba with Blade, Duel and Crown goes from reach 50 to 118 and dive speed
 14 to 32 — and the opponents draft from the same pool, so doubling them made fights
 swingier rather than easier.
@@ -102,7 +115,7 @@ removed: it dodges what is genuinely aimed at it
 and then attacks in every other situation, so there is no neutral to hide in.
 
 Measured against a sparring bot with a human-shaped 12-frame reaction delay, over 24
-matches, with both sides using meter: Rookie 2, Veteran 6, Lunacian 9, **Nightmare 11**
+matches, with both sides using meter: Rookie 0, Veteran 6, Lunacian 7, **Nightmare 11**
 out of 12. All 36 character pairings finish without stalling, and two Lunacians against
 each other still resolve.
 
@@ -135,16 +148,33 @@ first press started). One per Axie, and each one is that character's idea taken 
 | Venoki | **COIL** | leaves, and takes the whole doorway with him |
 | Momo | **DIVEBOMB** | turns the second wind into a stoop |
 
-**Head Shot**: catch them above the waistline and the round ends with a bigger bang and
-they start the next one **ROCKED** — slower, lower, longer to recover. It wears off after
-that round.
-
 **Kick Factor** is the comeback rule: fall two rounds behind and you get faster, jump
 higher and recover quicker, a little more for every round after that, up to three. It
 shows as an ember aura on the fighter and a tag on the HUD. Nobody has to earn it and
 nobody can turn it off — it exists so a 0–4 match is still worth watching.
 
 Mirror matches recolour the second Axie, so Olek vs Olek is legible.
+
+## Season pass
+
+A shallow prototype of a live-service loop, built to show the shape rather than to take
+anyone's money. **Nothing here charges anything** — the pass is free in this build, the
+prize pool is a mock, and there is no payment code.
+
+- **10 challenges** in the pool; six are live at a time (two daily, two weekly, two
+  seasonal), rotating off the date so it works without a server. Easy/medium/hard, worth
+  5 to 100 points.
+- **One season**, always 30 days, one pass at $5 (free here). Buying it unlocks **Momo**
+  immediately and starts challenges paying out. Challenges finished before you buy stay
+  unclaimed and pay when you do.
+- **10 tiers** of rewards: Nightmare Keys as filler, and five **costumes** — a palette
+  shift plus a face swap using the rig's own alternate eyes and mouths, so Ember Buba is
+  angry and Tidewalker Puffy is smiling with first-party art.
+- **Prize pool** on the main menu, ticking upward, captioned *leaderboard coming soon*.
+  It is a seeded number plus whatever this machine "spent"; the code says so.
+
+Ranked matchmaking does not exist, so for the demo a CPU match counts as ranked. That is
+a deliberate cheat and the only one.
 
 ## Online
 
