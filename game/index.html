@@ -1384,8 +1384,9 @@ function txt(s, x, y, size, col, align, font, spacing) {
   ctx.fillText(s, x, y);
   ctx.restore();
 }
-function wrapText(s, max, size, font) {
+function wrapText(s, max, size, font, spacing) {
   ctx.save(); ctx.font = `500 ${size}px ${font || FD}`;
+  if (spacing) ctx.letterSpacing = spacing + "px";
   const words = s.split(" "); const lines = []; let cur = "";
   for (const w of words) {
     const t = cur ? cur + " " + w : w;
@@ -1393,6 +1394,22 @@ function wrapText(s, max, size, font) {
   }
   if (cur) lines.push(cur);
   ctx.restore(); return lines;
+}
+
+/* txt(), but the size drops until the line fits `max` - names in the item
+   tables are longer than any box that has to hold four of them. */
+function fitTxt(s, x, y, max, size, col, align, font, spacing) {
+  const big = Math.abs(size);
+  ctx.save();
+  let use = big;
+  for (let k = 0; k < 24; k++) {
+    ctx.font = `${size < 0 ? "" : "600 "}${use}px ${font || FD}`;
+    ctx.letterSpacing = (spacing || 0) + "px";
+    if (ctx.measureText(s).width <= max || use <= big * 0.62) break;
+    use -= big * 0.04;
+  }
+  ctx.restore();
+  txt(s, x, y, size < 0 ? -use : use, col, align, font, spacing);
 }
 
 
@@ -2176,8 +2193,8 @@ function drawStagePick(t) {
   drawHints(STAGE_W / 2, 80, [["DIVE", "MOVE"], ["KICK", "FIGHT"]]);
 
   const N = BG_IMGS.length + 1, COLS = 5;
-  const TW = 176, TH = 104, GX = 12, GY = 34;
-  const X0 = (STAGE_W - (TW * COLS + GX * (COLS - 1))) / 2, Y0 = 108;
+  const TW = 180, TH = 124, GX = 12, GY = 36;
+  const X0 = (STAGE_W - (TW * COLS + GX * (COLS - 1))) / 2, Y0 = 168;
   for (let i = 0; i < N; i++) {
     const x = X0 + (i % COLS) * (TW + GX), y = Y0 + Math.floor(i / COLS) * (TH + GY);
     const on = app.stage.cur === i, random = i === BG_IMGS.length;
@@ -2301,19 +2318,20 @@ function drawPass(t) {
   txt("LEADERBOARD · COMING SOON", STAGE_W / 2, pb[1] + 84, -10, rgba("#E7E3FB", 0.42), "center", FM, 3);
 
   /* --- what you hold, in matching plates either side --- */
-  const sb = woodPanel(24, 26, 196, 88, { ink: "#100C22", inkA: 0.92, rim: "#7CF0B4" });
-  txt("SEASON POINTS", sb[0] + 12, sb[1] + 18, -10, rgba("#E7E3FB", 0.5), "left", FM, 3);
-  txt(String(save.points), sb[0] + 12, sb[1] + 52, 34, "#7CF0B4", "left", FM, 2);
-  txt(seasonDaysLeft() + " DAYS LEFT", sb[0] + 12, sb[1] + 68, -10, rgba("#E7E3FB", 0.4), "left", FM, 2);
+  const sb = woodPanel(24, 18, 196, 106, { ink: "#100C22", inkA: 0.92, rim: "#7CF0B4" });
+  txt("SEASON POINTS", sb[0] + 12, sb[1] + 16, -10, rgba("#E7E3FB", 0.5), "left", FM, 3);
+  txt(String(save.points), sb[0] + 12, sb[1] + 48, 32, "#7CF0B4", "left", FM, 2);
+  txt(seasonDaysLeft() + " DAYS LEFT", sb[0] + 12, sb[1] + 66, -10, rgba("#E7E3FB", 0.4), "left", FM, 2);
 
-  const kb = woodPanel(STAGE_W - 220, 26, 196, 88, { ink: "#100C22", inkA: 0.92, rim: "#FF6E7F" });
-  txt("NIGHTMARE KEYS", kb[0] + kb[2] - 12, kb[1] + 18, -10, rgba("#E7E3FB", 0.5), "right", FM, 3);
-  drawKey(kb[0] + 32, kb[1] + 46, 44);
-  txt("x" + save.keys, kb[0] + kb[2] - 12, kb[1] + 52, 26, "#FFD98A", "right", FM, 2);
-  txt("ONE PER NIGHTMARE RUN", kb[0] + kb[2] - 12, kb[1] + 68, -9, rgba("#E7E3FB", 0.4), "right", FM, 2);
+  const kb = woodPanel(STAGE_W - 220, 18, 196, 106, { ink: "#100C22", inkA: 0.92, rim: "#FF6E7F" });
+  txt("NIGHTMARE KEYS", kb[0] + kb[2] - 12, kb[1] + 16, -10, rgba("#E7E3FB", 0.5), "right", FM, 3);
+  drawKey(kb[0] + 30, kb[1] + 38, 32);
+  txt("x" + save.keys, kb[0] + kb[2] - 12, kb[1] + 48, 26, "#FFD98A", "right", FM, 2);
+  fitTxt("ONE PER NIGHTMARE RUN", kb[0] + kb[2] - 12, kb[1] + 66, kb[2] - 26, -9,
+    rgba("#E7E3FB", 0.4), "right", FM, 2);
 
   /* --- the track, two rows so each reward gets room --- */
-  const TY = 140, TH = 236, TX = 24, TW = STAGE_W - 48;
+  const TY = 132, TH = 262, TX = 24, TW = STAGE_W - 48;
   const tb = woodPanel(TX, TY, TW, TH, { ink: "#100C22", inkA: 0.92 });
   txt("REWARD TRACK", tb[0] + 14, tb[1] + 22, 15, rgba("#FFD98A", 0.9), "left", FD, 5);
   const done = TIERS.filter(x => save.points >= x.at).length;
@@ -2323,11 +2341,11 @@ function drawPass(t) {
     txt("OWN THE PASS TO CLAIM", tb[0] + tb[2] / 2, tb[1] + 22, -11, "#FF8A5C", "center", FM, 3);
   }
 
-  const COLS = 5, cw = (tb[2] - 20) / COLS, rowH = 96;
+  const COLS = 5, cw = (tb[2] - 20) / COLS, rowH = 100;
   for (let i = 0; i < TIERS.length; i++) {
     const tier = TIERS[i];
     const cx = tb[0] + 10 + (i % COLS + 0.5) * cw;
-    const ry = tb[1] + 36 + Math.floor(i / COLS) * rowH;
+    const ry = tb[1] + 34 + Math.floor(i / COLS) * rowH;
     const reached = save.points >= tier.at;
     const got = (save.claimed || []).includes(i);
 
@@ -2349,21 +2367,21 @@ function drawPass(t) {
         }
       );
     } else {
-      drawKey(cx, ry + 34, 40);
-      txt("x" + tier.keys, cx, ry + 58, 15, "#FFD98A", "center", FM, 1);
+      drawKey(cx, ry + 32, 38);
+      txt("x" + tier.keys, cx, ry + 62, 15, "#FFD98A", "center", FM, 1);
     }
     ctx.restore();
 
-    txt(tier.costume ? COS[tier.costume].name : "KEYS", cx, ry + 74, -9.5,
+    fitTxt(tier.costume ? COS[tier.costume].name : "KEYS", cx, ry + 76, cw - 20, -9.5,
       rgba(got ? "#7CF0B4" : "#E7E3FB", reached ? 0.9 : 0.4), "center", FM, 1);
-    txt(tier.at + " PTS", cx, ry + 86, -10,
+    txt(tier.at + " PTS", cx, ry + 88, -10,
       rgba(reached ? "#FFD98A" : "#E7E3FB", reached ? 0.9 : 0.3), "center", FM, 1);
     if (got) txt("CLAIMED", cx, ry + 14, -8.5, "#7CF0B4", "center", FM, 1.5);
     else if (reached && !save.pass) txt("LOCKED", cx, ry + 14, -8.5, "#FF8A5C", "center", FM, 1.5);
   }
 
   /* --- buy-in and challenges --- */
-  const BY = 390, BH = 118, GAP = 14;
+  const BY = 400, BH = 126, GAP = 14;
   const bw = (STAGE_W - 48 - GAP) * 0.62;
   const bb = woodPanel(24, BY, bw, BH, { ink: "#140F2A", inkA: 0.94, rim: save.pass ? "#7CF0B4" : "#FFD98A" });
   if (save.pass) {
@@ -2373,12 +2391,12 @@ function drawPass(t) {
     txt("Points keep banking whether or not you play today.",
       bb[0] + 16, bb[1] + 72, -13, rgba("#E7E3FB", 0.5), "left", FD);
   } else {
-    txt("UNLOCK THE REWARD TRACK", bb[0] + 16, bb[1] + 26, 20, "#FFD98A", "left", FD, 3);
+    txt("UNLOCK THE REWARD TRACK", bb[0] + 16, bb[1] + 24, 20, "#FFD98A", "left", FD, 3);
     txt("Momo joins the roster immediately, and every tier you have already",
-      bb[0] + 16, bb[1] + 48, -12.5, rgba("#E7E3FB", 0.75), "left", FD);
+      bb[0] + 16, bb[1] + 46, -12.5, rgba("#E7E3FB", 0.75), "left", FD);
     txt("earned unlocks at once. Nothing you have played is wasted.",
-      bb[0] + 16, bb[1] + 65, -12.5, rgba("#E7E3FB", 0.75), "left", FD);
-    woodButton(bb[0] + 16, bb[1] + 74, 236, 30, "UNLOCK · FREE IN DEMO", "#FFD98A", () => buyPass());
+      bb[0] + 16, bb[1] + 63, -12.5, rgba("#E7E3FB", 0.75), "left", FD);
+    woodButton(bb[0] + 16, bb[1] + 70, 236, 30, "UNLOCK · FREE IN DEMO", "#FFD98A", () => buyPass());
   }
 
   const cx2 = 24 + bw + GAP, cw2 = STAGE_W - 24 - cx2;
@@ -2390,7 +2408,7 @@ function drawPass(t) {
   woodButton(cb[0] + 16, cb[1] + 62, cb[2] - 32, 32, app.passList ? "HIDE LIST" : "SHOW LIST",
     "#FFD98A", () => { app.passList = !app.passList; SFX.move(); });
 
-  if (app.passList) drawChallengeList();
+  if (app.passList) { drawChallengeList(); return; }
   drawHintButtons(STAGE_W / 2, STAGE_H - 14, [["KICK", "BACK"], ["DIVE", "CHALLENGES"]],
     [() => { app.screen = "mode"; SFX.move(); }, () => { app.passList = !app.passList; SFX.move(); }]);
 }
@@ -2475,7 +2493,7 @@ function drawSkins(t) {
           scale: 0.56, anim: c.anim.idle, animT: t / 60 + k
         }
       );
-      txt(id ? COS[id].name : "DEFAULT", sx + sw / 2, sy + sh - 6, -8.5,
+      fitTxt(id ? COS[id].name : "DEFAULT", sx + sw / 2, sy + sh - 6, sw - 8, -8.5,
         on ? c.col : rgba("#E7E3FB", 0.45), "center", FM, 0.5);
       hot(sx, sy, sw, sh, () => {
         save.equipped = save.equipped || {};
@@ -2688,12 +2706,16 @@ function drawAugPick(t) {
     ctx.strokeStyle = rgba(on ? col : TIER[a.tier], on ? 1 : 0.3);
     ctx.lineWidth = on ? 3 : 1;
     ctx.strokeRect(x + 0.5, y + 0.5, CW - 1, CH - 1);
-    drawAugMedal(a.id, x + 34, y + CH / 2, 54);
-    txt(a.name, x + 66, y + 38, a.name.length > 12 ? 13 : 15, TIER[a.tier], "left", FD, 1);
-    let ly = y + 56;
-    for (const line of wrapText(a.line, CW - 76, 10.5)) {
-      if (ly > y + CH - 10) break;
-      txt(line, x + 66, ly, -10.5, rgba("#E7E3FB", 0.7), "left", FD);
+    /* the name gets the whole card width and shrinks to fit it - beside the
+       medallion the long ones ran off the card and onto its neighbour */
+    fitTxt(a.name, x + CW / 2, y + 22, CW - 16, 15, TIER[a.tier], "center", FD, 1);
+    ctx.fillStyle = rgba(TIER[a.tier], on ? 0.5 : 0.22);
+    ctx.fillRect(x + 10, y + 29, CW - 20, 1);
+    drawAugMedal(a.id, x + 36, y + 76, 54);
+    let ly = y + 50;
+    for (const line of wrapText(a.line, CW - 82, 10.5)) {
+      if (ly > y + CH - 8) break;
+      txt(line, x + 70, ly, -10.5, rgba("#E7E3FB", 0.7), "left", FD);
       ly += 13;
     }
     ctx.restore();
@@ -3024,6 +3046,30 @@ function woodPanel(x, y, w, h, opt) {
     ctx.restore();
   }
   return panelIn(x, y, w, h);
+}
+
+/* A flat slab with the same interface as woodPanel. The Origins frame art
+   leaves only ~40 of an 80px plate clear once its border is drawn, which is
+   why the header kept pushing its bottom line onto the wood. In a dense strip
+   the frame is the wrong tool, so the header uses this instead. */
+const SLAB = 6;
+function slabPanel(x, y, w, h, opt) {
+  opt = opt || {};
+  ctx.fillStyle = rgba("#2A2142", 0.9);
+  ctx.fillRect(x, y, w, h);
+  const b = [x + SLAB, y + SLAB, w - SLAB * 2, h - SLAB * 2];
+  ctx.fillStyle = rgba(opt.ink || "#120E28", opt.inkA === undefined ? 0.95 : opt.inkA);
+  ctx.fillRect(b[0], b[1], b[2], b[3]);
+  ctx.strokeStyle = rgba(opt.rim || "#8E7BD8", 0.8); ctx.lineWidth = 1;
+  ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+  if (opt.glow) {
+    ctx.save();
+    ctx.strokeStyle = rgba(opt.glow, 0.35 + 0.25 * Math.sin(app.t * 0.1));
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x + 1, y + 1, w - 2, h - 2);
+    ctx.restore();
+  }
+  return b;
 }
 
 /* a small parchment button */
@@ -3372,56 +3418,63 @@ function modePanelCast(m, x, y, w, h, t, i) {
 /* the strip across the top: what the season is worth, where you are on it,
    and the two doors that are not fights */
 function drawMenuHeader(t) {
-  const HH = 76;
+  /* the parchment frame eats CHROME off every edge, so the strip has to be
+     tall enough that three lines still land inside the ink rather than on
+     the wood - at 76 they did not, and the bottom line fell off the plate */
+  const HH = 86, PY = 5, PH = HH - 11;
   ctx.fillStyle = rgba("#0B0916", 0.95); ctx.fillRect(0, 0, STAGE_W, HH);
   ctx.fillStyle = rgba("#FFD98A", 0.35); ctx.fillRect(0, HH - 1, STAGE_W, 1);
 
   /* centre: the pool */
   const cw = 380, cx = (STAGE_W - cw) / 2;
-  const cb = woodPanel(cx, 4, cw, HH - 12, { ink: "#0B0916", inkA: 0.9, rim: "#FFD98A" });
-  txt("SEASON ONE PRIZE POOL", cx + cw / 2, cb[1] + 15, -10, rgba("#FFD98A", 0.8), "center", FM, 6);
+  const cb = slabPanel(cx, PY, cw, PH, { ink: "#0B0916", inkA: 0.9, rim: "#FFD98A" });
+  txt("SEASON ONE PRIZE POOL", cx + cw / 2, cb[1] + 16, -10, rgba("#FFD98A", 0.8), "center", FM, 6);
   ctx.save();
   ctx.shadowColor = "rgba(255,217,138,0.55)"; ctx.shadowBlur = 20;
-  txt(money(prizePool()), cx + cw / 2, cb[1] + 40, 26, "#FFE9AE", "center", FM, 2);
+  txt(money(prizePool()), cx + cw / 2, cb[1] + 44, 26, "#FFE9AE", "center", FM, 2);
   ctx.restore();
-  txt("LEADERBOARD COMING SOON", cx + cw / 2, cb[1] + 54, -8.5, rgba("#E7E3FB", 0.35), "center", FM, 3);
+  txt("LEADERBOARD COMING SOON", cx + cw / 2, cb[1] + 62, -8.5, rgba("#E7E3FB", 0.35), "center", FM, 3);
 
   /* left: the pass as a track */
   const done = TIERS.filter(x => save.points >= x.at).length;
-  const pw = 236, pb = woodPanel(10, 4, pw, HH - 12, {
-    ink: hovered(10, 4, pw, HH - 12) ? "#231A3F" : "#150F2C", inkA: 0.95,
+  const pw = 236, pb = slabPanel(10, PY, pw, PH, {
+    ink: hovered(10, PY, pw, PH) ? "#231A3F" : "#150F2C", inkA: 0.95,
     rim: save.pass ? "#7CF0B4" : "#FFD98A"
   });
-  txt(save.pass ? "SEASON PASS" : "SEASON PASS · LOCKED", pb[0] + 10, pb[1] + 16, -9.5,
+  txt(save.pass ? "SEASON PASS" : "SEASON PASS · LOCKED", pb[0] + 10, pb[1] + 15, -9.5,
     save.pass ? "#7CF0B4" : "#FFD98A", "left", FM, 2);
-  txt(String(save.points), pb[0] + 10, pb[1] + 42, 22, "#E7E3FB", "left", FM, 1);
-  txt("PTS", pb[0] + 10 + String(save.points).length * 15 + 6, pb[1] + 42, -11,
+  txt(String(save.points), pb[0] + 10, pb[1] + 44, 22, "#E7E3FB", "left", FM, 1);
+  txt("PTS", pb[0] + 10 + String(save.points).length * 15 + 6, pb[1] + 44, -11,
     rgba("#E7E3FB", 0.5), "left", FM, 2);
-  txt(done + " / " + TIERS.length + " TIERS", pb[0] + pb[2] - 10, pb[1] + 42, -11,
+  txt(done + " / " + TIERS.length + " TIERS", pb[0] + pb[2] - 10, pb[1] + 44, -11,
     rgba("#E7E3FB", 0.6), "right", FM, 2);
-  ctx.fillStyle = rgba("#08070F", 0.8); ctx.fillRect(pb[0] + 10, pb[1] + 50, pb[2] - 20, 5);
+  ctx.fillStyle = rgba("#08070F", 0.8); ctx.fillRect(pb[0] + 10, pb[1] + 54, pb[2] - 20, 5);
   ctx.fillStyle = save.pass ? "#7CF0B4" : "#FFD98A";
-  ctx.fillRect(pb[0] + 10, pb[1] + 50, (pb[2] - 20) * Math.min(1, done / TIERS.length), 5);
-  hot(10, 4, pw, HH - 12, () => { app.passPrev = IN_KICK; app.screen = "pass"; SFX.lock(); });
+  ctx.fillRect(pb[0] + 10, pb[1] + 54, (pb[2] - 20) * Math.min(1, done / TIERS.length), 5);
+  hot(10, PY, pw, PH, () => { app.passPrev = IN_KICK; app.screen = "pass"; SFX.lock(); });
 
-  /* right: keys, then the two buttons */
+  /* right: keys on their own column, then the two buttons beside them - the
+     caption used to run underneath both buttons and read as a smear */
   const rw = 236, rx = STAGE_W - rw - 10;
-  const rb = woodPanel(rx, 4, rw, HH - 12, { ink: "#150F2C", inkA: 0.95, rim: "#8E7BD8" });
-  drawKey(rb[0] + 26, rb[1] + 26, 34);
-  txt("x" + save.keys, rb[0] + 46, rb[1] + 31, 15, "#FFD98A", "left", FM, 1);
-  txt("NIGHTMARE KEYS", rb[0] + 10, rb[1] + 50, -9, rgba("#E7E3FB", 0.45), "left", FM, 2);
-  const bw = (rb[2] - 100) / 2;
+  const rb = slabPanel(rx, PY, rw, PH, { ink: "#150F2C", inkA: 0.95, rim: "#8E7BD8" });
+  const KEYW = 96;
+  drawKey(rb[0] + 24, rb[1] + 24, 32);
+  txt("x" + save.keys, rb[0] + 44, rb[1] + 29, 15, "#FFD98A", "left", FM, 1);
+  fitTxt("NIGHTMARE KEYS", rb[0] + KEYW / 2, rb[1] + 52, KEYW - 8, -9,
+    rgba("#E7E3FB", 0.5), "center", FM, 1.5);
+  const bw = (rb[2] - KEYW - 12) / 2, bh = rb[3] - 12;
   const mini = (bx, label, col, act) => {
-    const over = hovered(bx, rb[1] + 6, bw, rb[3] - 12);
+    const over = hovered(bx, rb[1] + 6, bw, bh);
     ctx.fillStyle = rgba(over ? "#3A2E16" : "#221B44", 0.95);
-    ctx.fillRect(bx, rb[1] + 6, bw, rb[3] - 12);
+    ctx.fillRect(bx, rb[1] + 6, bw, bh);
     ctx.strokeStyle = rgba(col, over ? 1 : 0.6); ctx.lineWidth = 1;
-    ctx.strokeRect(bx + 0.5, rb[1] + 6.5, bw - 1, rb[3] - 13);
-    txt(label, bx + bw / 2, rb[1] + rb[3] / 2 + 4, 13, over ? "#FFE9AE" : col, "center", FD, 1.5);
-    hot(bx, rb[1] + 6, bw, rb[3] - 12, act);
+    ctx.strokeRect(bx + 0.5, rb[1] + 6.5, bw - 1, bh - 1);
+    fitTxt(label, bx + bw / 2, rb[1] + 6 + bh / 2 + 5, bw - 10, 13,
+      over ? "#FFE9AE" : col, "center", FD, 1.5);
+    hot(bx, rb[1] + 6, bw, bh, act);
   };
-  mini(rb[0] + 96, "SKINS", "#C9A6FF", () => { app.skinPrev = IN_KICK; app.screen = "skins"; SFX.lock(); });
-  mini(rb[0] + 100 + bw, "HOW TO", "#9FB4D8", () => { SFX.lock(); tutStart(); });
+  mini(rb[0] + KEYW, "SKINS", "#C9A6FF", () => { app.skinPrev = IN_KICK; app.screen = "skins"; SFX.lock(); });
+  mini(rb[0] + KEYW + bw + 8, "HOW TO", "#9FB4D8", () => { SFX.lock(); tutStart(); });
 }
 
 function drawMode(cur, t) {
@@ -3435,7 +3488,7 @@ function drawMode(cur, t) {
     : [["DIVE", "MOVE"], ["KICK", "CONFIRM"]]);
 
   const PW = 228, GAP = 14, X0 = (STAGE_W - (PW * 4 + GAP * 3)) / 2;
-  const Y = 152, PH = app.mode.sub ? 200 : 268;
+  const Y = 158, PH = app.mode.sub ? 206 : 268;
 
   for (let i = 0; i < MODES.length; i++) {
     const m = MODES[i], x = X0 + i * (PW + GAP);
@@ -3448,23 +3501,28 @@ function drawMode(cur, t) {
       ink: on ? "#1B1540" : "#100C22", inkA: 0.96, rim: on ? m.col : null,
       glow: on ? m.col : null
     });
-    const NAME_H = 54;
+    const NAME_H = 62;
     const artH = b[3] - NAME_H;
 
-    /* the sub-label sits at the top of the art, clear of everything */
-    if (m.key === "cpu" && app.mode.sub === "cpu") {
-      txt(DIFFS[Math.min(app.mode.subCur, DIFFS.length - 1)].name,
-        b[0] + b[2] / 2, b[1] + 22, 17, m.col, "center", FD, 3);
-    } else if (m.key === "versus" && app.mode.sub === "versus") {
-      txt(VS_RULES[app.mode.subCur % VS_RULES.length].name,
-        b[0] + b[2] / 2, b[1] + 22, 17, m.col, "center", FD, 3);
-    } else if (m.key === "arcade" && app.mode.sub === "story") {
-      const r = STORY_RULES[app.mode.subCur % STORY_RULES.length];
-      txt(r.name, b[0] + b[2] / 2, b[1] + 22, 17,
-        app.mode.subCur ? "#FF4D6D" : m.col, "center", FD, 3);
-    }
+    modePanelCast(m, b[0], b[1] + 6, b[2], artH - 6, t, i);
 
-    modePanelCast(m, b[0], b[1] + (app.mode.sub ? 18 : 6), b[2], artH - (app.mode.sub ? 18 : 6), t, i);
+    /* the sub-label rides on top of the art with its own scrim - drawn under
+       the cast it simply vanished behind whoever was standing there */
+    const sub = m.key === "cpu" && app.mode.sub === "cpu"
+      ? [DIFFS[Math.min(app.mode.subCur, DIFFS.length - 1)].name, m.col]
+      : m.key === "versus" && app.mode.sub === "versus"
+        ? [VS_RULES[app.mode.subCur % VS_RULES.length].name, m.col]
+        : m.key === "arcade" && app.mode.sub === "story"
+          ? [STORY_RULES[app.mode.subCur % STORY_RULES.length].name,
+            app.mode.subCur ? "#FF4D6D" : m.col]
+          : null;
+    if (sub) {
+      ctx.fillStyle = rgba("#08070F", 0.78);
+      ctx.fillRect(b[0], b[1] + 2, b[2], 28);
+      ctx.fillStyle = rgba(sub[1], 0.5);
+      ctx.fillRect(b[0], b[1] + 29, b[2], 1);
+      fitTxt(sub[0], b[0] + b[2] / 2, b[1] + 22, b[2] - 16, 17, sub[1], "center", FD, 3);
+    }
 
     /* name plate along the bottom of the inner area */
     const ny = b[1] + b[3] - NAME_H;
@@ -3472,11 +3530,11 @@ function drawMode(cur, t) {
     ctx.fillRect(b[0], ny, b[2], NAME_H);
     ctx.fillStyle = rgba(m.col, on ? 0.9 : 0.4);
     ctx.fillRect(b[0], ny, b[2], 2);
-    txt(m.name, b[0] + b[2] / 2, ny + 24, m.name.length > 12 ? 19 : 22,
+    fitTxt(m.name, b[0] + b[2] / 2, ny + 24, b[2] - 16, 22,
       on ? m.col : rgba("#E7E3FB", 0.72), "center", FD, 2);
-    let by = ny + 40;
+    let by = ny + 41;
     for (const line of wrapText(m.blurb, b[2] - 16, 10.5, FM)) {
-      if (by > ny + NAME_H - 2) break;
+      if (by > ny + NAME_H - 6) break;
       txt(line, b[0] + b[2] / 2, by, -10.5, rgba("#E7E3FB", on ? 0.62 : 0.32), "center", FM);
       by += 12;
     }
@@ -3489,7 +3547,7 @@ function drawMode(cur, t) {
   /* the rack */
   if (app.mode.sub) {
     const rows = rackRows();
-    const RY = Y + PH + 16, RH = 84, RW = 800, RX = (STAGE_W - RW) / 2;
+    const RY = Y + PH + 18, RH = 104, RW = 800, RX = (STAGE_W - RW) / 2;
     txt(app.mode.sub === "cpu" ? "HOW HARD" : app.mode.sub === "story" ? "WHICH STORY" : "HOW YOU FIGHT",
       STAGE_W / 2, RY - 8, 12, rgba("#E7E3FB", 0.5), "center", FM, 5);
     for (let i = 0; i < rows.length; i++) {
@@ -3497,14 +3555,16 @@ function drawMode(cur, t) {
       const w = (RW - (rows.length - 1) * 12) / rows.length, x = RX + i * (w + 12);
       const col = rows[i].col;
       const b = woodPanel(x, RY, w, RH, { ink: on ? "#1B1540" : "#100C22", inkA: 0.96, rim: on ? col : null });
-      txt(rows[i].name, x + w / 2, b[1] + 22, 19, on ? col : rgba("#E7E3FB", 0.6), "center", FD, 2);
-      let ly = b[1] + 40;
-      for (const line of wrapText(rows[i].blurb, b[2] - 12, 10.5, FM)) {
-        if (ly > b[1] + b[3] - 4) break;
+      fitTxt(rows[i].name, x + w / 2, b[1] + 22, b[2] - 12, 19,
+        on ? col : rgba("#E7E3FB", 0.6), "center", FD, 2);
+      const lim = b[1] + b[3] - (rows[i].locked ? 26 : 12);
+      let ly = b[1] + 42;
+      for (const line of wrapText(rows[i].blurb, b[2] - 16, 10.5, FM)) {
+        if (ly > lim) break;
         txt(line, x + w / 2, ly, -10.5, rgba("#E7E3FB", on ? 0.6 : 0.3), "center", FM);
-        ly += 12;
+        ly += 13;
       }
-      if (rows[i].locked) txt("NO KEYS", x + w / 2, b[1] + b[3] - 6, -9, "#FF6E7F", "center", FM, 2);
+      if (rows[i].locked) txt("NO KEYS", x + w / 2, b[1] + b[3] - 11, -9, "#FF6E7F", "center", FM, 2);
       hot(x, RY, w, RH, () => { app.mode.subCur = i; modeConfirm(); }, () => { app.mode.subCur = i; });
     }
   }
@@ -3593,10 +3653,8 @@ function drawSelect(sel, t) {
     }
     ctx.fillStyle = rgba(c.col, 0.16); ctx.fillRect(x, y, CW, 3);
 
-    if (charLocked(i)) {
-      ctx.fillStyle = rgba("#08070F", 0.72); ctx.fillRect(x, y, CW, CH);
-      txt("SEASON PASS", x + CW / 2, y + CH / 2 - 4, 16, "#FFD98A", "center", FD, 4);
-      txt("UNLOCKS MOMO", x + CW / 2, y + CH / 2 + 16, -11, rgba("#E7E3FB", 0.6), "center", FM, 2);
+    const locked = charLocked(i);
+    if (locked) {
       hot(x, y, CW, CH, () => { app.passPrev = IN_KICK; app.screen = "pass"; SFX.lock(); });
     } else {
       hot(x, y, CW, CH,
@@ -3610,7 +3668,7 @@ function drawSelect(sel, t) {
         const chipW = 104, chipX = x + CW - chipW - 10, chipY = y + CH - 24;
         ctx.fillStyle = rgba(eq ? c.col : "#1A1436", 0.92);
         ctx.fillRect(chipX, chipY, chipW, 16);
-        txt(eq ? COS[eq].name : "DEFAULT SKIN", chipX + chipW / 2, chipY + 12, -9,
+        fitTxt(eq ? COS[eq].name : "DEFAULT SKIN", chipX + chipW / 2, chipY + 12, chipW - 8, -9,
           eq ? "#17110A" : rgba("#E7E3FB", 0.65), "center", FM, 1);
         hot(chipX, chipY, chipW, 16, () => {
           save.equipped = save.equipped || {};
@@ -3645,15 +3703,24 @@ function drawSelect(sel, t) {
       }
     }
 
+    /* the lock goes on last, over the card it is locking - drawn first the
+       name and the stat bars came straight back through it */
+    if (locked) {
+      ctx.fillStyle = rgba("#08070F", 0.8); ctx.fillRect(x, y, CW, CH);
+      ctx.fillStyle = rgba("#FFD98A", 0.16); ctx.fillRect(x, y + CH / 2 - 26, CW, 52);
+      txt("SEASON PASS", x + CW / 2, y + CH / 2 - 4, 16, "#FFD98A", "center", FD, 4);
+      txt("UNLOCKS MOMO", x + CW / 2, y + CH / 2 + 16, -11, rgba("#E7E3FB", 0.7), "center", FM, 2);
+    }
+
     for (let pl = 0; pl < 2; pl++) {
       if (sel.cur[pl] !== i) continue;
-      const locked = sel.lock[pl];
+      const rdy = sel.lock[pl];
       const who = pl === 1 && app.cpu !== null ? "CPU" : "P" + (pl + 1);
-      const tag = who + (locked ? " READY" : "");
-      const tw = locked ? 76 : 34, tx = pl === 0 ? x + 7 : x + CW - tw - 7;
-      ctx.fillStyle = locked ? PCOL[pl] : rgba(PCOL[pl], 0.32);
+      const tag = who + (rdy ? " READY" : "");
+      const tw = rdy ? 76 : 34, tx = pl === 0 ? x + 7 : x + CW - tw - 7;
+      ctx.fillStyle = rdy ? PCOL[pl] : rgba(PCOL[pl], 0.32);
       ctx.fillRect(tx, y + 8, tw, 18);
-      txt(tag, tx + tw / 2, y + 21, -10, locked ? "#0B0916" : "#E7E3FB", "center", FM, 1.2);
+      txt(tag, tx + tw / 2, y + 21, -10, rdy ? "#0B0916" : "#E7E3FB", "center", FM, 1.2);
     }
   }
 
@@ -4651,7 +4718,7 @@ function drawDraft(t) {
     txt(["COMMON", "RARE", "LEGENDARY"][a.tier], x + CW / 2, Y + 188, -10,
       rgba(TIER[a.tier], 0.9), "center", FM, 3);
     let ny = Y + 218;
-    for (const line of wrapText(a.name, CW - 40, 22)) {
+    for (const line of wrapText(a.name, CW - 40, 22, FD, 2)) {
       txt(line, x + CW / 2, ny, 22, on ? "#E7E3FB" : rgba("#E7E3FB", 0.7), "center", FD, 2);
       ny += 24;
     }
@@ -4866,7 +4933,7 @@ function drawPause() {
     ? [["DIVE", "MOVE"], ["KICK", "CONFIRM"], ["ESC", "RESUME"]]
     : [["DIVE", "MOVE"], ["KICK", "CHANGE"], ["ESC", "BACK"]]);
 
-  const W = 440, X = (STAGE_W - W) / 2, RH = 40, GAP = 7;
+  const W = 440, X = (STAGE_W - W) / 2, RH = 38, GAP = 6;
   const top = pb[1] + 88;
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i], y = top + i * (RH + GAP), on = pz.cur === i;
@@ -4877,20 +4944,21 @@ function drawPause() {
     ctx.strokeRect(X + 0.5, y + 0.5, W - 1, RH - 1);
     if (on) { ctx.fillStyle = "#F2D492"; ctx.fillRect(X, y, 4, RH); }
     const mid = r.value === "";
-    txt(r.label, mid ? STAGE_W / 2 : X + 22, y + 27, 18,
+    txt(r.label, mid ? STAGE_W / 2 : X + 22, y + 26, 18,
       on ? "#E7E3FB" : rgba("#E7E3FB", 0.5), mid ? "center" : "left", FD, 2.5);
     if (r.value) {
       const waiting = r.value === "PRESS A KEY";
-      txt(r.value, X + W - 22, y + 27, 17,
+      txt(r.value, X + W - 22, y + 26, 17,
         waiting ? "#FFD98A" : on ? "#F2D492" : rgba("#E7E3FB", 0.45), "right", FM, 2);
     }
-    /* volume rows get a bar behind the number so the value reads at a glance */
+    /* volume rows get a bar behind the number so the value reads at a glance.
+       150 wide it started under the end of SOUND EFFECTS */
     if (/VOLUME|MUSIC|SOUND/.test(r.label)) {
       const key = r.label === "MUSIC" ? "music" : r.label === "SOUND EFFECTS" ? "sfx" : "master";
-      const bw = 150, bx = X + W - 22 - 74 - bw;
-      ctx.fillStyle = rgba("#08070F", 0.7); ctx.fillRect(bx, y + 18, bw, 8);
+      const bw = 124, bx = X + W - 22 - 74 - bw;
+      ctx.fillStyle = rgba("#08070F", 0.7); ctx.fillRect(bx, y + 17, bw, 8);
       ctx.fillStyle = rgba(on ? "#F2D492" : "#8E7BD8", 0.9);
-      ctx.fillRect(bx, y + 18, bw * SETTINGS[key], 8);
+      ctx.fillRect(bx, y + 17, bw * SETTINGS[key], 8);
     }
     hot(X, y, W, RH, () => { pz.cur = i; SFX.lock(); r.act(); }, () => { if (!pz.bind) pz.cur = i; });
   }
