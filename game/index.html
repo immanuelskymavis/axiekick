@@ -1813,7 +1813,7 @@ function drawArena(i) {
   return true;
 }
 
-const MENU_SCREENS = ["title", "mode", "select", "ladder", "draft", "runend", "stage", "story", "augpick", "arc", "pass", "skins"];
+const MENU_SCREENS = ["title", "mode", "setup", "select", "ladder", "draft", "runend", "stage", "story", "augpick", "arc", "pass", "skins"];
 
 /* Nightmare Story runs under a violet wash, so which one you are in is obvious
    from across the room rather than something you read off the HUD. */
@@ -2321,71 +2321,138 @@ function drawPass(t) {
   txt("LEADERBOARD · COMING SOON", STAGE_W / 2, pb[1] + 84, -10, rgba("#E7E3FB", 0.42), "center", FM, 3);
 
   /* --- what you hold, in matching plates either side --- */
-  const sb = woodPanel(24, 16, 196, 100, { ink: "#100C22", inkA: 0.92, rim: "#7CF0B4" });
+  const sb = woodPanel(24, 16, 196, 100, { ink: "#100C22", inkA: 0.92, accent: "#7CF0B4" });
   txt("SEASON POINTS", sb[0] + 4, sb[1] + 14, -10, rgba("#E7E3FB", 0.5), "left", FM, 3);
   txt(String(save.points), sb[0] + 4, sb[1] + 46, 32, "#7CF0B4", "left", FM, 2);
   txt(seasonDaysLeft() + " DAYS LEFT", sb[0] + 4, sb[1] + 64, -10, rgba("#E7E3FB", 0.4), "left", FM, 2);
 
-  const kb = woodPanel(STAGE_W - 220, 16, 196, 100, { ink: "#100C22", inkA: 0.92, rim: "#FF6E7F" });
+  const kb = woodPanel(STAGE_W - 220, 16, 196, 100, { ink: "#100C22", inkA: 0.92, accent: "#FF6E7F" });
   txt("NIGHTMARE KEYS", kb[0] + kb[2] / 2, kb[1] + 14, -10, rgba("#E7E3FB", 0.5), "center", FM, 3);
   keyCount(kb[0] + kb[2] / 2, kb[1] + 38, 34, 26, "#FFD98A");
   fitTxt("ONE PER NIGHTMARE RUN", kb[0] + kb[2] / 2, kb[1] + 64, kb[2] - 10, -9,
     rgba("#E7E3FB", 0.4), "center", FM, 2);
 
-  /* --- the track, two rows so each reward gets room --- */
-  const TY = 132, TH = 262, TX = 24, TW = STAGE_W - 48;
-  const tb = woodPanel(TX, TY, TW, TH, { ink: "#100C22", inkA: 0.92 });
-  txt("REWARD TRACK", tb[0] + 14, tb[1] + 22, 15, rgba("#FFD98A", 0.9), "left", FD, 5);
+  /* --- the track ---------------------------------------------------------
+     One horizontal run with a rail through it, the way a season pass reads
+     everywhere else. Two stacked rows of five made you scan like a spreadsheet
+     and lost the one thing the shape is for: how far along you are. It scrolls
+     - wheel, drag, or the arrows - and parks itself on the tier you are
+     working towards. */
+  const TY = 128, TH = 240, TX = 24, TW = STAGE_W - 48;
+  const tb = woodPanel(TX, TY, TW, TH, { ink: "#100C22", inkA: 0.92, accent: "#FFD98A" });
+  txt("REWARD TRACK", TX + 16, TY + 26, 15, rgba("#FFD98A", 0.9), "left", FD, 5);
   const done = TIERS.filter(x => save.points >= x.at).length;
-  txt(done + " OF " + TIERS.length + " REACHED", tb[0] + tb[2] - 14, tb[1] + 22, -11,
+  txt(done + " OF " + TIERS.length + " REACHED", TX + TW - 16, TY + 26, -11,
     rgba("#E7E3FB", 0.55), "right", FM, 2.5);
   if (!save.pass) {
-    txt("OWN THE PASS TO CLAIM", tb[0] + tb[2] / 2, tb[1] + 22, -11, "#FF8A5C", "center", FM, 3);
+    txt("OWN THE PASS TO CLAIM", TX + TW / 2, TY + 26, -11, "#FF8A5C", "center", FM, 3);
   }
 
-  const COLS = 5, cw = (tb[2] - 20) / COLS, rowH = 100;
+  const TILE = 150, TGAP = 14, ARROW = 30;
+  const VX = TX + 14 + ARROW, VW = TW - 28 - ARROW * 2;
+  const VY = TY + 40, VH = TH - 52;
+  const RUN = TIERS.length * TILE + (TIERS.length - 1) * TGAP;
+  const maxScroll = Math.max(0, RUN - VW);
+
+  /* park on the tier being worked towards, until the pointer takes over */
+  if (app.trackAt === null || app.trackAt === undefined) {
+    const want = Math.min(TIERS.length - 1, done);
+    app.trackAt = clamp(want * (TILE + TGAP) - VW / 2 + TILE / 2, 0, maxScroll);
+  }
+  app.trackAt = clamp(app.trackAt, 0, maxScroll);
+  const sx = app.trackAt;
+
+  ctx.save();
+  ctx.beginPath(); ctx.rect(VX, VY, VW, VH); ctx.clip();
+
+  /* the rail, and how far along it you are */
+  const railY = VY + VH - 34;
+  ctx.fillStyle = rgba("#E7E3FB", 0.12);
+  ctx.fillRect(VX - sx + TILE / 2, railY, RUN - TILE, 3);
+  /* the fill is measured node to node, not points to points - the thresholds
+     climb 10, 25, 45 ... 400 while the nodes are evenly spaced, so a linear
+     bar would never line up with the dots it is running between */
+  let seg = -1;
+  for (let i = 0; i < TIERS.length; i++) if (save.points >= TIERS[i].at) seg = i;
+  let frac = 0;
+  if (seg >= TIERS.length - 1) frac = 1;
+  else if (seg >= 0) {
+    const lo = TIERS[seg].at, hi = TIERS[seg + 1].at;
+    frac = (seg + (save.points - lo) / (hi - lo)) / (TIERS.length - 1);
+  }
+  ctx.fillStyle = "#FFD98A";
+  ctx.fillRect(VX - sx + TILE / 2, railY, (RUN - TILE) * frac, 3);
+
   for (let i = 0; i < TIERS.length; i++) {
     const tier = TIERS[i];
-    const cx = tb[0] + 10 + (i % COLS + 0.5) * cw;
-    const ry = tb[1] + 34 + Math.floor(i / COLS) * rowH;
+    const x = VX - sx + i * (TILE + TGAP);
+    if (x > VX + VW + 20 || x + TILE < VX - 20) continue;
+    const cx = x + TILE / 2;
     const reached = save.points >= tier.at;
     const got = (save.claimed || []).includes(i);
+    const TH2 = VH - 54;
 
-    ctx.fillStyle = rgba(got ? "#14301E" : reached ? "#241C4A" : "#0E0A20", 0.85);
-    ctx.fillRect(cx - cw / 2 + 4, ry, cw - 8, rowH - 8);
-    ctx.strokeStyle = rgba(got ? "#7CF0B4" : reached ? "#FFD98A" : "#8E7BD8", got || reached ? 0.34 : 0.14);
-    ctx.lineWidth = 1;
-    ctx.strokeRect(cx - cw / 2 + 4.5, ry + 0.5, cw - 9, rowH - 9);
+    ctx.fillStyle = rgba(got ? "#14301E" : reached ? "#241C4A" : "#0E0A20", 0.9);
+    ctx.fillRect(x, VY, TILE, TH2);
+    ctx.fillStyle = rgba(got ? "#7CF0B4" : reached ? "#FFD98A" : "#8E7BD8", got || reached ? 0.5 : 0.16);
+    ctx.fillRect(x, VY, TILE, 2);
 
     ctx.save();
-    if (!reached) ctx.globalAlpha = 0.4;
+    if (!reached) ctx.globalAlpha = 0.38;
     if (tier.costume) {
       const cos = COS[tier.costume], ch = cos.ch;
       drawAxie(
         { ch, x: 0, y: 0, st: "stand", t: 30, facing: 1, inflate: 0, spin: 0, vx: 0, vy: 0, dead: false, cos: cos.id },
         CHARS[ch], {
-          portrait: true, px: cx, py: ry + 58, scale: 0.5,
+          portrait: true, px: cx, py: VY + TH2 - 30, scale: 0.56,
           anim: CHARS[ch].anim.idle, animT: t / 60 + i
         }
       );
     } else {
-      drawKey(cx, ry + 32, 38);
-      txt("x" + tier.keys, cx, ry + 62, 15, "#FFD98A", "center", FM, 1);
+      drawKey(cx, VY + TH2 - 62, 42);
+      txt("x" + tier.keys, cx, VY + TH2 - 30, 16, "#FFD98A", "center", FM, 1);
     }
     ctx.restore();
 
-    fitTxt(tier.costume ? COS[tier.costume].name : "KEYS", cx, ry + 76, cw - 20, -9.5,
+    fitTxt(tier.costume ? COS[tier.costume].name : "KEYS", cx, VY + TH2 - 10, TILE - 16, -10,
       rgba(got ? "#7CF0B4" : "#E7E3FB", reached ? 0.9 : 0.4), "center", FM, 1);
-    txt(tier.at + " PTS", cx, ry + 88, -10,
-      rgba(reached ? "#FFD98A" : "#E7E3FB", reached ? 0.9 : 0.3), "center", FM, 1);
-    if (got) txt("CLAIMED", cx, ry + 14, -8.5, "#7CF0B4", "center", FM, 1.5);
-    else if (reached && !save.pass) txt("LOCKED", cx, ry + 14, -8.5, "#FF8A5C", "center", FM, 1.5);
+    if (got) txt("CLAIMED", cx, VY + 15, -8.5, "#7CF0B4", "center", FM, 1.5);
+    else if (reached && !save.pass) txt("LOCKED", cx, VY + 15, -8.5, "#FF8A5C", "center", FM, 1.5);
+
+    /* the node on the rail, and what it costs */
+    ctx.fillStyle = reached ? "#FFD98A" : "#2A2447";
+    ctx.beginPath(); ctx.arc(cx, railY + 1.5, reached ? 7 : 5, 0, 7); ctx.fill();
+    if (reached) {
+      ctx.fillStyle = "#0B0916";
+      ctx.beginPath(); ctx.arc(cx, railY + 1.5, 3, 0, 7); ctx.fill();
+    }
+    txt(tier.at + " PTS", cx, railY + 26, -10,
+      rgba(reached ? "#FFD98A" : "#E7E3FB", reached ? 0.9 : 0.35), "center", FM, 1);
   }
+  ctx.restore();
+
+  /* scroll: wheel and drag inside the viewport, arrows either end */
+  trackScroll(VX, VY, VW, VH, maxScroll);
+  const arrow = (ax, dir) => {
+    const live = dir < 0 ? sx > 1 : sx < maxScroll - 1;
+    const o = live && hovered(ax, VY + VH / 2 - 34, ARROW, 68);
+    ctx.fillStyle = rgba("#E7E3FB", live ? (o ? 0.9 : 0.5) : 0.13);
+    ctx.beginPath();
+    ctx.moveTo(ax + (dir < 0 ? ARROW - 9 : 9), VY + VH / 2 - 16);
+    ctx.lineTo(ax + (dir < 0 ? 9 : ARROW - 9), VY + VH / 2);
+    ctx.lineTo(ax + (dir < 0 ? ARROW - 9 : 9), VY + VH / 2 + 16);
+    ctx.closePath(); ctx.fill();
+    if (live) hot(ax, VY + VH / 2 - 34, ARROW, 68, () => {
+      app.trackAt = clamp(sx + dir * (TILE + TGAP) * 2, 0, maxScroll); SFX.move();
+    });
+  };
+  arrow(TX + 10, -1);
+  arrow(TX + TW - 10 - ARROW, 1);
 
   /* --- buy-in and challenges --- */
   const BY = 400, BH = 126, GAP = 14;
   const bw = (STAGE_W - 48 - GAP) * 0.62;
-  const bb = woodPanel(24, BY, bw, BH, { ink: "#140F2A", inkA: 0.94, rim: save.pass ? "#7CF0B4" : "#FFD98A" });
+  const bb = woodPanel(24, BY, bw, BH, { ink: "#140F2A", inkA: 0.94, accent: save.pass ? "#7CF0B4" : "#FFD98A" });
   if (save.pass) {
     txt("SEASON PASS ACTIVE", bb[0] + 16, bb[1] + 28, 22, "#7CF0B4", "left", FD, 3);
     txt("Momo is on the roster. Every tier you reach unlocks as you go.",
@@ -2864,7 +2931,25 @@ function storyTick(inp) {
    ====================================================================== */
 const HOT = [];
 let TIP = null;
-const mouse = { x: -1e4, y: -1e4, inside: false };
+const mouse = { x: -1e4, y: -1e4, inside: false, down: false, drag: null, wheel: 0, wheelUsed: false };
+
+function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
+
+/* A horizontal strip you can wheel or drag. Returns nothing; it just moves
+   app.trackAt, which is the only scrollable thing in the game. */
+function trackScroll(x, y, w, h, maxScroll) {
+  const over = mouse.inside && mouse.x >= x && mouse.x <= x + w && mouse.y >= y && mouse.y <= y + h;
+  mouse.wheelUsed = over && maxScroll > 0;
+  if (!over) { mouse.drag = null; return; }
+  if (mouse.wheel) {
+    app.trackAt = clamp(app.trackAt + mouse.wheel * 0.9, 0, maxScroll);
+    mouse.wheel = 0;
+  }
+  if (mouse.down) {
+    if (mouse.drag === null) mouse.drag = { x: mouse.x, at: app.trackAt };
+    else app.trackAt = clamp(mouse.drag.at - (mouse.x - mouse.drag.x), 0, maxScroll);
+  } else mouse.drag = null;
+}
 
 function hot(x, y, w, h, click, hover) {
   HOT.push({ x, y, w, h, click, hover });
@@ -2892,7 +2977,16 @@ cv.addEventListener("mousemove", e => {
   cv.style.cursor = r ? "pointer" : "default";
   if (r && r.hover) r.hover();
 });
-cv.addEventListener("mouseleave", () => { mouse.inside = false; mouse.x = mouse.y = -1e4; });
+cv.addEventListener("mouseleave", () => {
+  mouse.inside = false; mouse.x = mouse.y = -1e4; mouse.drag = null;
+});
+cv.addEventListener("mousedown", e => { pointerPos(e); mouse.down = true; mouse.drag = null; });
+window.addEventListener("mouseup", () => { mouse.down = false; mouse.drag = null; });
+cv.addEventListener("wheel", e => {
+  pointerPos(e);
+  mouse.wheel = (Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY);
+  if (mouse.wheelUsed) e.preventDefault();
+}, { passive: false });
 cv.addEventListener("click", e => {
   pointerPos(e);
   audioWake();
@@ -3034,9 +3128,17 @@ function woodPanel(x, y, w, h, opt) {
      is only holding information keeps a hairline and nothing more. The strong
      stroke belongs to buttons and to whatever the cursor is on - which is what
      `glow` means here. */
-  ctx.strokeStyle = rim ? tint(rim, opt.glow ? 0.95 : 0.3) : rgba("#8E7BD8", 0.18);
-  ctx.lineWidth = opt.glow ? 2 : 1;
-  ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+  if (rim) {
+    ctx.strokeStyle = tint(rim, opt.glow ? 0.95 : 0.3);
+    ctx.lineWidth = opt.glow ? 2 : 1;
+    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+  } else if (opt.accent) {
+    /* a panel that only holds information gets a bar along its top rather than
+       a box around it, so nothing on the screen looks pressable but the things
+       that are */
+    ctx.fillStyle = tint(opt.accent, 0.4);
+    ctx.fillRect(x + 1, y + 1, w - 2, 2);
+  }
   if (opt.glow) {
     ctx.strokeStyle = tint(opt.glow, 0.2 + 0.14 * Math.sin(app.t * 0.1));
     ctx.lineWidth = 5;
@@ -3360,14 +3462,17 @@ const MODES = [
 ];
 
 function modePanelCast(m, x, y, w, h, t, i) {
-  const feet = y + h - 8;
+  /* the art is sized off the box it is in, so a taller panel means a bigger
+     Axie rather than more empty sky above one */
+  const fill = Math.max(0.7, Math.min(1.6, h / 196));
+  const feet = y + h - 6;
   if (m.cast.length === 2) {
     const a = CHARS[m.cast[0]], b = CHARS[m.cast[1]];
     const gap = m.key === "net" ? 0.30 : 0.22;
     drawAxie({ ch: m.cast[0], x: 0, y: 0, st: "stand", t: 30, facing: 1, inflate: 0, spin: 0, vx: 0, vy: 0, dead: false },
-      a, { portrait: true, px: x + w * (0.5 - gap), py: feet + Math.sin(t * 0.05 + i) * 3, scale: 0.84, anim: a.anim.idle, animT: t / 60 + i });
+      a, { portrait: true, px: x + w * (0.5 - gap), py: feet + Math.sin(t * 0.05 + i) * 3, scale: 0.84 * fill, anim: a.anim.idle, animT: t / 60 + i });
     drawAxie({ ch: m.cast[1], x: 0, y: 0, st: "stand", t: 30, facing: -1, inflate: 0, spin: 0, vx: 0, vy: 0, dead: false },
-      b, { portrait: true, px: x + w * (0.5 + gap), py: feet + Math.sin(t * 0.05 + i + 2) * 3, scale: 0.84, anim: b.anim.idle, animT: t / 60 + i + 1 });
+      b, { portrait: true, px: x + w * (0.5 + gap), py: feet + Math.sin(t * 0.05 + i + 2) * 3, scale: 0.84 * fill, anim: b.anim.idle, animT: t / 60 + i + 1 });
     if (m.key === "net") {
       ctx.save();
       ctx.setLineDash([6, 7]); ctx.lineDashOffset = -t * 0.6;
@@ -3379,7 +3484,7 @@ function modePanelCast(m, x, y, w, h, t, i) {
   }
   const a = CHARS[m.cast[0]];
   drawAxie({ ch: m.cast[0], x: 0, y: 0, st: "stand", t: 30, facing: 1, inflate: 0, spin: 0, vx: 0, vy: 0, dead: false },
-    a, { portrait: true, px: x + w / 2, py: feet + Math.sin(t * 0.05 + i) * 3, scale: 0.98, anim: a.anim.idle, animT: t / 60 + i });
+    a, { portrait: true, px: x + w / 2, py: feet + Math.sin(t * 0.05 + i) * 3, scale: 0.98 * fill, anim: a.anim.idle, animT: t / 60 + i });
   if (m.key === "arcade") {
     for (let n = 0; n < 5; n++) {
       drawUI(n === 2 ? "node_now" : n < 2 ? "node_win" : "stage_n",
@@ -3391,62 +3496,65 @@ function modePanelCast(m, x, y, w, h, t, i) {
 /* the strip across the top: what the season is worth, where you are on it,
    and the two doors that are not fights */
 function drawMenuHeader(t) {
-  /* the parchment frame eats CHROME off every edge, so the strip has to be
-     tall enough that three lines still land inside the ink rather than on
-     the wood - at 76 they did not, and the bottom line fell off the plate */
-  const HH = 86, PY = 5, PH = HH - 11;
+  /* Three plates on one grid: same top, same height, same inner padding. They
+     used to be sized independently and the key count ran under the buttons as
+     soon as you had three digits of it. */
+  const HH = 84, PY = 6, PH = HH - 14, PAD = 12;
   ctx.fillStyle = rgba("#0B0916", 0.95); ctx.fillRect(0, 0, STAGE_W, HH);
-  ctx.fillStyle = rgba("#FFD98A", 0.35); ctx.fillRect(0, HH - 1, STAGE_W, 1);
+  ctx.fillStyle = rgba("#FFD98A", 0.22); ctx.fillRect(0, HH - 1, STAGE_W, 1);
 
-  /* centre: the pool */
-  const cw = 380, cx = (STAGE_W - cw) / 2;
-  const cb = woodPanel(cx, PY, cw, PH, { ink: "#0B0916", inkA: 0.9, rim: "#FFD98A" });
-  txt("SEASON ONE PRIZE POOL", cx + cw / 2, cb[1] + 16, -10, rgba("#FFD98A", 0.8), "center", FM, 6);
-  ctx.save();
-  ctx.shadowColor = "rgba(255,217,138,0.55)"; ctx.shadowBlur = 20;
-  txt(money(prizePool()), cx + cw / 2, cb[1] + 44, 26, "#FFE9AE", "center", FM, 2);
-  ctx.restore();
-  txt("LEADERBOARD COMING SOON", cx + cw / 2, cb[1] + 62, -8.5, rgba("#E7E3FB", 0.35), "center", FM, 3);
+  const SIDE = 250, EDGE = 14, MID = 16;
+  const cw = STAGE_W - (SIDE + EDGE + MID) * 2, cx = EDGE + SIDE + MID;
 
-  /* left: the pass as a track */
+  /* left: the pass, the only plate here you can press */
   const done = TIERS.filter(x => save.points >= x.at).length;
-  const pw = 236, pb = woodPanel(10, PY, pw, PH, {
-    ink: hovered(10, PY, pw, PH) ? "#231A3F" : "#150F2C", inkA: 0.95,
-    rim: save.pass ? "#7CF0B4" : "#FFD98A"
+  const over = hovered(EDGE, PY, SIDE, PH);
+  const pb = woodPanel(EDGE, PY, SIDE, PH, {
+    ink: over ? "#231A3F" : "#150F2C", inkA: 0.95,
+    rim: save.pass ? "#7CF0B4" : "#FFD98A", glow: over ? (save.pass ? "#7CF0B4" : "#FFD98A") : null
   });
-  txt(save.pass ? "SEASON PASS" : "SEASON PASS · LOCKED", pb[0] + 10, pb[1] + 15, -9.5,
+  const px = EDGE + PAD, pr = EDGE + SIDE - PAD;
+  txt(save.pass ? "SEASON PASS" : "SEASON PASS · LOCKED", px, PY + 18, -9.5,
     save.pass ? "#7CF0B4" : "#FFD98A", "left", FM, 2);
-  txt(String(save.points), pb[0] + 10, pb[1] + 44, 22, "#E7E3FB", "left", FM, 1);
-  txt("PTS", pb[0] + 10 + String(save.points).length * 15 + 6, pb[1] + 44, -11,
-    rgba("#E7E3FB", 0.5), "left", FM, 2);
-  txt(done + " / " + TIERS.length + " TIERS", pb[0] + pb[2] - 10, pb[1] + 44, -11,
-    rgba("#E7E3FB", 0.6), "right", FM, 2);
-  ctx.fillStyle = rgba("#08070F", 0.8); ctx.fillRect(pb[0] + 10, pb[1] + 54, pb[2] - 20, 5);
+  txt(String(save.points), px, PY + 45, 22, "#E7E3FB", "left", FM, 1);
+  ctx.save(); ctx.font = "600 22px " + FM; ctx.letterSpacing = "1px";
+  const ptw = ctx.measureText(String(save.points)).width; ctx.restore();
+  txt("PTS", px + ptw + 7, PY + 45, -11, rgba("#E7E3FB", 0.5), "left", FM, 2);
+  txt(done + " / " + TIERS.length + " TIERS", pr, PY + 45, -11, rgba("#E7E3FB", 0.6), "right", FM, 2);
+  ctx.fillStyle = rgba("#08070F", 0.8); ctx.fillRect(px, PY + 54, SIDE - PAD * 2, 4);
   ctx.fillStyle = save.pass ? "#7CF0B4" : "#FFD98A";
-  ctx.fillRect(pb[0] + 10, pb[1] + 54, (pb[2] - 20) * Math.min(1, done / TIERS.length), 5);
-  hot(10, PY, pw, PH, () => { app.passPrev = IN_KICK; app.screen = "pass"; SFX.lock(); });
+  ctx.fillRect(px, PY + 54, (SIDE - PAD * 2) * Math.min(1, done / TIERS.length), 4);
+  hot(EDGE, PY, SIDE, PH, () => { app.passPrev = IN_KICK; app.screen = "pass"; SFX.lock(); });
 
-  /* right: keys on their own column, then the two buttons beside them - the
-     caption used to run underneath both buttons and read as a smear */
-  const rw = 236, rx = STAGE_W - rw - 10;
-  const rb = woodPanel(rx, PY, rw, PH, { ink: "#150F2C", inkA: 0.95, rim: "#8E7BD8" });
-  const KEYW = 96;
-  keyCount(rb[0] + KEYW / 2, rb[1] + 26, 30, 15, "#FFD98A");
-  fitTxt("NIGHTMARE KEYS", rb[0] + KEYW / 2, rb[1] + 52, KEYW - 8, -9,
+  /* centre: the pool, which is a read-out and gets no edge at all */
+  woodPanel(cx, PY, cw, PH, { ink: "#0B0916", inkA: 0.9, accent: "#FFD98A" });
+  txt("SEASON ONE PRIZE POOL", cx + cw / 2, PY + 20, -10, rgba("#FFD98A", 0.75), "center", FM, 6);
+  ctx.save();
+  ctx.shadowColor = "rgba(255,217,138,0.5)"; ctx.shadowBlur = 18;
+  txt(money(prizePool()), cx + cw / 2, PY + 46, 26, "#FFE9AE", "center", FM, 2);
+  ctx.restore();
+  txt("LEADERBOARD COMING SOON", cx + cw / 2, PY + 62, -8.5, rgba("#E7E3FB", 0.32), "center", FM, 3);
+
+  /* right: the keys, then the two doors that are not fights */
+  const rx = STAGE_W - SIDE - EDGE;
+  woodPanel(rx, PY, SIDE, PH, { ink: "#150F2C", inkA: 0.95, accent: "#8E7BD8" });
+  const KEYW = Math.max(102, keyCountWidth(28, 15) + 30);
+  keyCount(rx + KEYW / 2, PY + 28, 28, 15, "#FFD98A");
+  fitTxt("NIGHTMARE KEYS", rx + KEYW / 2, PY + 54, KEYW - 10, -9,
     rgba("#E7E3FB", 0.5), "center", FM, 1.5);
-  const bw = (rb[2] - KEYW - 12) / 2, bh = rb[3] - 12;
+  const bw = (SIDE - KEYW - PAD - 8) / 2, bh = PH - 16;
   const mini = (bx, label, col, act) => {
-    const over = hovered(bx, rb[1] + 6, bw, bh);
-    ctx.fillStyle = rgba(over ? "#3A2E16" : "#221B44", 0.95);
-    ctx.fillRect(bx, rb[1] + 6, bw, bh);
-    ctx.strokeStyle = rgba(col, over ? 1 : 0.6); ctx.lineWidth = 1;
-    ctx.strokeRect(bx + 0.5, rb[1] + 6.5, bw - 1, bh - 1);
-    fitTxt(label, bx + bw / 2, rb[1] + 6 + bh / 2 + 5, bw - 10, 13,
-      over ? "#FFE9AE" : col, "center", FD, 1.5);
-    hot(bx, rb[1] + 6, bw, bh, act);
+    const o = hovered(bx, PY + 8, bw, bh);
+    ctx.fillStyle = rgba(o ? "#3A2E16" : "#221B44", 0.95);
+    ctx.fillRect(bx, PY + 8, bw, bh);
+    ctx.strokeStyle = rgba(col, o ? 1 : 0.65); ctx.lineWidth = 1;
+    ctx.strokeRect(bx + 0.5, PY + 8.5, bw - 1, bh - 1);
+    fitTxt(label, bx + bw / 2, PY + 8 + bh / 2 + 5, bw - 10, 13,
+      o ? "#FFE9AE" : col, "center", FD, 1.5);
+    hot(bx, PY + 8, bw, bh, act);
   };
-  mini(rb[0] + KEYW, "SKINS", "#C9A6FF", () => { app.skinPrev = IN_KICK; app.screen = "skins"; SFX.lock(); });
-  mini(rb[0] + KEYW + bw + 8, "HOW TO", "#9FB4D8", () => { SFX.lock(); tutStart(); });
+  mini(rx + KEYW, "SKINS", "#C9A6FF", () => { app.skinPrev = IN_KICK; app.screen = "skins"; SFX.lock(); });
+  mini(rx + KEYW + bw + 8, "HOW TO", "#9FB4D8", () => { SFX.lock(); tutStart(); });
 }
 
 function drawMode(cur, t) {
@@ -3454,25 +3562,23 @@ function drawMode(cur, t) {
   ctx.fillStyle = rgba("#08070F", 0.62); ctx.fillRect(0, 0, STAGE_W, STAGE_H);
   drawMenuHeader(t);
 
-  txt("SELECT MODE", STAGE_W / 2, 112, 28, "#E7E3FB", "center", FD, 10);
-  drawHints(STAGE_W / 2, 134, app.mode.sub
-    ? [["DIVE", "MOVE"], ["KICK", "START"], ["ESC", "BACK"]]
-    : [["DIVE", "MOVE"], ["KICK", "CONFIRM"], ["ESC", "BACK"]]);
-
+  /* title, hints and the row of panels are one block, centred in what the
+     header leaves - four cards floating in the top half was the whole reason
+     this screen read as off-centre */
   const PW = 228, GAP = 14, X0 = (STAGE_W - (PW * 4 + GAP * 3)) / 2;
-  /* a two-row rack needs the height back off the panels above it */
-  const RACK = app.mode.sub ? rackRows() : null;
-  const Y = 150, PH = !RACK ? 296 : RACK.length > 1 ? 180 : 226;
+  const PH = 286, TOP = 92, BOT = STAGE_H - 30;
+  const B = TOP + ((BOT - TOP) - (PH + 74)) / 2;
+  txt("SELECT MODE", STAGE_W / 2, B + 28, 28, "#E7E3FB", "center", FD, 10);
+  drawHints(STAGE_W / 2, B + 50, [["DIVE", "MOVE"], ["KICK", "CONFIRM"], ["ESC", "BACK"]]);
+  const Y = B + 74;
 
   for (let i = 0; i < MODES.length; i++) {
     const m = MODES[i], x = X0 + i * (PW + GAP);
-    const on = cur === i && !app.mode.sub;
-    const dim = app.mode.sub && m.rack !== app.mode.sub;
+    const on = cur === i;
     ctx.save();
-    if (dim) ctx.globalAlpha = 0.32;
 
     woodPanel(x, Y, PW, PH, {
-      ink: on ? "#1B1540" : "#100C22", inkA: 0.96, rim: on ? m.col : null,
+      ink: on ? "#1B1540" : "#100C22", inkA: 0.96, rim: m.col,
       glow: on ? m.col : null
     });
     const NAME_H = 58;
@@ -3482,23 +3588,6 @@ function drawMode(cur, t) {
 
     /* the sub-label rides on top of the art with its own scrim - drawn under
        the cast it simply vanished behind whoever was standing there */
-    const rule = VS_RULES[app.mode.subRule % VS_RULES.length].name;
-    const sub = m.key === "cpu" && app.mode.sub === "cpu"
-      ? [DIFFS[Math.min(app.mode.subCur, DIFFS.length - 1)].name + " · " + rule, m.col]
-      : m.key === "versus" && app.mode.sub === "versus"
-        ? [rule, m.col]
-        : m.key === "arcade" && app.mode.sub === "story"
-          ? [STORY_RULES[app.mode.subCur % STORY_RULES.length].name,
-            app.mode.subCur ? "#FF4D6D" : m.col]
-          : null;
-    if (sub) {
-      ctx.fillStyle = rgba("#08070F", 0.8);
-      ctx.fillRect(x + 1, Y + 1, PW - 2, 27);
-      ctx.fillStyle = rgba(sub[1], 0.5);
-      ctx.fillRect(x + 1, Y + 28, PW - 2, 1);
-      fitTxt(sub[0], x + PW / 2, Y + 21, PW - 20, 17, sub[1], "center", FD, 3);
-    }
-
     /* name plate across the foot of the panel */
     const ny = Y + PH - NAME_H;
     ctx.fillStyle = rgba(m.col, on ? 0.22 : 0.1);
@@ -3514,75 +3603,38 @@ function drawMode(cur, t) {
       by += 12;
     }
     ctx.restore();
-    if (!app.mode.sub) {
-      hot(x, Y, PW, PH, () => { app.mode.cur = i; modeConfirm(); }, () => { app.mode.cur = i; });
-    }
-  }
-
-  /* the rack. VS CPU carries two questions - how hard, and whether either side
-     is drafting - so it is a list of rows rather than one row of cells. DIVE
-     walks every cell in reading order and landing on a cell answers its own
-     row, which keeps the whole thing on two buttons. */
-  if (RACK) {
-    const rows = RACK;
-    const RW = 800, RX = (STAGE_W - RW) / 2, RH = rows.length > 1 ? 76 : 88;
-    let ry = Y + PH + 20, flat = 0;
-    for (const row of rows) {
-      txt(row.label, STAGE_W / 2, ry - 8, 12, rgba("#E7E3FB", 0.5), "center", FM, 5);
-      const n = row.cells.length;
-      for (let i = 0; i < n; i++) {
-        const cell = row.cells[i], at = flat + i;
-        const here = app.mode.subAt === at;         /* where the cursor is */
-        const picked = app.mode[row.key] === i;     /* this row's answer */
-        const w = (RW - (n - 1) * 12) / n, x = RX + i * (w + 12);
-        const col = cell.col;
-        woodPanel(x, ry, w, RH, {
-          ink: picked ? "#1B1540" : "#100C22", inkA: 0.96,
-          rim: picked ? col : null, glow: here ? col : null
-        });
-        fitTxt(cell.name, x + w / 2, ry + 25, w - 20, 19,
-          picked ? col : rgba("#E7E3FB", 0.6), "center", FD, 2);
-        const lim = ry + RH - (cell.locked ? 22 : 8);
-        let ly = ry + 44;
-        for (const line of wrapText(cell.blurb, w - 24, 10.5, FM)) {
-          if (ly > lim) break;
-          txt(line, x + w / 2, ly, -10.5, rgba("#E7E3FB", picked ? 0.6 : 0.3), "center", FM);
-          ly += 13;
-        }
-        if (cell.locked) txt("NO KEYS", x + w / 2, ry + RH - 8, -9, "#FF6E7F", "center", FM, 2);
-        hot(x, ry, w, RH,
-          () => { app.mode.subAt = at; app.mode[row.key] = i; modeConfirm(); },
-          () => { app.mode.subAt = at; app.mode[row.key] = i; });
-      }
-      flat += n;
-      ry += RH + 26;
-    }
+    hot(x, Y, PW, PH, () => { app.mode.cur = i; modeConfirm(); }, () => { app.mode.cur = i; });
   }
 
   txt("THE CPU READS THE SAME TWO BUTTONS YOU DO", STAGE_W / 2, STAGE_H - 14, 10,
     rgba("#E7E3FB", 0.28), "center", FM, 4);
 }
 
-function ruleRow() {
+/* --- setup ----------------------------------------------------------------
+   Picking a mode used to drop a rack of extra choices under the mode panels,
+   which put two unrelated questions and four dimmed cards on one screen. Each
+   question gets its own screen now: one heading, one row of cards, the same
+   two buttons, and dots showing how many questions are left. */
+function ruleStep() {
   return {
-    label: "HOW YOU FIGHT", key: "subRule",
+    label: "HOW YOU FIGHT", sub: "Land items are drafted before the bell", key: "subRule",
     cells: VS_RULES.map((r, i) => ({ name: r.name, blurb: r.blurb, col: i ? "#FFD98A" : "#E7E3FB" }))
   };
 }
 
-function rackRows() {
-  if (app.mode.sub === "cpu") {
+function setupSteps(key) {
+  if (key === "cpu") {
     return [{
-      label: "HOW HARD", key: "subCur",
+      label: "HOW HARD", sub: "The CPU reads the same two buttons you do", key: "subCur",
       cells: DIFFS.map((d, i) => ({
         name: d.name, blurb: d.blurb,
         col: ["#7FD1A0", CHARS[1].col, CHARS[4].col, "#FF4D6D"][i]
       }))
-    }, ruleRow()];
+    }, ruleStep()];
   }
-  if (app.mode.sub === "story") {
+  if (key === "story") {
     return [{
-      label: "WHICH STORY", key: "subCur",
+      label: "WHICH STORY", sub: "Ten fights either way", key: "subCur",
       cells: STORY_RULES.map((r, i) => ({
         name: r.name, blurb: r.blurb,
         col: i ? "#FF4D6D" : "#FFD98A",
@@ -3590,40 +3642,112 @@ function rackRows() {
       }))
     }];
   }
-  return [ruleRow()];
+  return [ruleStep()];
 }
 
-function rackCells() {
-  return rackRows().reduce((n, r) => n + r.cells.length, 0);
+function setupStart(key) {
+  app.setup = { key, steps: setupSteps(key), at: 0, prev: [IN_KICK, IN_KICK] };
+  app.mode.subCur = key === "cpu" ? 1 : 0;
+  app.mode.subRule = 0;
+  app.screen = "setup";
+  SFX.move();
 }
 
-/* the flat cursor index back to the row that owns it */
-function rackAt(at) {
-  let flat = 0;
-  for (const row of rackRows()) {
-    if (at < flat + row.cells.length) return [row, at - flat];
-    flat += row.cells.length;
+function setupBack() {
+  const st = app.setup;
+  if (st && st.at > 0) { st.at--; st.steps = setupSteps(st.key); SFX.move(); return true; }
+  app.setup = null;
+  app.screen = "mode";
+  app.mode.prev = [IN_KICK, IN_KICK];
+  SFX.move();
+  return true;
+}
+
+function setupPick(i) {
+  const st = app.setup, step = st.steps[st.at];
+  if (step.cells[i].locked) { SFX.move(); return; }
+  app.mode[step.key] = i;
+  SFX.lock();
+  st.at++;
+  st.steps = setupSteps(st.key);
+  if (st.at >= st.steps.length) { app.setup = null; startChosenMode(); }
+}
+
+function drawSetup(t) {
+  drawStage(null);
+  ctx.fillStyle = rgba("#08070F", 0.72); ctx.fillRect(0, 0, STAGE_W, STAGE_H);
+  drawMenuHeader(t);
+
+  const st = app.setup, step = st.steps[st.at];
+  const m = MODES.find(x => x.rack === st.key) || MODES[0];
+  const n = step.cells.length;
+  const CW = n > 3 ? 214 : 300, GAP = 18, CH = 208;
+  const X0 = (STAGE_W - (CW * n + GAP * (n - 1))) / 2;
+  const TOP = 92, BOT = STAGE_H - 30;
+  const B = TOP + ((BOT - TOP) - (CH + 150)) / 2;
+
+  txt(m.name, STAGE_W / 2, B + 20, 13, rgba(m.col, 0.85), "center", FM, 7);
+  txt(step.label, STAGE_W / 2, B + 58, 32, "#E7E3FB", "center", FD, 10);
+  txt(step.sub, STAGE_W / 2, B + 78, -11, rgba("#E7E3FB", 0.42), "center", FM, 2);
+  if (st.steps.length > 1) {
+    const dw = st.steps.length * 22 - 8;
+    for (let k = 0; k < st.steps.length; k++) {
+      ctx.fillStyle = rgba(k === st.at ? "#FFD98A" : "#E7E3FB", k === st.at ? 0.95 : 0.2);
+      ctx.fillRect(STAGE_W / 2 - dw / 2 + k * 22, B + 94, 14, 4);
+    }
   }
-  return null;
+
+  const Y = B + 112;
+  for (let i = 0; i < n; i++) {
+    const cell = step.cells[i], x = X0 + i * (CW + GAP);
+    const on = app.mode[step.key] === i;
+    woodPanel(x, Y, CW, CH, {
+      ink: on ? "#1B1540" : "#0E0A20", inkA: 0.95,
+      rim: cell.col, glow: on ? cell.col : null
+    });
+    ctx.fillStyle = rgba(cell.col, on ? 0.9 : 0.28);
+    ctx.fillRect(x + 1, Y + 1, CW - 2, 3);
+    fitTxt(cell.name, x + CW / 2, Y + 54, CW - 28, 26,
+      on ? cell.col : rgba("#E7E3FB", 0.7), "center", FD, 3);
+    let ly = Y + 88;
+    for (const line of wrapText(cell.blurb, CW - 40, 13, FM)) {
+      txt(line, x + CW / 2, ly, -13, rgba("#E7E3FB", on ? 0.72 : 0.4), "center", FM);
+      ly += 18;
+    }
+    if (cell.locked) txt("NO KEYS", x + CW / 2, Y + CH - 20, 13, "#FF6E7F", "center", FM, 3);
+    hot(x, Y, CW, CH, () => setupPick(i), () => { app.mode[step.key] = i; });
+  }
+
+  drawHints(STAGE_W / 2, Y + CH + 34,
+    [["DIVE", "MOVE"], ["KICK", st.at === st.steps.length - 1 ? "START" : "NEXT"], ["ESC", "BACK"]]);
 }
 
-function modeConfirm(prev) {
+function setupTick(inp) {
+  const st = app.setup, step = st.steps[st.at];
+  for (let i = 0; i < 2; i++) {
+    const dive = (inp[i] & IN_DIVE) && !(st.prev[i] & IN_DIVE);
+    const kick = (inp[i] & IN_KICK) && !(st.prev[i] & IN_KICK);
+    if (dive) { app.mode[step.key] = (app.mode[step.key] + 1) % step.cells.length; SFX.move(); }
+    else if (kick) { setupPick(app.mode[step.key]); st.prev[i] = inp[i]; return; }
+    st.prev[i] = inp[i];
+  }
+}
+
+function modeConfirm() {
   const m = MODES[app.mode.cur];
-  if (m.rack && !app.mode.sub) {
-    app.mode.sub = m.rack;
-    app.mode.subCur = m.rack === "cpu" ? 1 : 0;
-    app.mode.subAt = m.rack === "cpu" ? 1 : 0;
-    SFX.move();
-    return;
-  }
   if (m.key === "net") { netPanel(true); return; }
+  if (m.rack) { setupStart(m.rack); return; }
+  startChosenMode();
+}
+
+function startChosenMode() {
+  const m = MODES[app.mode.cur];
   app.arcade = m.key === "arcade";
   app.nightmare = m.key === "arcade" && app.mode.subCur === 1;
   if (app.nightmare && save.keys < 1) { app.mode.subCur = 0; app.nightmare = false; }
   app.vsAug = (m.key === "versus" || m.key === "cpu") && app.mode.subRule === 1;
   app.cpu = m.key === "cpu" ? app.mode.subCur : app.arcade ? 0 : null;
-  app.mode.sub = null;
-  app.sel = { cur: [0, 1], lock: [false, false], t: 0, cpuT: 0, prev: prev || [0, 0] };
+  app.sel = { cur: [0, 1], lock: [false, false], t: 0, cpuT: 0, prev: [IN_KICK, IN_KICK] };
   app.screen = "select";
   SFX.lock();
   say("choose", 2);
@@ -3634,14 +3758,8 @@ function modeTick(inp) {
   for (let i = 0; i < 2; i++) {
     const dive = (inp[i] & IN_DIVE) && !(md.prev[i] & IN_DIVE);
     const kick = (inp[i] & IN_KICK) && !(md.prev[i] & IN_KICK);
-    if (dive) {
-      if (md.sub) {
-        md.subAt = (md.subAt + 1) % rackCells();
-        const at = rackAt(md.subAt);
-        if (at) md[at[0].key] = at[1];
-      } else md.cur = (md.cur + 1) % MODES.length;
-      SFX.move();
-    } else if (kick) { modeConfirm(inp.slice()); md.prev[i] = inp[i]; return; }
+    if (dive) { md.cur = (md.cur + 1) % MODES.length; SFX.move(); }
+    else if (kick) { modeConfirm(); md.prev[i] = inp[i]; return; }
     md.prev[i] = inp[i];
   }
 }
@@ -4379,14 +4497,18 @@ function ownedCostumes(chIdx) {
 
 /* key and count as one block, centred on cx - drawn as two independent
    anchors they drifted apart and the pair read as off-centre */
-function keyCount(cx, cy, size, fs, col) {
-  const label = "x" + save.keys;
+function keyCountWidth(size, fs) {
   ctx.save();
   ctx.font = "600 " + fs + "px " + FM;
   ctx.letterSpacing = "1px";
-  const tw = ctx.measureText(label).width;
+  const tw = ctx.measureText("x" + save.keys).width;
   ctx.restore();
-  const gap = size * 0.12, w = size + gap + tw;
+  return size + size * 0.12 + tw;
+}
+
+function keyCount(cx, cy, size, fs, col) {
+  const label = "x" + save.keys;
+  const gap = size * 0.12, w = keyCountWidth(size, fs);
   drawKey(cx - w / 2 + size / 2, cy, size);
   txt(label, cx - w / 2 + size + gap, cy + fs * 0.36, fs, col, "left", FM, 1);
 }
@@ -4711,7 +4833,7 @@ function drawLadder(t) {
   /* who is next */
   const foe = CHARS[run.foeCh];
   const boxY = 196;
-  woodPanel(180, boxY, 640, 150, { ink: "#150F2C", inkA: 0.93, rim: foe.col });
+  woodPanel(180, boxY, 640, 150, { ink: "#150F2C", inkA: 0.93, accent: foe.col });
   drawAxie(
     { ch: run.foeCh, x: 0, y: 0, st: "stand", t: 30, facing: -1, inflate: 0, spin: 0, vx: 0, vy: 0, dead: false },
     foe, {
@@ -4929,10 +5051,8 @@ function pauseItems() {
    the caller opens the pause menu instead. */
 function menuBack() {
   const a = app;
-  if (a.screen === "mode") {
-    if (a.mode.sub) { a.mode.sub = null; SFX.move(); return true; }
-    a.screen = "title"; SFX.move(); return true;
-  }
+  if (a.screen === "mode") { a.screen = "title"; SFX.move(); return true; }
+  if (a.screen === "setup") return setupBack();
   if (a.screen === "pass") {
     if (a.passList) { a.passList = false; SFX.move(); return true; }
     a.screen = "mode"; SFX.move(); return true;
@@ -5009,7 +5129,7 @@ function drawPause() {
      empty frame with four buttons at the top of it */
   const RH = 38, GAP = 6, bodyH = rows.length * (RH + GAP) - GAP;
   const BW = 524, BH = 110 + bodyH, BX = (STAGE_W - BW) / 2, BY = (STAGE_H - BH) / 2;
-  const pb = woodPanel(BX, BY, BW, BH, { ink: "#100C22", inkA: 0.95, rim: "#FFD98A" });
+  const pb = woodPanel(BX, BY, BW, BH, { ink: "#100C22", inkA: 0.95, accent: "#FFD98A" });
   txt(title, STAGE_W / 2, pb[1] + 32, 38, "#FFD98A", "center", FD, 12);
   drawHints(STAGE_W / 2, pb[1] + 56, pz.tab === "main"
     ? [["DIVE", "MOVE"], ["KICK", "CONFIRM"], ["ESC", "RESUME"]]
@@ -5059,7 +5179,9 @@ const app = {
   passPrev: 0,
   nightmare: false,
   pick: null,
-  mode: { cur: 0, prev: [0, 0], sub: null, subCur: 1, subRule: 0, subAt: 0 },
+  mode: { cur: 0, prev: [0, 0], subCur: 1, subRule: 0 },
+  setup: null,
+  trackAt: null,
   pause: null,
   bg: 0,                           /* which Origins arena this match is fought in */
   stage: { cur: 9, prev: 0 },
@@ -5168,6 +5290,8 @@ function runScreenTick(inp) {
     skinsTick(inp);
   } else if (app.screen === "tutorial") {
     tutorialTick(inp);
+  } else if (app.screen === "setup") {
+    setupTick(inp);
   } else if (app.screen === "story") {
     storyTick(inp);
   } else if (app.screen === "ladder") {
@@ -5253,6 +5377,7 @@ function frame(now) {
   else if (app.screen === "story") drawStory(app.t);
   else if (app.screen === "ladder") drawLadder(app.t);
   else if (app.screen === "draft") drawDraft(app.t);
+  else if (app.screen === "setup") drawSetup(app.t);
   else if (app.screen === "runend") drawRunEnd(app.t);
   else drawMatch(app.m);
 

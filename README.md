@@ -44,11 +44,12 @@ There is no walking; all movement comes from jumping, kicking and kicking back.
 ## Modes
 
 From the title screen: **local versus**, **online versus**, **story mode**, or **vs
-CPU** at four difficulties. Local versus and VS CPU both ask a second question —
-**skill only** or **augments**, where each side drafts two Land items before the bell.
-Against the CPU you pick your own two and it takes two off whatever you left on the
-table. The rack walks on the same two buttons: DIVE steps through every cell, and
-landing on one answers its own row.
+CPU**. Picking one walks you through however many questions that mode has, one screen
+each — VS CPU asks **how hard** and then **how you fight**, local versus asks only the
+second, story asks which story. Each screen is a heading, a row of cards, and the same
+two buttons, with dots showing what is left. **Augments** means each side drafts two
+Land items before the bell; against the CPU you pick your own two and it takes two off
+whatever you left on the table.
 
 `Esc` → **SETTINGS** for master/music/SFX volume, the announcer, screen shake, and
 rebindable controls with a reset. Everything persists.
@@ -172,6 +173,11 @@ A shallow prototype of a live-service loop, built to show the shape rather than 
 anyone's money. **Nothing here charges anything** — the pass is free in this build, the
 prize pool is a mock, and there is no payment code.
 
+The reward track is one horizontal run with a rail through it, the way a season pass
+reads everywhere else. It scrolls — wheel, drag, or the arrows — and parks itself on the
+tier you are working towards. The rail fills node to node rather than point to point,
+because the thresholds climb 10, 25, 45 … 400 while the nodes are evenly spaced.
+
 - **10 challenges** in the pool; six are live at a time (two daily, two weekly, two
   seasonal), rotating off the date so it works without a server. Easy/medium/hard, worth
   5 to 100 points.
@@ -187,8 +193,9 @@ prize pool is a mock, and there is no payment code.
 - **Prize pool** on the main menu, ticking upward, captioned *leaderboard coming soon*.
   It is a seeded number plus whatever this machine "spent"; the code says so.
 
-Menus are flat: a dark slab, a hairline rim in the thing's own colour, and a soft pulse
-on whatever is selected. There was an Origins parchment-and-stone nine-slice behind all
+Menus are flat, and an edge means you can press it: buttons and whatever the cursor is
+on get a stroke in their own colour, and a panel that is only holding information gets a
+bar along its top instead of a box around it. There was an Origins parchment-and-stone nine-slice behind all
 of this for a while; it read as clutter at menu density, and its border covered about
 19px of every panel edge against the 13 the layouts were told about, so half the screens
 were quietly fighting their own frame. The Origins art that carries meaning stays — the

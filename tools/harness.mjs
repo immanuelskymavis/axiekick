@@ -70,7 +70,7 @@ const expose = `
   hurtBox, hitRadius, kickAngle, spineFor, applyKickFactor,
   drawMode, drawSelect, drawStagePick, drawAugPick, drawArcCard, drawStory,
   drawLadder, drawDraft, drawRunEnd, drawPause, drawMatch, drawTitle,
-  drawMeter, drawTip, drawHUD, openPause, pauseRows, showArc, rackRows,
+  drawMeter, drawTip, drawHUD, openPause, pauseRows, showArc, setupSteps, drawSetup,
   settingsRows, controlRows, storyLines, SETTINGS, BINDS, VS_RULES,
   save, CHALLENGES, COSTUMES, TIERS, activeChallenges, rollChallenges, track,
   trackStoryChar, buyPass, charLocked, prizePool, drawPass, drawTutorial,
