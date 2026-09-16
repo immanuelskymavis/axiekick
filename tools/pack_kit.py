@@ -53,6 +53,30 @@ SFX = {
 }
 MUSIC = {"battle": "pvp.wav", "menu": "pve_1.wav"}
 
+# The announcer, and the one thing in this build that is not first-party Axie
+# art: Kenney's fighter voiceover pack, CC0, no attribution required. The kit
+# has no voice lines at all and browser speech synthesis was a robot reading a
+# script, so a real announcer saying fewer words wins. Only the lines that map
+# onto something the game actually does are packed.
+VO_ZIP = ("https://kenney.nl/media/pages/assets/voiceover-pack-fighter/"
+          "6ceb77c6f1-1677589837/kenney_voiceover-pack-fighter.zip")
+VO = {
+    "fight": "fight.ogg",
+    "round1": "round_1.ogg",
+    "round2": "round_2.ogg",
+    "round3": "round_3.ogg",
+    "round4": "round_4.ogg",
+    "round5": "round_5.ogg",
+    "final": "final_round.ogg",          # match point
+    "time": "time.ogg",
+    "tie": "it's_a_tie.ogg",             # a trade is a double KO
+    "line": "sudden_death.ogg",          # Hold the Line
+    "winner": "winner.ogg",
+    "flawless": "flawless_victory.ogg",
+    "choose": "choose_your_character.ogg",
+    "over": "game_over.ogg",
+}
+
 # Origins interface pieces. Everything here is drawn straight onto the canvas,
 # so it is cropped to what the game actually uses and nothing else.
 UI = {
@@ -122,6 +146,19 @@ def uri(mime, blob):
     return f"data:{mime};base64," + base64.b64encode(blob).decode()
 
 
+def grab_vo(offline):
+    """Kenney's pack ships as one zip; unpack it into the cache once."""
+    import zipfile
+    root = os.path.join(CACHE, "kenney-vo")
+    if not os.path.isdir(root):
+        if offline:
+            sys.exit("missing cache dir: " + root)
+        zpath = grab_url(VO_ZIP, "kenney-vo.zip", offline)
+        with zipfile.ZipFile(zpath) as z:
+            z.extractall(root)
+    return os.path.join(root, "Audio")
+
+
 def grab_url(url, name, offline):
     dest = os.path.join(CACHE, name)
     if not os.path.exists(dest):
@@ -152,7 +189,7 @@ def as_png(path, box=None, cap=None):
 
 def main():
     offline = "--offline" in sys.argv
-    out = {"bg": [], "sfx": {}, "music": {}, "ui": {}, "items": {}}
+    out = {"bg": [], "sfx": {}, "music": {}, "vo": {}, "ui": {}, "items": {}}
     total = 0
 
     print("backgrounds")
@@ -173,6 +210,14 @@ def main():
     for key, fn in MUSIC.items():
         blob = as_aac(grab("PvE/Music/" + fn, offline), 44)
         out["music"][key] = uri("audio/mp4", blob)
+        total += len(blob)
+        print(f"  {key:<12} {fn:<26} {len(blob)//1024:>4} KB")
+
+    print("announcer (Kenney, CC0)")
+    vodir = grab_vo(offline)
+    for key, fn in VO.items():
+        blob = as_aac(os.path.join(vodir, fn), 48)
+        out["vo"][key] = uri("audio/mp4", blob)
         total += len(blob)
         print(f"  {key:<12} {fn:<26} {len(blob)//1024:>4} KB")
 

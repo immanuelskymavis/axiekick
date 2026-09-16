@@ -30,7 +30,9 @@ the live URL serves.
 | **P2** | <kbd>K</kbd> | <kbd>L</kbd> |
 | **Gamepad** | A / ✕ | B / ○ |
 
-<kbd>Esc</kbd> opens the menu — resume, restart the match, or quit to the title.
+<kbd>Esc</kbd> backs out of whatever menu you are in, one step at a time, all the way
+to the title. In a fight — or on the story ladder, where there is nowhere back to — it
+opens the menu instead: resume, restart the match, or quit to the title.
 Every menu in the game is clickable too: hover moves the cursor, click confirms, and
 hovering an augment medallion explains it.
 Gamepads auto-assign to the first free player slot on their first button press.
@@ -41,8 +43,12 @@ There is no walking; all movement comes from jumping, kicking and kicking back.
 
 ## Modes
 
-From the title screen: **local versus** (skill only, or with a drafted augment each
-side), **online versus**, **story mode**, or **vs CPU** at four difficulties.
+From the title screen: **local versus**, **online versus**, **story mode**, or **vs
+CPU** at four difficulties. Local versus and VS CPU both ask a second question —
+**skill only** or **augments**, where each side drafts two Land items before the bell.
+Against the CPU you pick your own two and it takes two off whatever you left on the
+table. The rack walks on the same two buttons: DIVE steps through every cell, and
+landing on one answers its own row.
 
 `Esc` → **SETTINGS** for master/music/SFX volume, the announcer, screen shake, and
 rebindable controls with a reset. Everything persists.
@@ -80,8 +86,13 @@ mirrors included, both directions. Momo needling Venoki about going over the doo
 a different answer than Buba trying to barge through it.
 
 **Nightmare Story** is the same ten stages with every opponent a difficulty tier higher
-and carrying two more augments. It costs one **Nightmare Key**; the demo starts you with
-100.
+and carrying two more augments, and the whole thing runs under a violet wash so you can
+tell which one you are in from across the room. It costs one **Nightmare Key**; the demo
+starts you with 100.
+
+The random rungs draw from the roster minus whoever you just fought, so no two stages in
+a row hand you the same Axie — and the rung before the Reflection will not spend it
+early.
 
 **Level 10 is your Reflection**: the Axie you beat on level 1, carrying the exact three
 augments you drafted. Whatever you decided was strong, you have to beat.
@@ -289,6 +300,22 @@ appears, and `pvp` / `pve_1` as the battle and menu loops. These are battle-card
 with long tails — a 3.5-second whoosh on a jump you take twice a second turns to mud —
 so `SFX_LEN` gives each event a length and the voice is faded out at it.
 
+### The announcer
+
+The one thing in the build that is not first-party Axie art. The Origins kit has no
+voice lines at all, and the announcer used to be the browser's own speech synthesis —
+which could say anything, in whatever voice the machine happened to have, and none of it
+sounded like a fighting game. It is now
+[Kenney's Voiceover Pack (Fighter)](https://kenney.nl/assets/voiceover-pack-fighter),
+**CC0**, no attribution required, free for commercial use.
+
+Fourteen of its forty-five lines are packed — only the ones that map onto something the
+game actually does: `fight`, `round 1`–`round 5`, `final round` at match point,
+`sudden death` when Hold the Line appears, `time`, `it's a tie` on a trade, `winner`,
+`flawless victory`, `choose your character`, and `game over` when a run ends. The rest
+of the time it says nothing, which is the trade: a real voice saying fewer words beats a
+robot saying all of them. Still off in settings for anyone who hates it.
+
 ```bash
 python3 tools/pack_kit.py
 ```
@@ -304,7 +331,7 @@ keeps 2.2 MB of media out of a 22 MB one.
 | **Buba** | Beast | Horn drill | Steep 55° dive at 14 u/f, smallest hitbox, 27 frames of recovery when he misses |
 | **Puffy** | Aqua | Inflate | Hold DIVE at the apex to hang for 24 frames and sail forward while she does it — a stall that is also an approach |
 | **Pomodoro** | Bug | Aimed hang | The highest jump in the game, and holding KICK in the air sweeps the dive from 36° to 78°. Release to fire |
-| **Venoki** | Reptile | Armed retreat | His kickback swings wide for 16 frames and kills out to 140 units, so crowding him is its own mistake |
+| **Venoki** | Reptile | Armed retreat | His kickback swings wide for 20 frames and kills out past 200 units, so crowding him is its own mistake |
 | **Momo** | Bird | Second wind | One extra jump, any time she's airborne — bait the whiff, then take the air back |
 
 Effective kick ranges, measured from the sim across kick timings: Olek 120–460 units,
@@ -352,8 +379,8 @@ Deviations worth naming:
   ones, but nothing about the Unity + Spine 3.8 pipeline runs in a browser, so the game
   plays the skeletons directly. The procedural canvas Axies from the first build are still
   in `drawAxieShapes()` as the fallback for the frames before the atlas image decodes.
-- **Synth voices are still in there**, but only as the fallback for events the kit has no
-  obvious clip for, and for the whole game if the packed asset block is stripped out.
+- **Synth voices are still in there** as the fallback for events the kit has no obvious
+  clip for, and for the whole game if the packed asset block is stripped out.
 - **No F2 tuning overlay.** Character values live in the `CHARS` table at the top of the
   file, CPU difficulty in `DIFFS`, sound lengths in `SFX_LEN`; edit and reload.
 - **Local versus only** for human-vs-human, as scoped. Online P2P is the fast-follow —
