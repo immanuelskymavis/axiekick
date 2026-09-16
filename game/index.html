@@ -70,6 +70,25 @@ kbd{
   padding:8px 14px;cursor:pointer;
 }
 #net button:hover{border-color:var(--moon);color:var(--moon)}
+/* A fight needs two buttons held at once and there are no touch controls, so a
+   phone can reach the menus and then hit a wall. Say so at the door instead. */
+#nodesk{
+  position:fixed;inset:0;z-index:20;display:none;
+  align-items:center;justify-content:center;padding:28px;
+  background:var(--void);text-align:center;
+}
+#nodesk.on{display:flex}
+#nodesk div{max-width:34ch;display:flex;flex-direction:column;gap:14px}
+#nodesk h2{
+  margin:0;font-size:26px;letter-spacing:.12em;text-transform:uppercase;color:var(--moon);
+}
+#nodesk p{margin:0;font-size:15px;line-height:1.6;color:var(--dim)}
+#nodesk p b{color:var(--pale);font-weight:600}
+#nodesk button{
+  font-family:inherit;font-size:12px;letter-spacing:.12em;text-transform:uppercase;
+  background:none;color:var(--dim);border:1px solid var(--edge);
+  padding:9px 16px;cursor:pointer;align-self:center;
+}
 #net button[disabled]{opacity:.35;cursor:default;border-color:var(--edge);color:var(--dim)}
 #net textarea{
   width:100%;height:74px;resize:vertical;background:#0B0916;color:var(--pale);
@@ -128,6 +147,15 @@ kbd{
     </div>
 
     <div id="netstat">idle</div>
+  </div>
+</div>
+<div id="nodesk">
+  <div>
+    <h2>Desktop only</h2>
+    <p>AxieKick is played with <b>two buttons held at once</b>, and there are no touch
+      controls yet. On a phone or tablet you can reach the menus and then get stuck.</p>
+    <p>Open it on a laptop or desktop, with a keyboard or a gamepad.</p>
+    <button id="nodeskgo" type="button">Let me try anyway</button>
   </div>
 </div>
 <div id="legend">
@@ -1813,7 +1841,7 @@ function drawArena(i) {
   return true;
 }
 
-const MENU_SCREENS = ["title", "mode", "setup", "select", "ladder", "draft", "runend", "stage", "story", "augpick", "arc", "pass", "skins"];
+const MENU_SCREENS = ["title", "mode", "setup", "select", "ladder", "draft", "runend", "stage", "story", "augpick", "arc", "pass"];
 
 /* Nightmare Story runs under a violet wash, so which one you are in is obvious
    from across the room rather than something you read off the HUD. */
@@ -2465,7 +2493,7 @@ function drawPass(t) {
       bb[0] + 16, bb[1] + 46, -12.5, rgba("#E7E3FB", 0.75), "left", FD);
     txt("earned unlocks at once. Nothing you have played is wasted.",
       bb[0] + 16, bb[1] + 63, -12.5, rgba("#E7E3FB", 0.75), "left", FD);
-    woodButton(bb[0] + 16, bb[1] + 70, 236, 30, "UNLOCK · FREE IN DEMO", "#FFD98A", () => buyPass());
+    woodButton(bb[0] + 16, bb[1] + 70, 236, 30, "PURCHASE", "#FFD98A", () => buyPass());
   }
 
   const cx2 = 24 + bw + GAP, cw2 = STAGE_W - 24 - cx2;
@@ -2526,63 +2554,71 @@ function passTick(inp) {
   }
 }
 
-/* --- skins ---------------------------------------------------------------- */
-function drawSkins(t) {
-  drawStage(null);
-  ctx.fillStyle = rgba("#08070F", 0.8); ctx.fillRect(0, 0, STAGE_W, STAGE_H);
-  txt("SKINS", STAGE_W / 2, 52, 30, "#FFD98A", "center", FD, 10);
-  txt("EARNED ON THE SEASON PASS REWARD TRACK", STAGE_W / 2, 72, -10,
-    rgba("#E7E3FB", 0.45), "center", FM, 3);
-
-  const COLS = 3, CW = 296, CH = 186, GX = 12, GY = 12;
-  const X0 = (STAGE_W - (CW * COLS + GX * (COLS - 1))) / 2, Y0 = 92;
-  for (let i = 0; i < CHARS.length; i++) {
-    const c = CHARS[i];
-    const x = X0 + (i % COLS) * (CW + GX), y = Y0 + Math.floor(i / COLS) * (CH + GY);
-    const owned = ownedCostumes(i);
-    const eq = (save.equipped || {})[i];
-    const b = woodPanel(x, y, CW, CH, { ink: "#140F2A", inkA: 0.93 });
-    txt(c.name, b[0] + 10, b[1] + 26, 21, c.col, "left", FD, 2);
-
-    /* default */
-    const slots = [null].concat(owned.map(o => o.id));
-    for (let k = 0; k < slots.length && k < 3; k++) {
-      const id = slots[k], sx = b[0] + 10 + k * 88, sy = b[1] + 38, sw = 82, sh = 108;
-      const on = (eq || null) === id;
-      ctx.fillStyle = rgba(on ? "#241C4A" : "#0E0A20", 0.95);
-      ctx.fillRect(sx, sy, sw, sh);
-      ctx.strokeStyle = rgba(on ? c.col : "#8E7BD8", on ? 1 : 0.25);
-      ctx.lineWidth = on ? 2 : 1;
-      ctx.strokeRect(sx + 0.5, sy + 0.5, sw - 1, sh - 1);
-      drawAxie(
-        { ch: i, x: 0, y: 0, st: "stand", t: 30, facing: 1, inflate: 0, spin: 0, vx: 0, vy: 0,
-          dead: false, cos: id },
-        c, {
-          portrait: true, px: sx + sw / 2, py: sy + sh - 22 + Math.sin(t * 0.05 + k) * 3,
-          scale: 0.56, anim: c.anim.idle, animT: t / 60 + k
-        }
-      );
-      fitTxt(id ? COS[id].name : "DEFAULT", sx + sw / 2, sy + sh - 6, sw - 8, -8.5,
-        on ? c.col : rgba("#E7E3FB", 0.45), "center", FM, 0.5);
-      hot(sx, sy, sw, sh, () => {
-        save.equipped = save.equipped || {};
-        save.equipped[i] = id;
-        writeSave(); SFX.lock();
-      });
-    }
-    if (!owned.length) {
-      txt("no skins yet", b[0] + b[2] - 80, b[1] + 92, -11, rgba("#E7E3FB", 0.35), "center", FM, 1);
-    }
-  }
-  drawHintButtons(STAGE_W / 2, STAGE_H - 16, [["KICK", "BACK"]],
-    [() => { app.screen = "mode"; SFX.move(); }]);
+/* --- skins ----------------------------------------------------------------
+   A skin belongs to one Axie, so it is chosen where that Axie is chosen: lock
+   a character in, and if it owns anything, its wardrobe takes over that
+   player's half of the strip. It used to be a screen off the menu header,
+   which meant walking away from the roster to dress somebody you had not
+   picked yet. */
+function skinOptions(chIdx) {
+  return [null].concat(ownedCostumes(chIdx).map(o => o.id));
 }
 
-function skinsTick(inp) {
-  const m = inp[0] | inp[1];
-  const kick = (m & IN_KICK) && !(app.skinPrev & IN_KICK);
-  app.skinPrev = m;
-  if (kick) { app.screen = "mode"; SFX.move(); }
+function drawSkinPick(pl, x, y, w, h, t) {
+  const sel = app.sel, chIdx = sel.cur[pl], c = CHARS[chIdx];
+  const opts = skinOptions(chIdx);
+  const eq = (save.equipped || {})[chIdx] || null;
+  woodPanel(x, y, w, h, { ink: "#140F2A", inkA: 0.95, rim: PCOL[pl], glow: PCOL[pl] });
+
+  txt((pl === 1 && app.cpu !== null ? "CPU" : "P" + (pl + 1)) + " · PICK A LOOK",
+    x + 14, y + 20, -10, rgba(PCOL[pl], 0.9), "left", FM, 2);
+  txt("KICK TO FIGHT", x + w - 14, y + 20, -10, rgba("#E7E3FB", 0.4), "right", FM, 2);
+
+  const SW = 74, GAP = 10, total = opts.length * SW + (opts.length - 1) * GAP;
+  const sx = x + w / 2 - total / 2;
+  for (let k = 0; k < opts.length; k++) {
+    const id = opts[k], bx = sx + k * (SW + GAP), by = y + 28, bh = h - 36;
+    const on = (eq || null) === id;
+    ctx.fillStyle = rgba(on ? "#241C4A" : "#0E0A20", 0.95);
+    ctx.fillRect(bx, by, SW, bh);
+    ctx.strokeStyle = rgba(on ? c.col : "#8E7BD8", on ? 1 : 0.3);
+    ctx.lineWidth = on ? 2 : 1;
+    ctx.strokeRect(bx + 0.5, by + 0.5, SW - 1, bh - 1);
+    drawAxie(
+      { ch: chIdx, x: 0, y: 0, st: "stand", t: 30, facing: 1, inflate: 0, spin: 0, vx: 0, vy: 0,
+        dead: false, cos: id },
+      c, {
+        portrait: true, px: bx + SW / 2, py: by + bh - 16 + Math.sin(t * 0.05 + k) * 2,
+        scale: 0.46, anim: c.anim.idle, animT: t / 60 + k
+      }
+    );
+    fitTxt(id ? COS[id].name : "DEFAULT", bx + SW / 2, by + bh - 4, SW - 8, -8.5,
+      on ? c.col : rgba("#E7E3FB", 0.45), "center", FM, 0.5);
+    hot(bx, by, SW, bh, () => {
+      save.equipped = save.equipped || {};
+      save.equipped[chIdx] = id;
+      writeSave(); SFX.lock();
+      app.sel.skin[pl] = false;
+    }, () => {
+      save.equipped = save.equipped || {};
+      save.equipped[chIdx] = id;
+      writeSave();
+    });
+  }
+}
+
+/* step the wardrobe for one player; returns true if it swallowed the press */
+function skinTick(pl, dive, kick) {
+  const sel = app.sel;
+  if (!sel.skin[pl]) return false;
+  const chIdx = sel.cur[pl], opts = skinOptions(chIdx);
+  if (dive) {
+    save.equipped = save.equipped || {};
+    const at = opts.indexOf(save.equipped[chIdx] || null);
+    save.equipped[chIdx] = opts[(at + 1) % opts.length];
+    writeSave(); SFX.move();
+  } else if (kick) { sel.skin[pl] = false; SFX.lock(); }
+  return true;
 }
 
 /* --- tutorial ------------------------------------------------------------
@@ -2963,6 +2999,19 @@ function hotAt(px, py) {
 }
 function hovered(x, y, w, h) {
   return mouse.inside && mouse.x >= x && mouse.x <= x + w && mouse.y >= y && mouse.y <= y + h;
+}
+
+/* Coarse pointer and no hover is the honest signal for "there is no keyboard
+   here". Narrow-but-hoverable is a small window, not a phone, so it passes. */
+function touchOnly() {
+  try {
+    return matchMedia("(pointer: coarse)").matches && !matchMedia("(hover: hover)").matches;
+  } catch (e) { return false; }
+}
+if (touchOnly()) {
+  const nag = document.getElementById("nodesk");
+  nag.classList.add("on");
+  document.getElementById("nodeskgo").onclick = () => nag.classList.remove("on");
 }
 
 function pointerPos(e) {
@@ -3464,15 +3513,15 @@ const MODES = [
 function modePanelCast(m, x, y, w, h, t, i) {
   /* the art is sized off the box it is in, so a taller panel means a bigger
      Axie rather than more empty sky above one */
-  const fill = Math.max(0.7, Math.min(1.6, h / 196));
+  const fill = Math.max(0.62, Math.min(1.12, h / 232));
   const feet = y + h - 6;
   if (m.cast.length === 2) {
     const a = CHARS[m.cast[0]], b = CHARS[m.cast[1]];
-    const gap = m.key === "net" ? 0.30 : 0.22;
+    const gap = m.key === "net" ? 0.30 : 0.26;
     drawAxie({ ch: m.cast[0], x: 0, y: 0, st: "stand", t: 30, facing: 1, inflate: 0, spin: 0, vx: 0, vy: 0, dead: false },
-      a, { portrait: true, px: x + w * (0.5 - gap), py: feet + Math.sin(t * 0.05 + i) * 3, scale: 0.84 * fill, anim: a.anim.idle, animT: t / 60 + i });
+      a, { portrait: true, px: x + w * (0.5 - gap), py: feet + Math.sin(t * 0.05 + i) * 3, scale: 0.74 * fill, anim: a.anim.idle, animT: t / 60 + i });
     drawAxie({ ch: m.cast[1], x: 0, y: 0, st: "stand", t: 30, facing: -1, inflate: 0, spin: 0, vx: 0, vy: 0, dead: false },
-      b, { portrait: true, px: x + w * (0.5 + gap), py: feet + Math.sin(t * 0.05 + i + 2) * 3, scale: 0.84 * fill, anim: b.anim.idle, animT: t / 60 + i + 1 });
+      b, { portrait: true, px: x + w * (0.5 + gap), py: feet + Math.sin(t * 0.05 + i + 2) * 3, scale: 0.74 * fill, anim: b.anim.idle, animT: t / 60 + i + 1 });
     if (m.key === "net") {
       ctx.save();
       ctx.setLineDash([6, 7]); ctx.lineDashOffset = -t * 0.6;
@@ -3484,7 +3533,7 @@ function modePanelCast(m, x, y, w, h, t, i) {
   }
   const a = CHARS[m.cast[0]];
   drawAxie({ ch: m.cast[0], x: 0, y: 0, st: "stand", t: 30, facing: 1, inflate: 0, spin: 0, vx: 0, vy: 0, dead: false },
-    a, { portrait: true, px: x + w / 2, py: feet + Math.sin(t * 0.05 + i) * 3, scale: 0.98 * fill, anim: a.anim.idle, animT: t / 60 + i });
+    a, { portrait: true, px: x + w / 2, py: feet + Math.sin(t * 0.05 + i) * 3, scale: 0.88 * fill, anim: a.anim.idle, animT: t / 60 + i });
   if (m.key === "arcade") {
     for (let n = 0; n < 5; n++) {
       drawUI(n === 2 ? "node_now" : n < 2 ? "node_win" : "stage_n",
@@ -3496,37 +3545,34 @@ function modePanelCast(m, x, y, w, h, t, i) {
 /* the strip across the top: what the season is worth, where you are on it,
    and the two doors that are not fights */
 function drawMenuHeader(t) {
-  /* Three plates on one grid: same top, same height, same inner padding. They
-     used to be sized independently and the key count ran under the buttons as
-     soon as you had three digits of it. */
   const HH = 84, PY = 6, PH = HH - 14, PAD = 12;
   ctx.fillStyle = rgba("#0B0916", 0.95); ctx.fillRect(0, 0, STAGE_W, HH);
   ctx.fillStyle = rgba("#FFD98A", 0.22); ctx.fillRect(0, HH - 1, STAGE_W, 1);
 
-  const SIDE = 250, EDGE = 14, MID = 16;
-  const cw = STAGE_W - (SIDE + EDGE + MID) * 2, cx = EDGE + SIDE + MID;
+  const LW = 250, RW = 302, EDGE = 14, MID = 16;
+  const cx = EDGE + LW + MID, cw = STAGE_W - (EDGE + LW + MID) - (RW + EDGE + MID);
 
-  /* left: the pass, the only plate here you can press */
+  /* left: the pass, which is a button and now says so */
   const done = TIERS.filter(x => save.points >= x.at).length;
-  const over = hovered(EDGE, PY, SIDE, PH);
-  const pb = woodPanel(EDGE, PY, SIDE, PH, {
-    ink: over ? "#231A3F" : "#150F2C", inkA: 0.95,
-    rim: save.pass ? "#7CF0B4" : "#FFD98A", glow: over ? (save.pass ? "#7CF0B4" : "#FFD98A") : null
+  const over = hovered(EDGE, PY, LW, PH);
+  const col = save.pass ? "#7CF0B4" : "#FFD98A";
+  woodPanel(EDGE, PY, LW, PH, {
+    ink: over ? "#2A2150" : "#1B1540", inkA: 0.98, rim: col, glow: over ? col : null
   });
-  const px = EDGE + PAD, pr = EDGE + SIDE - PAD;
-  txt(save.pass ? "SEASON PASS" : "SEASON PASS · LOCKED", px, PY + 18, -9.5,
-    save.pass ? "#7CF0B4" : "#FFD98A", "left", FM, 2);
+  const px = EDGE + PAD, pr = EDGE + LW - PAD;
+  txt(save.pass ? "SEASON PASS" : "SEASON PASS · LOCKED", px, PY + 18, -9.5, col, "left", FM, 2);
+  txt("›", pr, PY + 19, 16, rgba(col, over ? 1 : 0.6), "right", FD, 0);
   txt(String(save.points), px, PY + 45, 22, "#E7E3FB", "left", FM, 1);
   ctx.save(); ctx.font = "600 22px " + FM; ctx.letterSpacing = "1px";
   const ptw = ctx.measureText(String(save.points)).width; ctx.restore();
   txt("PTS", px + ptw + 7, PY + 45, -11, rgba("#E7E3FB", 0.5), "left", FM, 2);
   txt(done + " / " + TIERS.length + " TIERS", pr, PY + 45, -11, rgba("#E7E3FB", 0.6), "right", FM, 2);
-  ctx.fillStyle = rgba("#08070F", 0.8); ctx.fillRect(px, PY + 54, SIDE - PAD * 2, 4);
-  ctx.fillStyle = save.pass ? "#7CF0B4" : "#FFD98A";
-  ctx.fillRect(px, PY + 54, (SIDE - PAD * 2) * Math.min(1, done / TIERS.length), 4);
-  hot(EDGE, PY, SIDE, PH, () => { app.passPrev = IN_KICK; app.screen = "pass"; SFX.lock(); });
+  ctx.fillStyle = rgba("#08070F", 0.8); ctx.fillRect(px, PY + 54, LW - PAD * 2, 4);
+  ctx.fillStyle = col;
+  ctx.fillRect(px, PY + 54, (LW - PAD * 2) * Math.min(1, done / TIERS.length), 4);
+  hot(EDGE, PY, LW, PH, () => { app.passPrev = IN_KICK; app.screen = "pass"; SFX.lock(); });
 
-  /* centre: the pool, which is a read-out and gets no edge at all */
+  /* centre: the pool is a read-out, so it gets a bar and no edge */
   woodPanel(cx, PY, cw, PH, { ink: "#0B0916", inkA: 0.9, accent: "#FFD98A" });
   txt("SEASON ONE PRIZE POOL", cx + cw / 2, PY + 20, -10, rgba("#FFD98A", 0.75), "center", FM, 6);
   ctx.save();
@@ -3535,26 +3581,28 @@ function drawMenuHeader(t) {
   ctx.restore();
   txt("LEADERBOARD COMING SOON", cx + cw / 2, PY + 62, -8.5, rgba("#E7E3FB", 0.32), "center", FM, 3);
 
-  /* right: the keys, then the two doors that are not fights */
-  const rx = STAGE_W - SIDE - EDGE;
-  woodPanel(rx, PY, SIDE, PH, { ink: "#150F2C", inkA: 0.95, accent: "#8E7BD8" });
-  const KEYW = Math.max(102, keyCountWidth(28, 15) + 30);
-  keyCount(rx + KEYW / 2, PY + 28, 28, 15, "#FFD98A");
-  fitTxt("NIGHTMARE KEYS", rx + KEYW / 2, PY + 54, KEYW - 10, -9,
-    rgba("#E7E3FB", 0.5), "center", FM, 1.5);
-  const bw = (SIDE - KEYW - PAD - 8) / 2, bh = PH - 16;
-  const mini = (bx, label, col, act) => {
+  /* right: what you hold, then the two doors that are not fights. The count
+     used to run under the first button, so the column is measured off it. */
+  const rx = STAGE_W - RW - EDGE;
+  woodPanel(rx, PY, RW, PH, { ink: "#150F2C", inkA: 0.95, accent: "#8E7BD8" });
+  /* the count sits in a column measured off its own text plus a real gutter,
+     so three digits of keys never crowd the button beside it */
+  const KEYW = Math.max(96, keyCountWidth(28, 16) + 42);
+  keyCount(rx + KEYW / 2, PY + PH / 2, 28, 16, "#FFD98A");
+  const bx0 = rx + KEYW, bw = (RW - KEYW - PAD - 8) / 2, bh = PH - 16;
+  const mini = (bx, label, c2, act) => {
     const o = hovered(bx, PY + 8, bw, bh);
     ctx.fillStyle = rgba(o ? "#3A2E16" : "#221B44", 0.95);
     ctx.fillRect(bx, PY + 8, bw, bh);
-    ctx.strokeStyle = rgba(col, o ? 1 : 0.65); ctx.lineWidth = 1;
+    ctx.strokeStyle = rgba(c2, o ? 1 : 0.65); ctx.lineWidth = 1;
     ctx.strokeRect(bx + 0.5, PY + 8.5, bw - 1, bh - 1);
-    fitTxt(label, bx + bw / 2, PY + 8 + bh / 2 + 5, bw - 10, 13,
-      o ? "#FFE9AE" : col, "center", FD, 1.5);
+    fitTxt(label, bx + bw / 2, PY + 8 + bh / 2 + 5, bw - 12, 13, o ? "#FFE9AE" : c2, "center", FD, 1.5);
     hot(bx, PY + 8, bw, bh, act);
   };
-  mini(rx + KEYW, "SKINS", "#C9A6FF", () => { app.skinPrev = IN_KICK; app.screen = "skins"; SFX.lock(); });
-  mini(rx + KEYW + bw + 8, "HOW TO", "#9FB4D8", () => { SFX.lock(); tutStart(); });
+  mini(bx0, "TUTORIAL", "#9FB4D8", () => { SFX.lock(); tutStart(); });
+  mini(bx0 + bw + 8, "SETTINGS", "#C9A6FF", () => {
+    SFX.lock(); openPause(); app.pause.tab = "settings"; app.pause.cur = 0;
+  });
 }
 
 function drawMode(cur, t) {
@@ -3747,7 +3795,7 @@ function startChosenMode() {
   if (app.nightmare && save.keys < 1) { app.mode.subCur = 0; app.nightmare = false; }
   app.vsAug = (m.key === "versus" || m.key === "cpu") && app.mode.subRule === 1;
   app.cpu = m.key === "cpu" ? app.mode.subCur : app.arcade ? 0 : null;
-  app.sel = { cur: [0, 1], lock: [false, false], t: 0, cpuT: 0, prev: [IN_KICK, IN_KICK] };
+  app.sel = { cur: [0, 1], lock: [false, false], skin: [false, false], t: 0, cpuT: 0, prev: [IN_KICK, IN_KICK] };
   app.screen = "select";
   SFX.lock();
   say("choose", 2);
@@ -3800,23 +3848,15 @@ function drawSelect(sel, t) {
       hot(x, y, CW, CH,
         () => { if (!sel.lock[0]) { sel.cur[0] = i; sel.lock[0] = true; SFX.lock(); } },
         () => { if (!sel.lock[0]) sel.cur[0] = i; });
-      /* cycle this Axie's owned skins right here; the full picker is on the
-         SKINS screen off the menu header */
-      const own = ownedCostumes(i);
-      if (own.length) {
+      /* a skin belongs to the Axie you just picked, so choosing one is a step
+         after you lock in rather than a screen somewhere else */
+      if (ownedCostumes(i).length) {
         const eq = (save.equipped || {})[i];
-        const chipW = 104, chipX = x + CW - chipW - 10, chipY = y + CH - 24;
-        ctx.fillStyle = rgba(eq ? c.col : "#1A1436", 0.92);
-        ctx.fillRect(chipX, chipY, chipW, 16);
-        fitTxt(eq ? COS[eq].name : "DEFAULT SKIN", chipX + chipW / 2, chipY + 12, chipW - 8, -9,
-          eq ? "#17110A" : rgba("#E7E3FB", 0.65), "center", FM, 1);
-        hot(chipX, chipY, chipW, 16, () => {
-          save.equipped = save.equipped || {};
-          const ids = [null].concat(own.map(o => o.id));
-          const at = ids.indexOf(save.equipped[i] || null);
-          save.equipped[i] = ids[(at + 1) % ids.length];
-          writeSave(); SFX.move();
-        });
+        const chipW = 96, chipX = x + CW - chipW - 10, chipY = y + CH - 22;
+        ctx.fillStyle = rgba(eq ? c.col : "#1A1436", 0.9);
+        ctx.fillRect(chipX, chipY, chipW, 14);
+        fitTxt(eq ? COS[eq].name : "DEFAULT", chipX + chipW / 2, chipY + 11, chipW - 8, -8.5,
+          eq ? "#17110A" : rgba("#E7E3FB", 0.6), "center", FM, 1);
       }
     }
 
@@ -3864,12 +3904,14 @@ function drawSelect(sel, t) {
     }
   }
 
-  /* the strip: whatever each player is hovering, in their own half */
+  /* the strip: whatever each player is hovering, in their own half - or, once
+     they have locked an Axie that owns a skin, that Axie's wardrobe */
   const SY = Y0 + CH * 2 + GY + 16;
   for (let pl = 0; pl < 2; pl++) {
     const c = CHARS[sel.cur[pl]];
     const half = (STAGE_W - 68) / 2, x = 34 + pl * (half + 4);
     const who = pl === 1 && app.cpu !== null ? "CPU" : "P" + (pl + 1);
+    if (sel.skin[pl]) { drawSkinPick(pl, x, SY, half - 4, 96, t); continue; }
     const sb = woodPanel(x, SY, half - 4, 96, { ink: "#0E0A20", inkA: 0.9 });
     ctx.fillStyle = PCOL[pl]; ctx.fillRect(sb[0], sb[1], 3, sb[3]);
 
@@ -4085,7 +4127,7 @@ function startSession() {
   for (let f = 0; f < net.delay; f++) { net.local[f] = 0; net.remote[f] = 0; }
   app.cpu = null;
   app.pause = null;
-  app.sel = { cur: [0, 1], lock: [false, false], t: 0, cpuT: 0, prev: [0, 0] };
+  app.sel = { cur: [0, 1], lock: [false, false], skin: [false, false], t: 0, cpuT: 0, prev: [0, 0] };
   app.screen = "select";
   rollArena();
   document.getElementById("net").classList.remove("on");
@@ -4317,8 +4359,14 @@ function netPanel(open) {
    prototype of an economy, not an economy.
    ====================================================================== */
 const SAVE_KEY = "axiekick.save";
+/* Bump whenever the shape below changes. A save from an older build is dropped
+   rather than merged: Object.assign over the defaults quietly keeps fields that
+   no longer mean what they did, and chasing that during a playtest costs more
+   than the progress is worth. */
+const SAVE_V = 2;
 const SEASON_DAYS = 30;
 const save = {
+  v: SAVE_V,
   keys: 100,                 /* Nightmare Keys, handed out freely for the demo */
   pass: false,
   points: 0,
@@ -4331,14 +4379,26 @@ const save = {
   seen: { daily: 0, weekly: 0 }
 };
 
+const SAVE_DEFAULTS = JSON.parse(JSON.stringify(save));
+
 function loadSave() {
   try {
     const raw = JSON.parse(localStorage.getItem(SAVE_KEY) || "{}");
-    Object.assign(save, raw);
+    if (raw && raw.v === SAVE_V) Object.assign(save, raw);
   } catch (e) { }
+  save.v = SAVE_V;
   if (!save.seasonStart) save.seasonStart = Date.now();
   if (typeof save.keys !== "number") save.keys = 100;
   writeSave();
+}
+
+/* back to a first run, which is the state hardest to get to otherwise */
+function resetSave() {
+  Object.assign(save, JSON.parse(JSON.stringify(SAVE_DEFAULTS)));
+  save.seasonStart = Date.now();
+  try { localStorage.removeItem(SAVE_KEY); } catch (e) { }
+  writeSave();
+  rollChallenges();
 }
 function writeSave() {
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) { }
@@ -4514,11 +4574,17 @@ function keyCount(cx, cy, size, fs, col) {
 }
 
 /* the Nightmare Key, wherever it appears */
+/* The packed icon is 64x64 with a detached glint across its top 8 rows and
+   seven empty rows under that, which read as a smudge above the key at HUD
+   size. Draw from row 15 down. */
+const KEY_CROP = 15;
 function drawKey(cx, cy, size) {
   const im = ITEM_IMG.key;
   if (im && im.complete && im.naturalWidth) {
-    const w = size, h = w * (im.naturalHeight / im.naturalWidth);
-    ctx.drawImage(im, cx - w / 2, cy - h / 2, w, h);
+    const sy = Math.round(im.naturalHeight * (KEY_CROP / 64));
+    const sh = im.naturalHeight - sy;
+    const w = size, h = w * (sh / im.naturalWidth);
+    ctx.drawImage(im, 0, sy, im.naturalWidth, sh, cx - w / 2, cy - h / 2, w, h);
     return true;
   }
   return false;
@@ -5000,7 +5066,17 @@ function settingsRows() {
       act: () => { SETTINGS.shake = !SETTINGS.shake; saveSettings(); }
     },
     { label: "CONTROLS", value: "›", act: () => { app.pause.tab = "controls"; app.pause.cur = 0; } },
-    { label: "BACK", value: "", act: () => { app.pause.tab = "main"; app.pause.cur = 0; } }
+    {
+      label: "RESET PROGRESS",
+      value: app.pause.wipe ? "PRESS AGAIN" : "",
+      act: () => {
+        if (app.pause.wipe) {
+          resetSave(); app.pause.wipe = false;
+          passToast = { text: "PROGRESS RESET", t: 0 };
+        } else app.pause.wipe = true;
+      }
+    },
+    { label: "BACK", value: "", act: () => { app.pause.tab = "main"; app.pause.cur = 0; app.pause.wipe = false; } }
   ];
 }
 
@@ -5057,7 +5133,6 @@ function menuBack() {
     if (a.passList) { a.passList = false; SFX.move(); return true; }
     a.screen = "mode"; SFX.move(); return true;
   }
-  if (a.screen === "skins") { a.screen = "mode"; SFX.move(); return true; }
   if (a.screen === "select") { a.screen = "mode"; a.mode.prev = [IN_KICK, IN_KICK]; SFX.move(); return true; }
   if (a.screen === "stage") { a.screen = "select"; a.sel.lock = [false, false]; SFX.move(); return true; }
   if (a.screen === "augpick") { a.screen = "stage"; a.stage.prev = IN_KICK; SFX.move(); return true; }
@@ -5162,7 +5237,10 @@ function drawPause() {
       ctx.fillStyle = rgba(on ? "#F2D492" : "#8E7BD8", 0.9);
       ctx.fillRect(bx, y + 17, bw * SETTINGS[key], 8);
     }
-    hot(X, y, W, RH, () => { pz.cur = i; SFX.lock(); r.act(); }, () => { if (!pz.bind) pz.cur = i; });
+    hot(X, y, W, RH, () => {
+      if (pz.wipe && r.label !== "RESET PROGRESS") pz.wipe = false;
+      pz.cur = i; SFX.lock(); r.act();
+    }, () => { if (!pz.bind) pz.cur = i; });
   }
 }
 
@@ -5174,7 +5252,6 @@ const app = {
   vsAug: false,
   arc: { kind: "open", t: 0, prev: 0 },
   passList: false,
-  skinPrev: 0,
   tut: null,
   passPrev: 0,
   nightmare: false,
@@ -5186,7 +5263,7 @@ const app = {
   bg: 0,                           /* which Origins arena this match is fought in */
   stage: { cur: 9, prev: 0 },
   story: { t: 0, prev: 0 },
-  sel: { cur: [0, 1], lock: [false, false], t: 0, cpuT: 0, prev: [0, 0] },
+  sel: { cur: [0, 1], lock: [false, false], skin: [false, false], t: 0, cpuT: 0, prev: [0, 0] },
   m: null
 };
 
@@ -5194,7 +5271,7 @@ function selectTick(inp) {
   const sel = app.sel;
   const humans = app.cpu === null || app.arcade ? (app.arcade ? 1 : 2) : 1;
   if (app.arcade) {
-    if (sel.lock[0]) {
+    if (sel.lock[0] && !sel.skin[0]) {
       sel.t++;
       if (sel.t > 24) { run.prev = IN_KICK; arcadeStart(sel.cur[0]); }
     }
@@ -5211,6 +5288,7 @@ function selectTick(inp) {
   for (let i = 0; i < humans; i++) {
     const dive = (inp[i] & IN_DIVE) && !(sel.prev[i] & IN_DIVE);
     const kick = (inp[i] & IN_KICK) && !(sel.prev[i] & IN_KICK);
+    if (skinTick(i, dive, kick)) { sel.t = 0; sel.prev[i] = inp[i]; continue; }
     if (dive) {
       if (sel.lock[i]) { sel.lock[i] = false; SFX.move(); }
       else {
@@ -5218,9 +5296,13 @@ function selectTick(inp) {
         SFX.move();
       }
       sel.t = 0;
-    } else if (kick && !sel.lock[i]) { sel.lock[i] = true; SFX.lock(); sel.t = 0; }
+    } else if (kick && !sel.lock[i]) {
+      sel.lock[i] = true; SFX.lock(); sel.t = 0;
+      if (ownedCostumes(sel.cur[i]).length) sel.skin[i] = true;
+    }
     sel.prev[i] = inp[i];
   }
+  if (sel.skin[0] || sel.skin[1]) return;
   if (sel.lock[0] && sel.lock[1]) {
     sel.t++;
     if (sel.t > 36) {
@@ -5248,7 +5330,7 @@ function endChoose(isKick) {
     SFX.lock();
   } else {
     if (net.on) {
-      app.sel = { cur: app.sel.cur.slice(), lock: [false, false], t: 0, cpuT: 0, prev: [IN_DIVE, IN_DIVE] };
+      app.sel = { cur: app.sel.cur.slice(), lock: [false, false], skin: [false, false], t: 0, cpuT: 0, prev: [IN_DIVE, IN_DIVE] };
       app.screen = "select";
     } else {
       app.mode.prev = [IN_DIVE, IN_DIVE];
@@ -5286,8 +5368,6 @@ function runScreenTick(inp) {
     arcTick(inp);
   } else if (app.screen === "pass") {
     passTick(inp);
-  } else if (app.screen === "skins") {
-    skinsTick(inp);
   } else if (app.screen === "tutorial") {
     tutorialTick(inp);
   } else if (app.screen === "setup") {
@@ -5372,7 +5452,6 @@ function frame(now) {
   else if (app.screen === "augpick") drawAugPick(app.t);
   else if (app.screen === "arc") drawArcCard(app.t);
   else if (app.screen === "pass") drawPass(app.t);
-  else if (app.screen === "skins") drawSkins(app.t);
   else if (app.screen === "tutorial") drawTutorial(app.t);
   else if (app.screen === "story") drawStory(app.t);
   else if (app.screen === "ladder") drawLadder(app.t);
