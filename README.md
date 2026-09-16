@@ -51,8 +51,15 @@ two buttons, with dots showing what is left. **Augments** means each side drafts
 Land items before the bell; against the CPU you pick your own two and it takes two off
 whatever you left on the table.
 
-`Esc` → **SETTINGS** for master/music/SFX volume, the announcer, screen shake, and
-rebindable controls with a reset. Everything persists.
+**SETTINGS** is on the menu header, and on `Esc` in a fight: master/music/SFX volume,
+the announcer, screen shake, rebindable controls with a reset, and **RESET PROGRESS**
+behind a press-again confirm. Everything persists in `localStorage` under a schema
+version — a save from an older build is dropped rather than merged, because merging
+quietly keeps fields that no longer mean what they did.
+
+The game is desktop only and says so on a phone before you get stuck: a fight needs two
+buttons held at once and there are no touch controls yet, but the menus answer taps, so
+a phone could otherwise walk all the way to a match it cannot play.
 
 ### Stages
 
@@ -184,12 +191,13 @@ because the thresholds climb 10, 25, 45 … 400 while the nodes are evenly space
 - **Points are always yours.** Challenges pay whether or not you own the pass; what the
   pass unlocks is the right to *claim* the reward track. Buy it after a week of playing
   and every tier you already earned opens at once.
-- **One season**, always 30 days, one pass at $5 (free here). It also unlocks **Momo**.
+- **One season**, always 30 days, one pass. It also unlocks **Momo**.
 - **10 tiers** of rewards, each one rendered on the track as the thing you get: the
   Nightmare Key item, or the actual Axie wearing the skin. Five **skins** — a palette
   shift plus a face swap using the rig's own alternate eyes and mouths, so Ember Buba is
-  angry and Ruin Warden Venoki has his eyes shut. Equip them on the **SKINS** screen or
-  by clicking the chip on a character card.
+  angry and Ruin Warden Venoki has his eyes shut. A skin belongs to one Axie, so you pick
+  it where you pick that Axie: lock a character in on the roster and, if it owns
+  anything, its wardrobe takes over your half of the strip.
 - **Prize pool** on the main menu, ticking upward, captioned *leaderboard coming soon*.
   It is a seeded number plus whatever this machine "spent"; the code says so.
 
@@ -206,52 +214,74 @@ a deliberate cheat and the only one.
 
 ## Online
 
-Delay-based lockstep over a WebRTC data channel, with the offer and answer passed by
-hand. There is no signalling server, no lobby and nothing deployed — which also means
-nothing to stand up before a test and nothing to keep running after it.
+**Rollback netcode over a WebRTC data channel, with a matchmaking queue.**
 
-Both players open **https://immanuelskymavis.github.io/axiekick/**, then:
+Both players open the game, pick **PLAY ONLINE → QUEUE FOR A MATCH**, and get paired
+with whoever else is waiting. Whoever queued first hosts and is player 1. Once the data
+channel opens the match is peer to peer and the server sees nothing of it.
 
-1. One of you picks **PLAY ONLINE → HOST A MATCH** and sends the link it generates over
-   Slack. The host is player 1, on the left.
-2. The other opens that link. It joins automatically and produces a reply code.
-3. They send the reply code back; the host pastes it and hits **Connect**. You land on
-   character select together.
+### The matchmaker
 
-The invite lives in the URL fragment, which browsers never send to a server — so the
-"host" in "GitHub Pages hosting" only ever serves the same static file to both of you.
-It never sees a match. There is also a manual **JOIN A MATCH** box if you would rather
-paste the code than open a link.
+`tools/signal.mjs` — one file, no dependencies, same as the game. It hands every client
+the ICE config, pairs whoever is in the queue, relays offer/answer/candidates between
+that pair, and gets out of the way.
 
-Not the published Claude artifact, though: that page blocks the STUN lookup at the CSP
-level and falls back to host candidates only — fine for two laptops on one office wifi,
-useless between continents. The panel says so when it happens.
+```bash
+PORT=8787 node tools/signal.mjs
+```
 
-How it works, and what it costs:
+Then open the game with `?signal=ws://localhost:8787`, or set `SIGNAL_URL` in
+`game/index.html` when you deploy. With no server configured the queue button says so
+and the hand-pasted codes still work as the fallback.
 
-- Inputs for frame *F* are decided at frame *F − delay*. Both peers run the same
-  `step()` over the same input pairs, so neither ever has to send game state.
-- The host picks the delay from the round trip it can actually measure —
-  `round(rtt/2 / 16.7ms) + 2`, clamped to 3–14 frames — and tells the guest. Toronto to
-  Ho Chi Minh City is around 250ms, so expect **10 frames (~170ms) of input lag**. That
-  is the honest price of delay-based lockstep at that distance, and the reason rollback
-  is next: it needs nothing new from this transport, which already carries a full input
-  history.
+Players behind symmetric NAT — which is most corporate networks — need a TURN relay.
+The credentials live on the server, not in the page:
+
+```bash
+TURN_URL=turn:turn.example.com:3478 TURN_USER=axiekick TURN_PASS=secret \
+  PORT=8787 node tools/signal.mjs
+```
+
+Behind nginx or a load balancer, forward the `Upgrade` header and terminate TLS there;
+the game uses `wss://` whenever it is itself served over https.
+
+### The netcode
+
+Lockstep waited for the opponent's input before simulating anything, which is why the
+delay had to cover the whole round trip — about 170 ms Toronto to Ho Chi Minh City.
+Rollback never waits. It assumes the other side is still holding whatever they held
+last, simulates immediately, and when the truth arrives it rewinds to that frame and
+replays. The guess is right most frames, because two buttons do not change often.
+
+- A snapshot per frame, kept for 12 frames. `step()` is pure and the whole match state
+  is plain data, so a snapshot is one `structuredClone` — about 0.03 ms.
+- Delay is now 1–4 frames and pays only for how far ahead inputs are sent, not for the
+  round trip. Distance is absorbed by rewinding instead of by lag you can feel.
 - The channel is unordered and unreliable on purpose, and every packet re-sends the last
-  24 frames of input (12 bytes a tick), so a dropped datagram heals on the next tick
-  instead of stalling the match waiting for a retransmit.
+  24 frames of input (12 bytes a tick), so a dropped datagram heals on the next tick.
 - A state hash goes across every 30 frames. If the two ever disagree the HUD says
   `DESYNC @ frame` instead of quietly drifting.
-- Ping, delay, stall count and worst stall are on screen for the whole match.
+- Ping, delay, rollback count and stalls are on screen for the whole match.
 
-Verified end to end between two browser contexts over a real data channel: a full FT5
-match plus a rematch, 2,228 frames, 73 hash checkpoints, zero desyncs; and again through
-the link handshake, with STUN returning server-reflexive candidates, the host's chosen
-delay propagating to the guest, and both sides agreeing on every checkpoint.
+`tools/rollback-test.mjs` is the proof it is correct: it simulates 1,800 frames with
+both input streams known up front, then drives the same frames through `netTick()` with
+the remote stream arriving late, bursty and out of order, and compares the two. Five
+delivery patterns, up to 1,310 rollbacks and 1,796 mispredictions in a run, every one
+landing on the same state as perfect information.
 
-**Not yet verified across continents** — that test needs two people, and it is the one
-that matters. If it will not connect at all, the cause is NAT rather than netcode: add a
-TURN relay to the `ICE` list in `game/index.html` and try again.
+```bash
+node tools/rollback-test.mjs
+```
+
+Verified between two live browsers through the matchmaker: queue, pair, negotiate,
+connect, and a match at 926 frames with 8 hash checkpoints, zero desyncs, zero stalls.
+
+**Still not verified across continents** — that test needs two people and a deployed
+relay, and it is the one that matters.
+
+Not on the published Claude artifact either: that page blocks the STUN lookup at the CSP
+level and falls back to host candidates only — fine for two laptops on one office wifi,
+useless between continents. The panel says so when it happens.
 
 ## The art
 

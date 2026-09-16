@@ -38,6 +38,9 @@ const win = {
   addEventListener: noop, removeEventListener: noop, dispatchEvent: noop,
   requestAnimationFrame: noop, setTimeout: noop, clearTimeout: noop,
   performance: { now: () => Date.now() },
+  structuredClone,
+  URLSearchParams,
+  WebSocket: undefined,
   navigator: { getGamepads: () => [], clipboard: null },
   location: { href: "http://x/", origin: "http://x", pathname: "/", hash: "" },
   history: { replaceState: noop },
@@ -75,7 +78,7 @@ const expose = `
   save, CHALLENGES, COSTUMES, TIERS, activeChallenges, rollChallenges, track,
   trackStoryChar, buyPass, charLocked, prizePool, drawPass, drawTutorial,
   tutStart, tutorialTick, progressOf, checkChallenges, TUT_STEPS, PAIR_TALK,
-  say, claimTiers, ownedCostumes, woodPanel
+  say, claimTiers, ownedCostumes, woodPanel, net, netTick, netResync, snapTake, pairFor, MAX_ROLLBACK
 };`;
 
 const ctxv = vm.createContext(win);

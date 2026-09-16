@@ -104,6 +104,14 @@ kbd{
 .netstep.on{display:flex}
 #netwarn{display:none;border-left:2px solid #E0A159;background:rgba(224,161,89,.09);padding:9px 12px;color:#E9D3AE}
 #netwarn.on{display:block}
+#mmstat{
+  font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--moon);
+  background:#0B0916;border:1px solid var(--edge);padding:8px 10px;
+}
+#mmoff{display:none;border-left:2px solid #E0A159;background:rgba(224,161,89,.09);padding:9px 12px;color:#E9D3AE}
+#mmoff.on{display:block}
+#mmoff code{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--pale);background:#0B0916;padding:1px 5px}
+.netsep{border-top:1px solid var(--edge);padding-top:12px;margin-top:2px !important}
 #netwarn code{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--pale);background:#0B0916;padding:1px 5px}
 </style>
 
@@ -115,9 +123,19 @@ kbd{
 <div id="net">
   <div id="netbox">
     <h2>Play online</h2>
-    <p>No server: one of you hosts, the other joins, and you paste two codes at each other
-      over Slack. Inputs then go peer to peer.
-      <b>Host</b> is player 1 on the left.</p>
+    <p><b>Queue for a match</b> and the matchmaker pairs you with whoever else is waiting.
+      Inputs then go peer to peer; the server never sees the fight. Netcode is rollback,
+      so distance costs you correction rather than input lag.</p>
+    <div class="netrow">
+      <button id="mmqueue">Queue for a match</button>
+      <button id="mmcancel">Leave queue</button>
+    </div>
+    <div id="mmstat">idle</div>
+    <p id="mmoff"><b>No matchmaking server is configured for this build.</b> Run
+      <code>node tools/signal.mjs</code> and open the game with
+      <code>?signal=ws://localhost:8787</code>, or use the codes below.</p>
+    <p class="netsep">Or do it by hand: one of you hosts, the other joins, and you paste two
+      codes at each other. <b>Host</b> is player 1 on the left.</p>
     <p id="netwarn"><b>This page blocks the STUN lookup,</b> so it can only find an opponent
       on the same network as you. For an opponent on the internet, both of you need to run
       the game from your own machine: <code>python3 -m http.server 8123</code> in the repo,
@@ -3956,12 +3974,24 @@ function drawSelect(sel, t) {
 const HASH_KEY = "#h=";
 const NET_WINDOW = 24;          /* frames of input history in every packet */
 const HASH_EVERY = 30;          /* desync canary cadence */
-const ICE = [{ urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] }];
+let ICE = [{ urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] }];
+
+/* Where the matchmaker lives. Point it somewhere with ?signal=wss://host, or
+   set this constant when you deploy. tools/signal.mjs is the server; it hands
+   back its own ICE list on connect, so TURN credentials stay off this page. */
+const SIGNAL_URL = (function () {
+  try {
+    const q = new URLSearchParams(location.search).get("signal");
+    if (q) return q;
+  } catch (e) { }
+  return "";        /* empty = matchmaking off, manual codes still work */
+})();
 
 const net = {
-  on: false, role: null, pc: null, ch: null,
-  frame: 0, delay: 5, seed: 1,
-  local: [], remote: [],
+  on: false, role: null, pc: null, ch: null, ws: null, queued: false,
+  frame: 0, delay: 2, seed: 1,
+  local: [], remote: [], used: [], predict: 0,
+  snaps: new Map(), rollbacks: 0, worstRollback: 0, rbLost: 0,
   stall: 0, stalls: 0, worstStall: 0,
   rtt: 0, pingSent: 0, lastPing: 0, rttPeak: 0, lastTune: 0,
   hashes: new Map(), peerHashes: new Map(), desyncAt: -1,
@@ -4117,11 +4147,98 @@ async function netJoin(code) {
   } catch (e) { netSay("could not join: " + e.message); }
 }
 
+/* ---- matchmaking ---------------------------------------------------------
+   Queue up, get handed an opponent, and let the two ends negotiate on their
+   own. The hand-pasted codes below still work and are still the fallback when
+   there is no server to talk to, but nobody should have to use them to test.
+   The server also hands down the ICE list, TURN included, which is the part
+   that actually decides whether two offices can connect. */
+function mmSay(msg) {
+  netSay(msg);
+  const el = document.getElementById("mmstat");
+  if (el) el.textContent = msg;
+}
+
+function mmClose() {
+  if (net.ws) { try { net.ws.close(); } catch (e) { } net.ws = null; }
+  net.queued = false;
+}
+
+function mmSend(obj) {
+  if (net.ws && net.ws.readyState === 1) net.ws.send(JSON.stringify(obj));
+}
+
+function mmQueue() {
+  if (!SIGNAL_URL) { mmSay("no matchmaking server configured — use a code below"); return; }
+  if (net.ws && net.ws.readyState === 1) { mmSend({ t: "queue" }); return; }
+  netTeardown();
+  mmSay("connecting to matchmaking…");
+  let ws;
+  try { ws = net.ws = new WebSocket(SIGNAL_URL); }
+  catch (e) { mmSay("could not reach matchmaking: " + e.message); return; }
+
+  ws.onopen = () => { mmSay("looking for an opponent…"); mmSend({ t: "queue" }); };
+  ws.onerror = () => mmSay("matchmaking unreachable — use a code below");
+  ws.onclose = () => { net.queued = false; if (!net.on) mmSay("matchmaking closed"); };
+  ws.onmessage = async e => {
+    let m; try { m = JSON.parse(e.data); } catch (err) { return; }
+    if (m.t === "hello" && m.ice) ICE = m.ice;
+    else if (m.t === "queued") { net.queued = true; mmSay("in the queue…"); }
+    else if (m.t === "match") { if (m.ice) ICE = m.ice; await mmStart(m.role); }
+    else if (m.t === "sdp") await mmSdp(m.sdp);
+    else if (m.t === "ice" && net.pc && m.cand) {
+      try { await net.pc.addIceCandidate(m.cand); } catch (err) { }
+    } else if (m.t === "peer-left") {
+      if (!net.on) mmSay("they left — queue again");
+    }
+  };
+}
+
+/* With a relay in the middle there is somewhere to trickle to, so candidates
+   go out as they are found rather than waiting for the whole set. */
+function mmTrickle(pc) {
+  pc.onicecandidate = e => { if (e.candidate) mmSend({ t: "ice", cand: e.candidate.toJSON() }); };
+}
+
+async function mmStart(role) {
+  net.role = role;
+  net.pc = null;
+  const pc = net.pc = newPeer();
+  mmTrickle(pc);
+  if (role === "host") {
+    net.seed = (Math.random() * 0x7fffffff) | 0;
+    wireChannel(pc.createDataChannel("in", { ordered: false, maxRetransmits: 0 }));
+    await pc.setLocalDescription(await pc.createOffer());
+    mmSend({ t: "sdp", sdp: { type: "offer", sdp: pc.localDescription.sdp, seed: net.seed } });
+    mmSay("opponent found — connecting…");
+  } else {
+    pc.ondatachannel = e => wireChannel(e.channel);
+    mmSay("opponent found — connecting…");
+  }
+}
+
+async function mmSdp(sdp) {
+  const pc = net.pc;
+  if (!pc || !sdp) return;
+  try {
+    if (sdp.type === "offer") {
+      net.seed = sdp.seed | 0;
+      await pc.setRemoteDescription({ type: "offer", sdp: sdp.sdp });
+      await pc.setLocalDescription(await pc.createAnswer());
+      mmSend({ t: "sdp", sdp: { type: "answer", sdp: pc.localDescription.sdp } });
+    } else if (sdp.type === "answer") {
+      await pc.setRemoteDescription({ type: "answer", sdp: sdp.sdp });
+    }
+  } catch (e) { mmSay("negotiation failed: " + e.message); }
+}
+
 /* ---- session ---- */
 function startSession() {
+  mmClose();
   net.on = true;
   net.frame = 0;
-  net.local = []; net.remote = [];
+  net.local = []; net.remote = []; net.used = []; net.predict = 0;
+  net.snaps.clear(); net.rollbacks = 0; net.worstRollback = 0; net.rbLost = 0;
   net.stall = 0; net.stalls = 0; net.worstStall = 0;
   net.hashes.clear(); net.peerHashes.clear(); net.desyncAt = -1;
   for (let f = 0; f < net.delay; f++) { net.local[f] = 0; net.remote[f] = 0; }
@@ -4182,8 +4299,11 @@ function netTuneDelay() {
   const f = net.frame;
   if (f - net.lastTune < 180) return;
   net.lastTune = f;
+  /* With rollback the delay is no longer paying for the round trip, only for
+     how far ahead we send. One or two frames keeps the prediction short
+     without adding lag you can feel; distance is absorbed by rewinding. */
   const half = Math.max(net.rtt, net.rttPeak) / 2;
-  const want = Math.min(14, Math.max(3, Math.round(half / (1000 / 60)) + 2));
+  const want = Math.min(4, Math.max(1, Math.round(half / (1000 / 60) / 3)));
   net.rttPeak = net.rtt;
   if (want === net.delay) return;
   net.delay = want;
@@ -4239,7 +4359,62 @@ function stateHash(s) {
   return h >>> 0;
 }
 
-/* One networked tick. Returns the input pair to run, or null to stall. */
+/* ---- rollback ------------------------------------------------------------
+   Lockstep waited for the opponent's input before simulating anything, which
+   is why the delay had to cover the whole round trip. Rollback never waits: it
+   guesses the other side is still holding whatever they held last, simulates
+   immediately, and when the truth turns up it rewinds to that frame and
+   replays. The guess is right most frames - two buttons do not change often -
+   and when it is wrong nobody sees more than a few frames of correction.
+
+   This works because step() is pure and the whole match state is plain data,
+   so a frame costs one structuredClone (about 0.03 ms here). */
+const MAX_ROLLBACK = 12;
+
+function snapTake(f) {
+  if (!app.m) return;
+  net.snaps.set(f, structuredClone(app.m));
+  const floor = f - MAX_ROLLBACK;
+  for (const k of net.snaps.keys()) if (k < floor) net.snaps.delete(k);
+}
+
+function pairFor(f) {
+  const mine = net.local[f];
+  /* nothing from them yet: assume they are still doing what they were */
+  const theirs = net.remote[f] === undefined ? net.predict : net.remote[f];
+  net.used[f] = theirs;
+  return net.role === "host" ? [mine, theirs] : [theirs, mine];
+}
+
+/* Replay from the earliest frame we guessed wrong. Returns frames replayed. */
+function netResync() {
+  let bad = -1;
+  const floor = Math.max(0, net.frame - MAX_ROLLBACK);
+  for (let f = floor; f < net.frame; f++) {
+    const real = net.remote[f], used = net.used[f];
+    /* only frames this client actually simulated can be wrong; the handful
+       seeded at the start of a session were never predicted */
+    if (used !== undefined && real !== undefined && used !== real) { bad = f; break; }
+  }
+  if (bad < 0) return 0;
+  const snap = net.snaps.get(bad);
+  if (!snap) { net.rbLost++; return 0; }
+
+  app.m = structuredClone(snap);
+  const to = net.frame;
+  for (let f = bad; f < to; f++) {
+    snapTake(f);
+    const pair = pairFor(f);
+    for (const e of step(app.m, pair[0], pair[1])) void e;   /* replayed, not re-heard */
+  }
+  net.rollbacks++;
+  const n = to - bad;
+  if (n > net.worstRollback) net.worstRollback = n;
+  return n;
+}
+
+/* One networked tick. Always returns a pair; rollback never stalls unless the
+   opponent has been silent longer than we can rewind. */
 function netTick(localMask) {
   const target = net.frame + net.delay;
   if (net.local[target] === undefined) net.local[target] = localMask;
@@ -4249,16 +4424,27 @@ function netTick(localMask) {
   if (now - net.lastPing > 500) { net.lastPing = now; netPing(3, now); }
   netTuneDelay();
 
-  const mine = net.local[net.frame], theirs = net.remote[net.frame];
-  if (mine === undefined || theirs === undefined) {
+  netResync();
+
+  const mine = net.local[net.frame];
+  if (mine === undefined) return null;          /* our own input, always known */
+
+  /* if they have been quiet longer than we can rewind, stop rather than build
+     a prediction we could never correct */
+  const oldest = net.frame - MAX_ROLLBACK;
+  if (oldest >= 0 && net.remote[oldest] === undefined) {
     net.stall++;
     if (net.stall > net.worstStall) net.worstStall = net.stall;
     if (net.stall === 1) net.stalls++;
     return null;
   }
   net.stall = 0;
+
+  snapTake(net.frame);
+  const pair = pairFor(net.frame);
+  if (net.remote[net.frame] !== undefined) net.predict = net.remote[net.frame];
   net.frame++;
-  return net.role === "host" ? [mine, theirs] : [theirs, mine];
+  return pair;
 }
 
 function netAfterTick() {
@@ -4287,7 +4473,8 @@ function drawNetHUD() {
   ctx.strokeRect(x + 0.5, y + 0.5, w - 1, 51);
   const col = bad ? "#FF5470" : "#7CF0B4";
   txt((net.role === "host" ? "HOST · P1" : "GUEST · P2"), x + 10, y + 16, -10.5, col, "left", FM, 1.5);
-  txt("ping " + net.rtt + " ms   delay " + net.delay + "f", x + 10, y + 31, -10.5,
+  txt("ping " + net.rtt + " ms   delay " + net.delay + "f   rb " + net.rollbacks,
+    x + 10, y + 31, -10.5,
     rgba("#E7E3FB", 0.75), "left", FM);
   txt(bad ? "DESYNC @ " + net.desyncAt : "stalls " + net.stalls + "  worst " + net.worstStall + "f",
     x + 10, y + 45, -10.5, bad ? "#FF5470" : rgba("#E7E3FB", 0.5), "left", FM);
@@ -4318,8 +4505,12 @@ function netPanel(open) {
     document.getElementById("step-join").classList.remove("on");
     document.getElementById("hostcode").value = "";
     document.getElementById("joincode").value = "";
-    netSay(netProbe() ? "choose host or join" : "this page cannot reach a STUN server");
-  }
+    document.getElementById("mmoff").classList.toggle("on", !SIGNAL_URL);
+    document.getElementById("mmcancel").disabled = true;
+    mmSay(netProbe()
+      ? (SIGNAL_URL ? "ready — queue for a match" : "no matchmaking server for this build")
+      : "this page cannot reach a STUN server");
+  } else mmClose();
 }
 (function () {
   const $ = id => document.getElementById(id);
@@ -4327,9 +4518,14 @@ function netPanel(open) {
     $("step-host").classList.toggle("on", which === "host");
     $("step-join").classList.toggle("on", which === "join");
   };
+  $("mmqueue").onclick = () => { show(null); $("mmcancel").disabled = false; mmQueue(); };
+  $("mmcancel").onclick = () => {
+    mmSend({ t: "cancel" }); mmClose(); $("mmcancel").disabled = true;
+    mmSay("left the queue");
+  };
   $("nethost").onclick = () => { show("host"); netHost(); };
   $("netjoin").onclick = () => { show("join"); netSay("paste the host's code"); };
-  $("netclose").onclick = () => { netPanel(false); netTeardown(); };
+  $("netclose").onclick = () => { netPanel(false); mmClose(); netTeardown(); };
   $("makeanswer").onclick = () => netJoin($("offerin").value);
   $("acceptanswer").onclick = () => netTakeAnswer($("answerin").value);
   const copy = async el => {
