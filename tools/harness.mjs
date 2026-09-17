@@ -78,7 +78,7 @@ const expose = `
   save, CHALLENGES, COSTUMES, TIERS, activeChallenges, rollChallenges, track,
   trackStoryChar, buyPass, charLocked, prizePool, drawPass, drawTutorial,
   tutStart, tutorialTick, progressOf, checkChallenges, TUT_STEPS, PAIR_TALK,
-  say, claimTiers, ownedCostumes, woodPanel, net, netTick, netResync, snapTake, pairFor, MAX_ROLLBACK
+  say, claimTiers, ownedCostumes, woodPanel, drawLobby, lobbyOpen, lobbyTick, lobbyBot, ccu, net, netTick, netResync, snapTake, pairFor, MAX_ROLLBACK
 };`;
 
 const ctxv = vm.createContext(win);

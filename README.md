@@ -209,16 +209,34 @@ of this for a while; it read as clutter at menu density, and its border covered 
 were quietly fighting their own frame. The Origins art that carries meaning stays — the
 ladder nodes, the augment medallions and their avatar rings, the Nightmare Key.
 
-Ranked matchmaking does not exist, so for the demo a CPU match counts as ranked. That is
-a deliberate cheat and the only one.
+Ranked matchmaking does not exist, so for the demo a CPU match counts as ranked. That,
+and the bot that stands in when the online queue comes up empty, are the two deliberate
+cheats in the build.
 
 ## Online
 
 **Rollback netcode over a WebRTC data channel, with a matchmaking queue.**
 
-Both players open the game, pick **PLAY ONLINE → QUEUE FOR A MATCH**, and get paired
-with whoever else is waiting. Whoever queued first hosts and is player 1. Once the data
-channel opens the match is peer to peer and the server sees nothing of it.
+**PLAY ONLINE** drops you in a lobby: your fighter on a plinth, the player count, and
+four doors — **FIGHT**, **CHANGE FIGHTER**, **CUSTOM MATCH**, **BACK**. Pick your Axie
+and its skin here rather than after connecting, so the match starts the moment an
+opponent turns up. FIGHT queues you; the panel becomes a timer with an estimate, and
+when somebody is found the screen says **NEW CHALLENGER APPROACHES** and the fight
+begins. Whoever queued first hosts and is player 1.
+
+Each side sends its pick down the data channel, and the host names a frame both sides
+have already reached for the match to begin on — starting when the message happens to
+land is wall clock, and the two ends would begin on different frames and desync inside a
+second.
+
+**If nobody turns up within 24 seconds you are matched against a bot** playing at
+Lunacian or Nightmare, under a handle, with no CPU tag in the HUD. This is a deliberate
+cheat for a demo with no player base, and the second one in the build after ranked
+counting CPU matches. It is here so a tester who presses FIGHT gets a fight.
+
+**CUSTOM MATCH** opens the old hand-pasted flow: one of you hosts, the other joins, and
+you trade two codes. No server needed, which is what makes it the fallback when there is
+nothing deployed.
 
 ### The matchmaker
 

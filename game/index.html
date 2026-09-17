@@ -1859,7 +1859,7 @@ function drawArena(i) {
   return true;
 }
 
-const MENU_SCREENS = ["title", "mode", "setup", "select", "ladder", "draft", "runend", "stage", "story", "augpick", "arc", "pass"];
+const MENU_SCREENS = ["title", "mode", "setup", "lobby", "select", "ladder", "draft", "runend", "stage", "story", "augpick", "arc", "pass"];
 
 /* Nightmare Story runs under a violet wash, so which one you are in is obvious
    from across the room rather than something you read off the HUD. */
@@ -3337,7 +3337,7 @@ function drawHUD(s) {
   txt(c0.name, 26, 36, 26, c0.col, "left", FD, 1);
   txt("P1 · " + c0.cls, 26, 56, 11, rgba("#E7E3FB", 0.55), "left", FM, 1.2);
   txt(c1.name, STAGE_W - 26, 36, 26, col1, "right", FD, 1);
-  txt(c1.cls + " · " + (s.cpu ? "CPU " + DIFFS[s.cpu.diff].name : "P2"),
+  txt(c1.cls + " · " + (s.foeName ? s.foeName : s.cpu ? "CPU " + DIFFS[s.cpu.diff].name : "P2"),
     STAGE_W - 26, 56, 11, rgba("#E7E3FB", 0.55), "right", FM, 1.2);
 
   for (let i = 0; i < 2; i++) {
@@ -3801,7 +3801,7 @@ function setupTick(inp) {
 
 function modeConfirm() {
   const m = MODES[app.mode.cur];
-  if (m.key === "net") { netPanel(true); return; }
+  if (m.key === "net") { SFX.lock(); lobbyOpen(); return; }
   if (m.rack) { setupStart(m.rack); return; }
   startChosenMode();
 }
@@ -3991,7 +3991,7 @@ const net = {
   on: false, role: null, pc: null, ch: null, ws: null, queued: false,
   frame: 0, delay: 2, seed: 1,
   local: [], remote: [], used: [], predict: 0,
-  snaps: new Map(), rollbacks: 0, worstRollback: 0, rbLost: 0,
+  snaps: new Map(), rollbacks: 0, worstRollback: 0, rbLost: 0, peerPick: null, sentPick: false, matchAt: 0,
   stall: 0, stalls: 0, worstStall: 0,
   rtt: 0, pingSent: 0, lastPing: 0, rttPeak: 0, lastTune: 0,
   hashes: new Map(), peerHashes: new Map(), desyncAt: -1,
@@ -4147,6 +4147,245 @@ async function netJoin(code) {
   } catch (e) { netSay("could not join: " + e.message); }
 }
 
+/* --- the online lobby -----------------------------------------------------
+   PLAY ONLINE used to open a modal full of base64 boxes, which is a transport
+   detail wearing a menu's clothes. You now stand in a lobby with the fighter
+   you will actually use, press FIGHT, and wait. Hosting by hand is still
+   there, behind CUSTOM MATCH, for two people on one network with no server.
+
+   Fighter and skin are chosen here rather than after connecting, so the match
+   starts the moment an opponent is found. Each side sends its pick down the
+   data channel and both build the same match from the same seed. */
+/* Queue length is wall clock, not frames: it is what the player is actually
+   waiting through, and a tab that stalls and catches up should not burn it. */
+const BOT_AFTER_MS = 24000;
+const FOE_NAMES = [
+  "RuinWalker", "axie_andy", "PlantDad", "nocturne", "Kestrel", "tofu_bandit",
+  "MysticMitch", "SevenLeaf", "bird_law", "Quillon", "Sunfish", "lunacian_lo"
+];
+
+/* A number that moves like a player count and is honest about being a prop:
+   it is the clock and a hash, the same as the prize pool. */
+function ccu() {
+  const day = Math.floor(Date.now() / 86400000);
+  const base = 180 + ((day * 2654435761) >>> 0) % 90;
+  const hour = new Date().getHours();
+  const peak = 1 + 0.55 * Math.sin((hour - 6) / 24 * Math.PI * 2);
+  return Math.max(24, Math.round(base * peak));
+}
+
+function lobbyOpen() {
+  if (!app.lobby) app.lobby = { at: "idle", t: 0, cur: 0, prev: [IN_KICK, IN_KICK], foe: null };
+  app.lobby.at = "idle";
+  app.lobby.t = 0;
+  app.lobby.prev = [IN_KICK, IN_KICK];
+  app.screen = "lobby";
+}
+
+function lobbyRows() {
+  return [
+    { label: "FIGHT", col: "#7CF0B4", act: lobbyFight },
+    { label: "CHANGE FIGHTER", col: "#E7E3FB", act: lobbyPickFighter },
+    { label: "CUSTOM MATCH", col: "#9FB4D8", act: () => { SFX.lock(); netPanel(true); } },
+    { label: "BACK", col: "#8E7BD8", act: () => { SFX.move(); menuBack(); } }
+  ];
+}
+
+function lobbyPickFighter() {
+  SFX.lock();
+  app.sel = {
+    cur: [save.onlineCh || 0, 1], lock: [false, false], skin: [false, false],
+    t: 0, cpuT: 0, prev: [IN_KICK, IN_KICK], forLobby: true
+  };
+  app.screen = "select";
+}
+
+function lobbyFight() {
+  const lb = app.lobby;
+  lb.at = "queue";
+  lb.t = 0;
+  lb.since = Date.now();
+  lb.foe = null;
+  SFX.lock();
+  if (SIGNAL_URL) mmQueue();
+}
+
+function lobbyCancel() {
+  app.lobby.at = "idle";
+  app.lobby.t = 0;
+  mmSend({ t: "cancel" });
+  mmClose();
+  netTeardown();
+  SFX.move();
+}
+
+/* Nobody is out there, so give them somebody. The opponent is a CPU wearing a
+   handle; the HUD does not say CPU and the difficulty is one of the two that
+   can actually hold a rally. Documented in the README rather than hidden. */
+function lobbyBot() {
+  const lb = app.lobby;
+  mmSend({ t: "cancel" });
+  mmClose();
+  netTeardown();
+  const pool = CHARS.map((c, i) => i).filter(i => !charLocked(i));
+  const foeCh = pool[Math.floor(Math.random() * pool.length)];
+  lb.foe = {
+    ch: foeCh,
+    name: FOE_NAMES[Math.floor(Math.random() * FOE_NAMES.length)],
+    diff: Math.random() < 0.6 ? 2 : 3,
+    bot: true
+  };
+  lb.at = "found";
+  lb.t = 0;
+  say("fight", 2);
+}
+
+function lobbyStartMatch() {
+  const lb = app.lobby, foe = lb.foe;
+  const mine = save.onlineCh || 0;
+  if (foe.bot) {
+    app.cpu = foe.diff;
+    app.arcade = false; app.vsAug = false;
+    app.m = newMatch(mine, foe.ch, foe.diff, (Math.random() * 1e6) | 0);
+    app.m.foeName = foe.name;          /* the HUD shows a handle, not a tier */
+    trails[0].length = 0; trails[1].length = 0;
+    rollArena();
+    app.screen = "match";
+    return;
+  }
+  /* a real opponent: the host is player 1 and both sides already agreed */
+  app.cpu = null;
+  const host = net.role === "host";
+  app.m = newMatch(host ? mine : foe.ch, host ? foe.ch : mine, null, net.seed);
+  app.m.foeName = foe.name;
+  trails[0].length = 0; trails[1].length = 0;
+  rollArena();
+  app.screen = "match";
+}
+
+function drawLobby(t) {
+  drawStage(null);
+  ctx.fillStyle = rgba("#08070F", 0.72); ctx.fillRect(0, 0, STAGE_W, STAGE_H);
+  drawMenuHeader(t);
+  const lb = app.lobby, chIdx = save.onlineCh || 0, c = CHARS[chIdx];
+
+  txt("ONLINE", STAGE_W / 2, 126, 30, "#E7E3FB", "center", FD, 12);
+  txt(ccu().toLocaleString("en-US") + " FIGHTERS ONLINE", STAGE_W / 2, 146, -10.5,
+    rgba("#7CF0B4", 0.7), "center", FM, 4);
+
+  /* your fighter, on a plinth, left of centre */
+  const PX = 300, PY = 400;
+  ctx.save();
+  const g = ctx.createRadialGradient(PX, PY - 6, 6, PX, PY - 6, 120);
+  g.addColorStop(0, rgba(c.col, 0.3)); g.addColorStop(1, rgba(c.col, 0));
+  ctx.fillStyle = g; ctx.fillRect(PX - 130, PY - 130, 260, 150);
+  ctx.restore();
+  ctx.fillStyle = rgba(c.col, 0.5);
+  ctx.beginPath(); ctx.ellipse(PX, PY + 2, 78, 12, 0, 0, 7); ctx.fill();
+  drawAxie(
+    { ch: chIdx, x: 0, y: 0, st: "stand", t: 30, facing: 1, inflate: 0, spin: 0, vx: 0, vy: 0,
+      dead: false, cos: (save.equipped || {})[chIdx] || null },
+    c, { portrait: true, px: PX, py: PY + Math.sin(t * 0.045) * 4, scale: 1.15,
+      anim: c.anim.idle, animT: t / 60 }
+  );
+  txt(c.name, PX, PY + 42, 30, c.col, "center", FD, 3);
+  const eq = (save.equipped || {})[chIdx];
+  txt(c.cls + (eq ? " · " + COS[eq].name : ""), PX, PY + 62, -11,
+    rgba("#E7E3FB", 0.5), "center", FM, 3);
+
+  const RX = 604, RW = 320;
+  if (lb.at === "idle") {
+    const rows = lobbyRows();
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i], y = 200 + i * 62, on = lb.cur === i;
+      const over = hovered(RX, y, RW, 50);
+      woodPanel(RX, y, RW, 50, {
+        ink: on || over ? "#231A4A" : "#140F2A", inkA: 0.96,
+        rim: r.col, glow: on || over ? r.col : null
+      });
+      fitTxt(r.label, RX + RW / 2, y + 32, RW - 30, i === 0 ? 24 : 19,
+        on || over ? r.col : rgba("#E7E3FB", 0.75), "center", FD, 3);
+      hot(RX, y, RW, 50, () => { lb.cur = i; r.act(); }, () => { lb.cur = i; });
+    }
+    drawHints(STAGE_W / 2, STAGE_H - 22, [["DIVE", "MOVE"], ["KICK", "CONFIRM"], ["ESC", "BACK"]]);
+    return;
+  }
+
+  if (lb.at === "queue") {
+    const secs = (Date.now() - lb.since) / 1000;
+    const est = Math.max(4, Math.round(26 - Math.min(18, ccu() / 16)));
+    woodPanel(RX, 200, RW, 174, { ink: "#140F2A", inkA: 0.96, accent: "#7CF0B4" });
+    txt("SEARCHING", RX + RW / 2, 238, 26, "#7CF0B4", "center", FD, 6);
+    const dots = ".".repeat(1 + (Math.floor(lb.t / 24) % 3));
+    txt(dots, RX + RW / 2 + 84, 238, 26, "#7CF0B4", "left", FD, 2);
+
+    const mm = Math.floor(secs / 60), ss = Math.floor(secs % 60);
+    txt(mm + ":" + String(ss).padStart(2, "0"), RX + RW / 2, 288, 40, "#E7E3FB", "center", FM, 3);
+    txt("ESTIMATED " + est + "S", RX + RW / 2, 310, -10.5, rgba("#E7E3FB", 0.45), "center", FM, 3);
+
+    /* a bar that fills toward the point where we stop waiting */
+    const bw = RW - 48, bx = RX + 24;
+    ctx.fillStyle = rgba("#08070F", 0.8); ctx.fillRect(bx, 326, bw, 5);
+    ctx.fillStyle = rgba("#7CF0B4", 0.85);
+    ctx.fillRect(bx, 326, bw * Math.min(1, (Date.now() - lb.since) / BOT_AFTER_MS), 5);
+
+    woodButton(RX + 24, 344, RW - 48, 26, "CANCEL", "#FF6E7F", () => lobbyCancel());
+    drawHints(STAGE_W / 2, STAGE_H - 22, [["KICK", "CANCEL"], ["ESC", "CANCEL"]]);
+    return;
+  }
+
+  /* found: the other Axie walks on and the banner lands */
+  const foe = lb.foe, fc = CHARS[foe.ch];
+  const k = Math.min(1, lb.t / 18);
+  const fx = 700 + (1 - k) * 220;
+  ctx.save();
+  ctx.globalAlpha = k;
+  drawAxie(
+    { ch: foe.ch, x: 0, y: 0, st: "stand", t: 30, facing: -1, inflate: 0, spin: 0, vx: 0, vy: 0, dead: false },
+    fc, { portrait: true, px: fx, py: PY + Math.sin(t * 0.045 + 2) * 4, scale: 1.15,
+      anim: fc.anim.idle, animT: t / 60 + 1 }
+  );
+  txt(foe.name, fx, PY + 42, 24, fc.col, "center", FD, 2);
+  txt(fc.name, fx, PY + 62, -11, rgba("#E7E3FB", 0.5), "center", FM, 3);
+  ctx.restore();
+
+  const bk = Math.min(1, lb.t / 12);
+  ctx.save();
+  ctx.translate(STAGE_W / 2, 214);
+  ctx.scale(1.5 - 0.5 * bk, 1.5 - 0.5 * bk);
+  ctx.globalAlpha = bk;
+  ctx.fillStyle = rgba("#08070F", 0.72); ctx.fillRect(-STAGE_W / 2, -34, STAGE_W, 62);
+  txt("NEW CHALLENGER", 0, 0, 40, "#FFD98A", "center", FD, 10);
+  txt("APPROACHES", 0, 22, 18, rgba("#E7E3FB", 0.8), "center", FM, 8);
+  ctx.restore();
+}
+
+function lobbyTick(inp) {
+  const lb = app.lobby;
+  const m = inp[0] | inp[1];
+  const dive = (m & IN_DIVE) && !(lb.prev[0] & IN_DIVE);
+  const kick = (m & IN_KICK) && !(lb.prev[0] & IN_KICK);
+  lb.prev[0] = m;
+  lb.t++;
+
+  if (lb.at === "found") {
+    if (lb.foe && lb.foe.bot) { if (lb.t > 96) lobbyStartMatch(); return; }
+    /* a real opponent starts on the frame the host named, not when we feel
+       like it - both sides are counting the same frames */
+    if (net.matchAt && net.frame >= net.matchAt) lobbyStartMatch();
+    return;
+  }
+  if (lb.at === "queue") {
+    if (kick) { lobbyCancel(); return; }
+    /* nobody showed up: stop waiting and give them a fight */
+    if (Date.now() - lb.since >= BOT_AFTER_MS) lobbyBot();
+    return;
+  }
+  const rows = lobbyRows();
+  if (dive) { lb.cur = (lb.cur + 1) % rows.length; SFX.move(); }
+  else if (kick) rows[lb.cur].act();
+}
+
 /* ---- matchmaking ---------------------------------------------------------
    Queue up, get handed an opponent, and let the two ends negotiate on their
    own. The hand-pasted codes below still work and are still the fallback when
@@ -4244,12 +4483,58 @@ function startSession() {
   for (let f = 0; f < net.delay; f++) { net.local[f] = 0; net.remote[f] = 0; }
   app.cpu = null;
   app.pause = null;
-  app.sel = { cur: [0, 1], lock: [false, false], skin: [false, false], t: 0, cpuT: 0, prev: [0, 0] };
-  app.screen = "select";
-  rollArena();
   document.getElementById("net").classList.remove("on");
   netSay("connected");
   audioWake();
+
+  /* Queued from the lobby both sides already have a fighter, so trade picks
+     and start; the hand-pasted flow still meets on the shared roster. */
+  if (app.screen === "lobby" && app.lobby && app.lobby.at === "queue") {
+    net.peerPick = null; net.sentPick = false; net.matchAt = 0;
+    netSendPick();
+    return;
+  }
+  app.sel = { cur: [0, 1], lock: [false, false], skin: [false, false], t: 0, cpuT: 0, prev: [0, 0] };
+  app.screen = "select";
+  rollArena();
+}
+
+/* kind 6: which Axie I am fighting as, and what I call myself */
+function netSendPick() {
+  if (!net.ch || net.ch.readyState !== "open" || net.sentPick) return;
+  net.sentPick = true;
+  const name = (save.handle || FOE_NAMES[(net.seed >>> 3) % FOE_NAMES.length]).slice(0, 12);
+  const bytes = new TextEncoder().encode(name);
+  const v = new DataView(new ArrayBuffer(3 + bytes.length));
+  v.setUint8(0, 6);
+  v.setUint8(1, save.onlineCh || 0);
+  v.setUint8(2, bytes.length);
+  for (let i = 0; i < bytes.length; i++) v.setUint8(3 + i, bytes[i]);
+  try { net.ch.send(v.buffer); } catch (e) { }
+}
+
+/* Both picks in hand. The two sides cannot start when the message happens to
+   land - that is wall clock, and they would begin on different frames and
+   desync immediately. The host names a frame both will already have reached,
+   and both start on it. */
+function netPickReady() {
+  if (!net.peerPick || !app.lobby || app.lobby.at !== "queue") return;
+  app.lobby.foe = { ch: net.peerPick.ch, name: net.peerPick.name, bot: false };
+  app.lobby.at = "found";
+  app.lobby.t = 0;
+  if (net.role === "host") {
+    net.matchAt = net.frame + 150;
+    netSendStart(net.matchAt);
+  }
+  say("fight", 2);
+}
+
+/* kind 7: the frame the fight begins on */
+function netSendStart(at) {
+  if (!net.ch || net.ch.readyState !== "open") return;
+  const v = new DataView(new ArrayBuffer(5));
+  v.setUint8(0, 7); v.setUint32(1, at >>> 0);
+  try { net.ch.send(v.buffer); } catch (e) { }
 }
 
 function netTeardown() {
@@ -4341,6 +4626,15 @@ function netRecv(v) {
     if (net.rtt > net.rttPeak) net.rttPeak = net.rtt;
   } else if (kind === 5) {
     net.delay = v.getUint8(1);            /* the host sets the pace */
+  } else if (kind === 6) {
+    const n = v.getUint8(2), b = new Uint8Array(n);
+    for (let i = 0; i < n; i++) b[i] = v.getUint8(3 + i);
+    net.peerPick = { ch: v.getUint8(1), name: new TextDecoder().decode(b) || "opponent" };
+    netSendPick();                        /* they may have asked first */
+    netPickReady();
+  } else if (kind === 7) {
+    net.matchAt = v.getUint32(1);
+    if (net.role === "host") netSendStart(net.matchAt);   /* late joiner echo */
   }
 }
 
@@ -4572,6 +4866,7 @@ const save = {
   seasonStart: 0,
   counters: {},
   storyChars: [],
+  onlineCh: 0,
   seen: { daily: 0, weekly: 0 }
 };
 
@@ -5325,11 +5620,20 @@ function menuBack() {
   const a = app;
   if (a.screen === "mode") { a.screen = "title"; SFX.move(); return true; }
   if (a.screen === "setup") return setupBack();
+  if (a.screen === "lobby") {
+    if (a.lobby && a.lobby.at === "queue") { lobbyCancel(); return true; }
+    if (a.lobby && a.lobby.at === "found") return true;      /* let it land */
+    mmClose(); netTeardown();
+    a.screen = "mode"; a.mode.prev = [IN_KICK, IN_KICK]; SFX.move(); return true;
+  }
   if (a.screen === "pass") {
     if (a.passList) { a.passList = false; SFX.move(); return true; }
     a.screen = "mode"; SFX.move(); return true;
   }
-  if (a.screen === "select") { a.screen = "mode"; a.mode.prev = [IN_KICK, IN_KICK]; SFX.move(); return true; }
+  if (a.screen === "select") {
+    if (a.sel && a.sel.forLobby) { a.lobby.prev = [IN_KICK, IN_KICK]; a.screen = "lobby"; SFX.move(); return true; }
+    a.screen = "mode"; a.mode.prev = [IN_KICK, IN_KICK]; SFX.move(); return true;
+  }
   if (a.screen === "stage") { a.screen = "select"; a.sel.lock = [false, false]; SFX.move(); return true; }
   if (a.screen === "augpick") { a.screen = "stage"; a.stage.prev = IN_KICK; SFX.move(); return true; }
   if (a.screen === "tutorial") { a.screen = "mode"; a.mode.prev = [IN_KICK, IN_KICK]; SFX.move(); return true; }
@@ -5454,6 +5758,7 @@ const app = {
   pick: null,
   mode: { cur: 0, prev: [0, 0], subCur: 1, subRule: 0 },
   setup: null,
+  lobby: null,
   trackAt: null,
   pause: null,
   bg: 0,                           /* which Origins arena this match is fought in */
@@ -5499,6 +5804,15 @@ function selectTick(inp) {
     sel.prev[i] = inp[i];
   }
   if (sel.skin[0] || sel.skin[1]) return;
+  if (sel.forLobby) {
+    if (sel.lock[0]) {
+      save.onlineCh = sel.cur[0];
+      writeSave();
+      app.lobby.prev = [IN_KICK, IN_KICK];
+      app.screen = "lobby";
+    }
+    return;
+  }
   if (sel.lock[0] && sel.lock[1]) {
     sel.t++;
     if (sel.t > 36) {
@@ -5566,6 +5880,8 @@ function runScreenTick(inp) {
     passTick(inp);
   } else if (app.screen === "tutorial") {
     tutorialTick(inp);
+  } else if (app.screen === "lobby") {
+    lobbyTick(inp);
   } else if (app.screen === "setup") {
     setupTick(inp);
   } else if (app.screen === "story") {
@@ -5652,6 +5968,7 @@ function frame(now) {
   else if (app.screen === "story") drawStory(app.t);
   else if (app.screen === "ladder") drawLadder(app.t);
   else if (app.screen === "draft") drawDraft(app.t);
+  else if (app.screen === "lobby") drawLobby(app.t);
   else if (app.screen === "setup") drawSetup(app.t);
   else if (app.screen === "runend") drawRunEnd(app.t);
   else drawMatch(app.m);
