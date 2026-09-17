@@ -4182,11 +4182,22 @@ function lobbyOpen() {
   app.screen = "lobby";
 }
 
+/* With a matchmaker deployed, FIGHT is the front door. Without one there is
+   nobody to find, so saying "searching" for twenty-four seconds and then
+   handing over a bot would be a lie told slowly. The lobby says what it has. */
 function lobbyRows() {
+  if (SIGNAL_URL) {
+    return [
+      { label: "FIGHT", col: "#7CF0B4", act: lobbyFight },
+      { label: "CHANGE FIGHTER", col: "#E7E3FB", act: lobbyPickFighter },
+      { label: "CUSTOM MATCH", col: "#9FB4D8", act: () => { SFX.lock(); netPanel(true); } },
+      { label: "BACK", col: "#8E7BD8", act: () => { SFX.move(); menuBack(); } }
+    ];
+  }
   return [
-    { label: "FIGHT", col: "#7CF0B4", act: lobbyFight },
+    { label: "PLAY A FRIEND", col: "#7CF0B4", act: () => { SFX.lock(); netPanel(true); } },
+    { label: "FIGHT A BOT", col: "#FFD98A", act: () => { SFX.lock(); lobbyBot(); } },
     { label: "CHANGE FIGHTER", col: "#E7E3FB", act: lobbyPickFighter },
-    { label: "CUSTOM MATCH", col: "#9FB4D8", act: () => { SFX.lock(); netPanel(true); } },
     { label: "BACK", col: "#8E7BD8", act: () => { SFX.move(); menuBack(); } }
   ];
 }
@@ -4270,8 +4281,13 @@ function drawLobby(t) {
   const lb = app.lobby, chIdx = save.onlineCh || 0, c = CHARS[chIdx];
 
   txt("ONLINE", STAGE_W / 2, 126, 30, "#E7E3FB", "center", FD, 12);
-  txt(ccu().toLocaleString("en-US") + " FIGHTERS ONLINE", STAGE_W / 2, 146, -10.5,
-    rgba("#7CF0B4", 0.7), "center", FM, 4);
+  if (SIGNAL_URL) {
+    txt(ccu().toLocaleString("en-US") + " FIGHTERS ONLINE", STAGE_W / 2, 146, -10.5,
+      rgba("#7CF0B4", 0.7), "center", FM, 4);
+  } else {
+    txt("NO MATCHMAKER · PLAY A FRIEND WITH A CODE", STAGE_W / 2, 146, -10.5,
+      rgba("#E0A159", 0.8), "center", FM, 4);
+  }
 
   /* your fighter, on a plinth, left of centre */
   const PX = 300, PY = 400;
@@ -4356,7 +4372,8 @@ function drawLobby(t) {
   ctx.globalAlpha = bk;
   ctx.fillStyle = rgba("#08070F", 0.72); ctx.fillRect(-STAGE_W / 2, -34, STAGE_W, 62);
   txt("NEW CHALLENGER", 0, 0, 40, "#FFD98A", "center", FD, 10);
-  txt("APPROACHES", 0, 22, 18, rgba("#E7E3FB", 0.8), "center", FM, 8);
+  txt(foe.bot && !SIGNAL_URL ? "PRACTICE BOT" : "APPROACHES", 0, 22, 18,
+    rgba("#E7E3FB", 0.8), "center", FM, 8);
   ctx.restore();
 }
 

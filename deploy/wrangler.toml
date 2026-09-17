@@ -1,0 +1,13 @@
+name = "axiekick-matchmaker"
+main = "worker.js"
+compatibility_date = "2026-01-15"
+
+# The queue has to live in one place both halves of a pair can reach, which is
+# what a Durable Object is for. One instance, named "global", holds it.
+[[durable_objects.bindings]]
+name = "LOBBY"
+class_name = "Lobby"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["Lobby"]

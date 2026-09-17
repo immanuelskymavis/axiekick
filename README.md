@@ -217,8 +217,11 @@ cheats in the build.
 
 **Rollback netcode over a WebRTC data channel, with a matchmaking queue.**
 
-**PLAY ONLINE** drops you in a lobby: your fighter on a plinth, the player count, and
-four doors — **FIGHT**, **CHANGE FIGHTER**, **CUSTOM MATCH**, **BACK**. Pick your Axie
+**PLAY ONLINE** drops you in a lobby: your fighter on a plinth and four doors. With a
+matchmaker deployed those are **FIGHT**, **CHANGE FIGHTER**, **CUSTOM MATCH**, **BACK**;
+with none, the lobby says so and leads with **PLAY A FRIEND** and **FIGHT A BOT**,
+because saying "searching" for twenty-four seconds with nobody to find would be a lie
+told slowly. Pick your Axie
 and its skin here rather than after connecting, so the match starts the moment an
 opponent turns up. FIGHT queues you; the panel becomes a timer with an estimate, and
 when somebody is found the screen says **NEW CHALLENGER APPROACHES** and the fight
@@ -240,20 +243,30 @@ nothing deployed.
 
 ### The matchmaker
 
-`tools/signal.mjs` — one file, no dependencies, same as the game. It hands every client
-the ICE config, pairs whoever is in the queue, relays offer/answer/candidates between
-that pair, and gets out of the way.
+Two flavours of the same protocol: `tools/signal.mjs` runs anywhere Node does, and
+`deploy/worker.js` runs on Cloudflare Workers with the queue in a Durable Object. Either
+hands every client the ICE config, pairs whoever is waiting, relays
+offer/answer/candidates between that pair, and gets out of the way.
 
 ```bash
-PORT=8787 node tools/signal.mjs
+PORT=8787 node tools/signal.mjs            # local
+cd deploy && npx wrangler@3 deploy         # or Cloudflare, after `wrangler login`
 ```
 
-Then open the game with `?signal=ws://localhost:8787`, or set `SIGNAL_URL` in
-`game/index.html` when you deploy. With no server configured the queue button says so
-and the hand-pasted codes still work as the fallback.
+Point the game at it with `?signal=wss://…`, or set `SIGNAL_URL` in `game/index.html`.
+**`wss://` from the published build** — Pages is HTTPS and browsers block mixed content.
 
-Players behind symmetric NAT — which is most corporate networks — need a TURN relay.
-The credentials live on the server, not in the page:
+**Nothing is deployed yet**, so the public build has no matchmaker and the lobby says so
+rather than pretending to search. **[deploy/README.md](deploy/README.md)** is the whole
+story: what works today, what an account buys, and why there is no credential-free
+TURN.
+
+Players behind symmetric NAT — most corporate networks, some mobile carriers — need a
+TURN relay. Every provider needs an account, because TURN relays real bandwidth and
+nobody gives that away anonymously; the old free public endpoints are dead, which was
+checked rather than assumed. Without one, **Google STUN alone still connects most home
+networks** — also checked, `host` and `srflx` gather fine — which is why two friends can
+play right now with nothing deployed. Credentials live on the server, never in the page:
 
 ```bash
 TURN_URL=turn:turn.example.com:3478 TURN_USER=axiekick TURN_PASS=secret \
