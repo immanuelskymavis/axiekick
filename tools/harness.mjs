@@ -66,7 +66,7 @@ win.document = {
 const expose = `
 ;globalThis.__G = {
   CHARS, SPINES, DIFFS, AUGS, AUG, LADDER, MODES, run, app, net,
-  IN_DIVE, IN_KICK, METER_MAX, METER_GAIN, KF_CAP, STAGE_W, STAGE_H, FLOOR_Y,
+  IN_DIVE, IN_KICK, IN_LEFT, IN_RIGHT, WALK_FWD, WALK_BACK, WALK_PAD, METER_MAX, METER_GAIN, KF_CAP, STAGE_W, STAGE_H, FLOOR_Y,
   WIN_ROUNDS, LINE_TICKS, BG_IMGS, DEG,
   newMatch, step, stepPlayer, statsFor, cpuInput, arcadeStart, arcadeSetup,
   arcadeFight, arcadeResolve, arcadeTake, arcadeOffer, runRand, endRound,
@@ -78,7 +78,9 @@ const expose = `
   save, CHALLENGES, COSTUMES, TIERS, activeChallenges, rollChallenges, track,
   trackStoryChar, buyPass, charLocked, prizePool, drawPass, drawTutorial,
   tutStart, tutorialTick, progressOf, checkChallenges, TUT_STEPS, PAIR_TALK,
-  say, claimTiers, ownedCostumes, woodPanel, drawLobby, lobbyOpen, lobbyTick, lobbyBot, ccu, net, netTick, netResync, snapTake, pairFor, MAX_ROLLBACK
+  say, claimTiers, ownedCostumes, woodPanel, drawLobby, lobbyOpen, lobbyTick, lobbyBot, ccu, net, netTick, netResync, snapTake, pairFor, MAX_ROLLBACK,
+  JACK_BINDS, keyFor, rebuildKeymap, readInputs, selectTick, modeTick, drawJackCard,
+  keys, setScheme, saveSettings, netSendInputs, netRecv, NET_WINDOW, trails, ghosts, pushTrail, pushGhost, animFor
 };`;
 
 const ctxv = vm.createContext(win);

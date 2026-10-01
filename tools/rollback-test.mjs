@@ -11,7 +11,7 @@
  */
 import { G } from "./harness.mjs";
 
-const { newMatch, step, net, netTick, IN_DIVE, IN_KICK, app } = G;
+const { newMatch, step, net, netTick, IN_DIVE, IN_KICK, IN_LEFT, IN_RIGHT, app } = G;
 const FRAMES = 1800;
 const SEED = 0x2f6e2b1;
 
@@ -24,6 +24,9 @@ function stream(n, salt) {
     s = (Math.imul(s, 1103515245) + 12345) & 0x7fffffff;
     if ((s >>> 9) % 7 === 0) held ^= IN_DIVE;
     if ((s >>> 13) % 11 === 0) held ^= IN_KICK;
+    /* Jack Controls put movement on the wire too, so predict and replay it */
+    if ((s >>> 17) % 5 === 0) held ^= IN_LEFT;
+    if ((s >>> 21) % 6 === 0) held ^= IN_RIGHT;
     out.push(held);
   }
   return out;

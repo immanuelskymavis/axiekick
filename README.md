@@ -39,7 +39,33 @@ Gamepads auto-assign to the first free player slot on their first button press.
 <kbd>F1</kbd> hitboxes · <kbd>F3</kbd> perf · <kbd>M</kbd> mute.
 
 Kick on the ground is a **kickback** — a backward hop, and your only way to retreat.
-There is no walking; all movement comes from jumping, kicking and kicking back.
+On DiveKick controls there is no walking at all; movement comes from jumping, kicking
+and kicking back. (Jack Controls, below, is the one exception, and it is opt-in.)
+
+### Jack Controls
+
+A prototype second scheme, set **per player** under `Esc` → Settings → Controls, for
+people who want a fighting game's hands on a DiveKick brain.
+
+| | Jump / dive | Kick | Walk |
+|---|---|---|---|
+| **P1** | <kbd>W</kbd> | <kbd>S</kbd> | <kbd>A</kbd> <kbd>D</kbd> |
+| **P2** | <kbd>↑</kbd> | <kbd>↓</kbd> | <kbd>←</kbd> <kbd>→</kbd> |
+
+It adds exactly one thing: a **ground walk**. Forward is faster than back, the two
+bodies stop where they would touch, and you cannot walk out of landing recovery or
+steer in the air — a jump is still a commitment, which is the part that makes the game
+the game. Turning the scheme on pops a card showing the layout; the same card is on
+the controls list under **JACK CONTROLS** whenever anyone needs reminding.
+
+The two players are set independently on purpose: one person plays the fighting game
+they already know, the other plays DiveKick, and the match answers which one reads the
+situation faster. Anyone on DiveKick controls has no walk at all — the movement keys
+are inert inside a match. The layout is fixed rather than rebindable; the whole point
+of it is that it is the one everybody already knows.
+
+Player two's **arrow keys also drive character select** whichever scheme they are on,
+so the second player can pick without first being handed a keyboard diagram.
 
 ## Modes
 
@@ -52,7 +78,8 @@ Land items before the bell; against the CPU you pick your own two and it takes t
 whatever you left on the table.
 
 **SETTINGS** is on the menu header, and on `Esc` in a fight: master/music/SFX volume,
-the announcer, screen shake, rebindable controls with a reset, and **RESET PROGRESS**
+the announcer, screen shake, a control scheme per player, rebindable controls with a
+reset, and **RESET PROGRESS**
 behind a press-again confirm. Everything persists in `localStorage` under a schema
 version — a save from an older build is dropped rather than merged, because merging
 quietly keeps fields that no longer mean what they did.
@@ -139,7 +166,7 @@ out of 12. All 36 character pairings finish without stalling, and two Lunacians 
 each other still resolve.
 
 The CPU is not special-cased anywhere in the simulation — it reads state and returns
-the same 2-bit input mask a player does, so a CPU match steps through exactly the same
+the same input mask a player does, so a CPU match steps through exactly the same
 code as a human one. Its randomness comes from an LCG seeded per match and stored in
 state, so a CPU round replays from its input log like any other.
 
@@ -422,7 +449,9 @@ The simulation is deliberately separable from everything else:
 - `step(state, in0, in1)` is pure — same inputs, same state, every time. Verified by
   hashing 600 ticks of scripted input and comparing runs.
 - Fixed 60 Hz tick with an accumulator loop, clamped at 5 ticks per frame.
-- Inputs are a 2-bit mask per player per tick (`IN_DIVE | IN_KICK`).
+- Inputs are a 4-bit mask per player per tick (`IN_DIVE | IN_KICK | IN_LEFT | IN_RIGHT`).
+  The top two bits are Jack Controls' walk, and only a player on that scheme can set
+  them; the wire format carries all four so a mixed-scheme match works online.
 - No `Math.random` and no wall-clock reads inside the sim. The CPU's LCG lives in state
   and is seeded when a match is created; starfields and trails are render-side only and
   never feed back into state.

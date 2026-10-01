@@ -214,7 +214,11 @@ const LINE_TICKS = 5 * 60;    // Hold the Line window
 const KO_FREEZE = 45, KO_RESET = 60, INTRO_TICKS = 72;
 const WIN_ROUNDS = 5;
 
-const IN_DIVE = 1, IN_KICK = 2;
+const IN_DIVE = 1, IN_KICK = 2, IN_LEFT = 4, IN_RIGHT = 8;
+/* Jack Controls bolt a traditional ground walk onto the two-button game. The
+   sim always understands the movement bits; a control scheme decides whether a
+   player can ever produce them, so DiveKick controls stay DiveKick. */
+const WALK_FWD = 3.4, WALK_BACK = 2.6, WALK_PAD = 6;
 
 /* how much of the drawn body the hurtbox fills; 1.0 is the art's own edge */
 const BODY_FIT = 0.94;
@@ -540,7 +544,7 @@ function mkPlayer(chIdx, x, facing, augs) {
     ch: chIdx, c: cs, augs: augs || [], cos: cos ? cos.id : null,
     x, y: 0, vx: 0, vy: 0,
     st: "stand", t: 0, facing,
-    prevIn: 0, floatUsed: 0, inflate: 0, jumps: 0, hang: 0, aimT: 0,
+    prevIn: 0, floatUsed: 0, inflate: 0, jumps: 0, hang: 0, aimT: 0, walk: 0,
     meter: 0, kf: 0, dvT: -1, kkT: -1, specT: 0, tint: false,
     wx: x, wy: 0, pwx: x, pwy: 0,   // weapon point, current + previous tick
     spin: 0, hit: false, dead: false, ward: cs.wardStart || 0, band: 0
@@ -705,19 +709,37 @@ function stepPlayer(p, opp, inp) {
   }
   p.pwx = p.wx; p.pwy = p.wy;
   p.hit = false;
+  p.walk = 0;
   let sound = fired ? "spec" : null;
 
   switch (fired ? "_fired" : p.st) {
     case "_fired": break;
 
-    case "stand":
+    case "stand": {
       p.facing = opp.x >= p.x ? 1 : -1;
+      /* Walking is a standing option only: landing recovery still costs you the
+         ground you would have covered, and forward is faster than back, so
+         closing remains a commitment. You cannot walk through the other Axie. */
+      const mv = ((inp & IN_RIGHT) ? 1 : 0) - ((inp & IN_LEFT) ? 1 : 0);
+      if (mv && !dive && !kick) {
+        p.walk = mv;
+        let nx = p.x + mv * (mv === p.facing ? WALK_FWD : WALK_BACK);
+        /* the two bodies stop where they would touch, so how close you can get
+           is the size of the Axies rather than a number picked for all of them */
+        const hug = c.rx + opp.c.rx + WALK_PAD;
+        if (mv === p.facing && opp.y <= 0 && Math.abs(opp.x - p.x) >= hug) {
+          const lim = opp.x - hug * p.facing;
+          nx = p.facing > 0 ? Math.min(nx, lim) : Math.max(nx, lim);
+        }
+        p.x = nx;
+      }
       if (dive) {
         p.vy = c.jumpV; p.vx = c.jumpVX * p.facing;
         p.st = "rise"; p.t = 0; p.floatUsed = 0; p.jumps = 0; sound = "dive";
       }
       else if (kick) { p.vx = -c.kbSpd * p.facing; p.vy = c.kbUp; p.st = "kb"; p.t = 0; sound = "kb"; }
       break;
+    }
 
     case "rise":
     case "fall":
@@ -1116,18 +1138,49 @@ function kickSolution(me, c, seen, oc, lead) {
 const keys = Object.create(null);
 const DEFAULT_BINDS = { p1dive: "KeyA", p1kick: "KeyS", p2dive: "KeyK", p2kick: "KeyL" };
 const BINDS = Object.assign({}, DEFAULT_BINDS);
+
+/* Jack Controls: the layout somebody who has played a fighting game before
+   reaches for. Fixed rather than rebindable - the whole point is that it is the
+   one everybody already knows. */
+const JACK_BINDS = [
+  { dive: "KeyW", kick: "KeyS", left: "KeyA", right: "KeyD" },
+  { dive: "ArrowUp", kick: "ArrowDown", left: "ArrowLeft", right: "ArrowRight" }
+];
+
+/* the key a player would actually press for an action, whichever scheme is on */
+function keyFor(key) {
+  const p = key[1] === "2" ? 1 : 0;
+  return SETTINGS.scheme[p] === "jack" ? JACK_BINDS[p][key.slice(2)] : BINDS[key];
+}
+
 let KEYMAP = {};
 function rebuildKeymap() {
   KEYMAP = {};
-  KEYMAP[BINDS.p1dive] = [0, IN_DIVE];
-  KEYMAP[BINDS.p1kick] = [0, IN_KICK];
-  KEYMAP[BINDS.p2dive] = [1, IN_DIVE];
-  KEYMAP[BINDS.p2kick] = [1, IN_KICK];
+  const bind = (code, p, bit) => { if (code) KEYMAP[code] = [p, bit]; };
+  for (let p = 0; p < 2; p++) {
+    if (SETTINGS.scheme[p] === "jack") {
+      const j = JACK_BINDS[p];
+      bind(j.dive, p, IN_DIVE); bind(j.kick, p, IN_KICK);
+      bind(j.left, p, IN_LEFT); bind(j.right, p, IN_RIGHT);
+    } else {
+      bind(BINDS["p" + (p + 1) + "dive"], p, IN_DIVE);
+      bind(BINDS["p" + (p + 1) + "kick"], p, IN_KICK);
+    }
+  }
+  /* The arrow keys always answer for player two, so the second player can drive
+     character select without first being told anyone's bindings. readInputs
+     drops them again inside a match unless P2 is actually on Jack Controls. */
+  const a = JACK_BINDS[1];
+  if (!KEYMAP[a.left]) KEYMAP[a.left] = [1, IN_LEFT];
+  if (!KEYMAP[a.right]) KEYMAP[a.right] = [1, IN_RIGHT];
   const L = document.getElementById("legend-keys");
   if (L) {
-    L.innerHTML =
-      "<b>P1</b> <kbd>" + keyName(BINDS.p1dive) + "</kbd> dive <kbd>" + keyName(BINDS.p1kick) + "</kbd> kick" +
-      " &nbsp; <b>P2</b> <kbd>" + keyName(BINDS.p2dive) + "</kbd> dive <kbd>" + keyName(BINDS.p2kick) + "</kbd> kick";
+    const leg = p => SETTINGS.scheme[p] === "jack"
+      ? "<kbd>" + keyName(JACK_BINDS[p].dive) + "</kbd> jump <kbd>" + keyName(JACK_BINDS[p].kick) +
+        "</kbd> kick <kbd>" + keyName(JACK_BINDS[p].left) + "/" + keyName(JACK_BINDS[p].right) + "</kbd> walk"
+      : "<kbd>" + keyName(keyFor("p" + (p + 1) + "dive")) + "</kbd> dive <kbd>" +
+        keyName(keyFor("p" + (p + 1) + "kick")) + "</kbd> kick";
+    L.innerHTML = "<b>P1</b> " + leg(0) + " &nbsp; <b>P2</b> " + leg(1);
   }
 }
 function keyName(code) {
@@ -1139,12 +1192,16 @@ function keyName(code) {
 }
 
 /* everything the settings panel owns, remembered between visits */
-const SETTINGS = { master: 0.55, music: 0.24, sfx: 1, announcer: true, shake: true };
+const SETTINGS = {
+  master: 0.55, music: 0.24, sfx: 1, announcer: true, shake: true,
+  scheme: ["dive", "dive"]        /* per player: "dive" | "jack" */
+};
 function loadSettings() {
   try {
     const raw = JSON.parse(localStorage.getItem("axiekick.settings") || "{}");
     if (raw.s) Object.assign(SETTINGS, raw.s);
     if (raw.b) Object.assign(BINDS, raw.b);
+    if (!Array.isArray(SETTINGS.scheme)) SETTINGS.scheme = ["dive", "dive"];
   } catch (e) { }
   announcer = SETTINGS.announcer;
 }
@@ -1202,10 +1259,22 @@ function readInputs() {
     if (b[1] && b[1].pressed) v |= IN_KICK;
     if (b[2] && b[2].pressed) v |= IN_DIVE;
     if (b[3] && b[3].pressed) v |= IN_KICK;
-    if (v && !padPrev[slot]) { anyPressEdge = true; audioWake(); }
+    if (b[14] && b[14].pressed) v |= IN_LEFT;      /* d-pad, for Jack Controls */
+    if (b[15] && b[15].pressed) v |= IN_RIGHT;
+    const ax = g.axes && g.axes[0] || 0;
+    if (ax < -0.4) v |= IN_LEFT; else if (ax > 0.4) v |= IN_RIGHT;
+    if ((v & (IN_DIVE | IN_KICK)) && !padPrev[slot]) { anyPressEdge = true; audioWake(); }
     padPrev[slot] = v;
     m[slot] |= v;
     slot++;
+  }
+  /* Movement bits stop at the edge of the match for anyone on DiveKick
+     controls - in the menus they are just a cursor, in a fight they would be a
+     different game. */
+  if (app.screen === "match") {
+    for (let p = 0; p < 2; p++) {
+      if (SETTINGS.scheme[p] !== "jack") m[p] &= IN_DIVE | IN_KICK;
+    }
   }
   return m;
 }
@@ -1778,7 +1847,9 @@ function animFor(p, c) {
     }
     case "kb": return [A.kb, Math.min(SPINES[c.id].dur[A.kb], t)];
     case "rise": case "fall": return [A.air, t % SPINES[c.id].dur[A.air]];
-    default: return [A.idle, t % SPINES[c.id].dur[A.idle]];
+    default:
+      if (p.walk) return [A.air, t % SPINES[c.id].dur[A.air]];
+      return [A.idle, t % SPINES[c.id].dur[A.idle]];
   }
 }
 
@@ -2704,9 +2775,9 @@ function drawTutorial(t) {
   txt(d.text, STAGE_W / 2, 158, 36, rgba("#FFD98A", flash), "center", FD, 8);
   txt(d.sub, STAGE_W / 2, 182, 13, rgba("#E7E3FB", 0.75), "center", FM, 3);
   if (d.key === "both") {
-    drawHints(STAGE_W / 2, 204, [[keyName(BINDS.p1dive), "+"], [keyName(BINDS.p1kick), "TOGETHER"]]);
+    drawHints(STAGE_W / 2, 204, [[keyName(keyFor("p1dive")), "+"], [keyName(keyFor("p1kick")), "TOGETHER"]]);
   } else if (d.key) {
-    drawHints(STAGE_W / 2, 204, [[keyName(BINDS[d.key]), "PRESS"]]);
+    drawHints(STAGE_W / 2, 204, [[keyName(keyFor(d.key)), "PRESS"]]);
   }
   /* progress under the words, where you read last */
   for (let i = 0; i < TUT_STEPS.length; i++) {
@@ -3824,7 +3895,10 @@ function modeTick(inp) {
   for (let i = 0; i < 2; i++) {
     const dive = (inp[i] & IN_DIVE) && !(md.prev[i] & IN_DIVE);
     const kick = (inp[i] & IN_KICK) && !(md.prev[i] & IN_KICK);
-    if (dive) { md.cur = (md.cur + 1) % MODES.length; SFX.move(); }
+    const left = (inp[i] & IN_LEFT) && !(md.prev[i] & IN_LEFT);
+    const right = (inp[i] & IN_RIGHT) && !(md.prev[i] & IN_RIGHT);
+    if (left || right) { md.cur = (md.cur + (right ? 1 : MODES.length - 1)) % MODES.length; SFX.move(); }
+    else if (dive) { md.cur = (md.cur + 1) % MODES.length; SFX.move(); }
     else if (kick) { modeConfirm(); md.prev[i] = inp[i]; return; }
     md.prev[i] = inp[i];
   }
@@ -3838,7 +3912,8 @@ function drawSelect(sel, t) {
   drawStage(null);
   ctx.fillStyle = rgba("#08070F", 0.6); ctx.fillRect(0, 0, STAGE_W, STAGE_H);
   txt("CHOOSE YOUR AXIE", STAGE_W / 2, 44, 28, "#E7E3FB", "center", FD, 8);
-  drawHints(STAGE_W / 2, 66, [["DIVE", "MOVE"], ["KICK", "LOCK IN"], ["ESC", "BACK"]]);
+  drawHints(STAGE_W / 2, 66,
+    [["DIVE", "MOVE"], ["KICK", "LOCK IN"], ["LEFT/RIGHT", "P2 MOVE"], ["ESC", "BACK"]]);
 
   const CW = 300, CH = 158, GX = 16, GY = 14;
   const X0 = (STAGE_W - (CW * 3 + GX * 2)) / 2, Y0 = 82;
@@ -4572,15 +4647,15 @@ function netSendInputs() {
   const end = net.frame + net.delay;
   const start = Math.max(0, end - NET_WINDOW + 1);
   const count = end - start + 1;
-  const buf = new ArrayBuffer(6 + Math.ceil(count / 4));
+  const buf = new ArrayBuffer(6 + Math.ceil(count / 2));
   const v = new DataView(buf);
   v.setUint8(0, 1);
   v.setUint32(1, start);
   v.setUint8(5, count);
   for (let i = 0; i < count; i++) {
     const val = net.local[start + i] || 0;
-    const at = 6 + (i >> 2), sh = (i & 3) * 2;
-    v.setUint8(at, v.getUint8(at) | ((val & 3) << sh));
+    const at = 6 + (i >> 1), sh = (i & 1) * 4;
+    v.setUint8(at, v.getUint8(at) | ((val & 15) << sh));
   }
   try { net.ch.send(buf); } catch (e) { }
 }
@@ -4626,8 +4701,8 @@ function netRecv(v) {
   if (kind === 1) {
     const start = v.getUint32(1), count = v.getUint8(5);
     for (let i = 0; i < count; i++) {
-      const at = 6 + (i >> 2), sh = (i & 3) * 2;
-      const val = (v.getUint8(at) >> sh) & 3;
+      const at = 6 + (i >> 1), sh = (i & 1) * 4;
+      const val = (v.getUint8(at) >> sh) & 15;
       const f = start + i;
       if (net.remote[f] === undefined) net.remote[f] = val;
     }
@@ -5588,22 +5663,77 @@ function settingsRows() {
   ];
 }
 
+function setScheme(p, how) {
+  SETTINGS.scheme[p] = how;
+  rebuildKeymap(); saveSettings();
+}
+
+/* The two players are set independently on purpose: the pitch for Jack Controls
+   is one person playing the fighting game they already know against one person
+   playing DiveKick, and finding out which reads the situation faster. */
+function schemeRow(p) {
+  const jack = SETTINGS.scheme[p] === "jack";
+  return {
+    label: "PLAYER " + (p + 1) + " · SCHEME",
+    value: jack ? "JACK" : "DIVEKICK",
+    act: () => {
+      setScheme(p, jack ? "dive" : "jack");
+      /* switching to a layout nobody has seen yet is exactly when to show it */
+      if (!jack) { app.pause.tab = "jack"; app.pause.jp = p; app.pause.cur = 0; }
+    }
+  };
+}
+
 function controlRows() {
   const row = (label, key) => ({
     label, value: app.pause.bind === key ? "PRESS A KEY" : keyName(BINDS[key]),
     act: () => { app.pause.bind = key; }
   });
-  return [
-    row("PLAYER 1 · DIVE", "p1dive"),
-    row("PLAYER 1 · KICK", "p1kick"),
-    row("PLAYER 2 · DIVE", "p2dive"),
-    row("PLAYER 2 · KICK", "p2kick"),
-    {
-      label: "RESET TO DEFAULTS", value: "",
-      act: () => { Object.assign(BINDS, DEFAULT_BINDS); rebuildKeymap(); saveSettings(); }
-    },
-    { label: "BACK", value: "", act: () => { app.pause.tab = "settings"; app.pause.cur = 0; } }
-  ];
+  const rows = [schemeRow(0), schemeRow(1)];
+  for (let p = 0; p < 2; p++) {
+    if (SETTINGS.scheme[p] === "jack") continue;      /* Jack's layout is fixed */
+    rows.push(row("PLAYER " + (p + 1) + " · DIVE", "p" + (p + 1) + "dive"));
+    rows.push(row("PLAYER " + (p + 1) + " · KICK", "p" + (p + 1) + "kick"));
+  }
+  rows.push({
+    label: "JACK CONTROLS", value: "›",
+    act: () => { app.pause.tab = "jack"; app.pause.jp = null; app.pause.cur = 0; }
+  });
+  rows.push({
+    label: "RESET TO DEFAULTS", value: "",
+    act: () => {
+      Object.assign(BINDS, DEFAULT_BINDS);
+      SETTINGS.scheme = ["dive", "dive"];
+      rebuildKeymap(); saveSettings();
+    }
+  });
+  rows.push({ label: "BACK", value: "", act: () => { app.pause.tab = "settings"; app.pause.cur = 0; } });
+  return rows;
+}
+
+/* The Jack Controls card. Shown when you turn the scheme on, and from the
+   controls list whenever somebody needs reminding mid-session. */
+const JACK_CARD_H = 212;
+function drawJackCard(x, y, w) {
+  const jp = app.pause.jp;
+  txt(jp === null ? "A FIGHTING GAME LAYOUT, ON TOP OF DIVEKICK"
+    : "PLAYER " + (jp + 1) + " IS ON JACK CONTROLS",
+    x + w / 2, y + 16, 14, rgba("#E7E3FB", 0.8), "center", FD, 2);
+  txt("WALK ON THE GROUND. JUMP, DIVE AND KICK EXACTLY AS BEFORE.",
+    x + w / 2, y + 36, -12, rgba("#E7E3FB", 0.5), "center", FM, 2);
+
+  for (let p = 0; p < 2; p++) {
+    const cx = x + w * (p ? 0.74 : 0.26), j = JACK_BINDS[p];
+    const live = SETTINGS.scheme[p] === "jack";
+    txt("PLAYER " + (p + 1), cx, y + 68, 17, live ? PCOL[p] : rgba("#E7E3FB", 0.35), "center", FD, 4);
+    if (!live) txt("(ON DIVEKICK)", cx, y + 86, -11, rgba("#E7E3FB", 0.3), "center", FM, 2);
+    ctx.save();
+    if (!live) ctx.globalAlpha = 0.4;
+    drawHints(cx, y + 112, [[keyName(j.dive), "JUMP / DIVE"]]);
+    drawHints(cx, y + 146, [[keyName(j.kick), "KICK"]]);
+    drawHints(cx, y + 180, [[keyName(j.left), ""], [keyName(j.right), "WALK"]]);
+    ctx.restore();
+  }
 }
 
 function bump(k) {
@@ -5616,6 +5746,9 @@ function bump(k) {
 function pauseRows() {
   if (app.pause.tab === "settings") return settingsRows();
   if (app.pause.tab === "controls") return controlRows();
+  if (app.pause.tab === "jack") {
+    return [{ label: "GOT IT", value: "", act: () => { app.pause.tab = "controls"; app.pause.cur = 0; } }];
+  }
   return pauseItems().map(label => ({ label, value: "", act: () => pauseChoose(label) }));
 }
 
@@ -5660,7 +5793,7 @@ function menuBack() {
 
 function openPause() {
   if (app.screen === "title") return;
-  app.pause = { cur: 0, prev: [0, 0], t: 0, tab: "main", bind: null };
+  app.pause = { cur: 0, prev: [0, 0], t: 0, tab: "main", bind: null, jp: null };
   SFX.move();
   setMusicGain();
 }
@@ -5714,21 +5847,25 @@ function pauseChoose(pick) {
 function drawPause() {
   const pz = app.pause;
   const rows = pauseRows();
-  const title = pz.tab === "settings" ? "SETTINGS" : pz.tab === "controls" ? "CONTROLS" : "PAUSED";
+  const title = pz.tab === "settings" ? "SETTINGS" : pz.tab === "controls" ? "CONTROLS"
+    : pz.tab === "jack" ? "JACK CONTROLS" : "PAUSED";
+  const cardH = pz.tab === "jack" ? JACK_CARD_H : 0;
   ctx.fillStyle = rgba("#08070F", 0.88);
   ctx.fillRect(0, 0, STAGE_W, STAGE_H);
   /* the box is sized to whatever tab is open, so the short one is not a tall
      empty frame with four buttons at the top of it */
-  const RH = 38, GAP = 6, bodyH = rows.length * (RH + GAP) - GAP;
+  const RH = 38, GAP = 6, bodyH = rows.length * (RH + GAP) - GAP + cardH;
   const BW = 524, BH = 110 + bodyH, BX = (STAGE_W - BW) / 2, BY = (STAGE_H - BH) / 2;
   const pb = woodPanel(BX, BY, BW, BH, { ink: "#100C22", inkA: 0.95, accent: "#FFD98A" });
   txt(title, STAGE_W / 2, pb[1] + 32, 38, "#FFD98A", "center", FD, 12);
   drawHints(STAGE_W / 2, pb[1] + 56, pz.tab === "main"
     ? [["DIVE", "MOVE"], ["KICK", "CONFIRM"], ["ESC", "RESUME"]]
+    : pz.tab === "jack" ? [["KICK", "CLOSE"], ["ESC", "BACK"]]
     : [["DIVE", "MOVE"], ["KICK", "CHANGE"], ["ESC", "BACK"]]);
 
   const W = 440, X = (STAGE_W - W) / 2;
-  const top = pb[1] + 76;
+  if (cardH) drawJackCard(X, pb[1] + 76, W);
+  const top = pb[1] + 76 + cardH;
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i], y = top + i * (RH + GAP), on = pz.cur === i;
     ctx.fillStyle = rgba(on ? "#1D1740" : "#120E28", on ? 0.98 : 0.7);
@@ -5806,8 +5943,16 @@ function selectTick(inp) {
   for (let i = 0; i < humans; i++) {
     const dive = (inp[i] & IN_DIVE) && !(sel.prev[i] & IN_DIVE);
     const kick = (inp[i] & IN_KICK) && !(sel.prev[i] & IN_KICK);
+    const left = (inp[i] & IN_LEFT) && !(sel.prev[i] & IN_LEFT);
+    const right = (inp[i] & IN_RIGHT) && !(sel.prev[i] & IN_RIGHT);
     if (skinTick(i, dive, kick)) { sel.t = 0; sel.prev[i] = inp[i]; continue; }
-    if (dive) {
+    if ((left || right) && !sel.lock[i]) {
+      /* the grid is a grid, so left and right walk it either way - this is how
+         the second player picks without being handed a keyboard diagram */
+      const d = right ? 1 : CHARS.length - 1;
+      do { sel.cur[i] = (sel.cur[i] + d) % CHARS.length; } while (charLocked(sel.cur[i]));
+      SFX.move(); sel.t = 0;
+    } else if (dive) {
       if (sel.lock[i]) { sel.lock[i] = false; SFX.move(); }
       else {
         do { sel.cur[i] = (sel.cur[i] + 1) % CHARS.length; } while (charLocked(sel.cur[i]));
@@ -5941,6 +6086,7 @@ function frame(now) {
     if (escEdge) {
       escEdge = false;
       if (app.pause && app.pause.bind) { app.pause.bind = null; }
+      else if (app.pause && app.pause.tab === "jack") { app.pause.tab = "controls"; app.pause.cur = 0; }
       else if (app.pause && app.pause.tab === "controls") { app.pause.tab = "settings"; app.pause.cur = 0; }
       else if (app.pause && app.pause.tab === "settings") { app.pause.tab = "main"; app.pause.cur = 0; }
       else if (app.pause) closePause();
