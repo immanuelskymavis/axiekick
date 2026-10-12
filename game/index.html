@@ -2217,7 +2217,8 @@ function keyName(code) {
 const SETTINGS = {
   master: 0.55, music: 0.24, sfx: 1, announcer: true, shake: true,
   scheme: ["dive", "dive"],       /* per player: "dive" | "jack" */
-  game: "kick"                    /* "kick" | "fighter": the switch on the title */
+  game: "kick",                   /* "kick" | "fighter": the switch on the title */
+  moves: true                     /* AXIE FIGHTER's move list in the corner of a fight */
 };
 function loadSettings() {
   try {
@@ -4918,6 +4919,15 @@ function drawHUDSF(s) {
     const augs = p.augs;
     for (let a = 0; a < augs.length; a++) drawAugMedal(augs[a], i === 0 ? 30 + a * 32 : STAGE_W - 30 - a * 32, 112, 30);
   }
+  /* the move list: a demo crowd does not know the buttons, so the fight
+     tells them. A CPU's side is left off - nobody is holding it. */
+  const listBot = [0, 0];
+  if (SETTINGS.moves && app.screen === "match") {
+    for (let i = 0; i < 2; i++) {
+      if (i === 1 && s.cpu) continue;
+      listBot[i] = drawMoveList(s.p[i], i, s.p[i].augs.length ? 136 : 96);
+    }
+  }
   if (run.on) txt("STAGE " + (run.level + 1) + " / 10", STAGE_W / 2, 78, -10, rgba("#FFD98A", 0.85), "center", FM, 4);
   const secs = Math.max(0, Math.ceil(s.timer / 60));
   txt(String(secs).padStart(2, "0"), STAGE_W / 2, 50, 38, secs <= 10 ? "#FF6B6B" : "#E7E3FB", "center", FM, 1);
@@ -4932,11 +4942,68 @@ function drawHUDSF(s) {
     const a = Math.min(1, (80 - age) / 20);
     const x = i ? STAGE_W - 36 : 36, al = i ? "right" : "left";
     const pop = age < 6 ? 1.25 - age * 0.04 : 1;
-    ctx.save(); ctx.translate(x, 196); ctx.scale(pop, pop);
+    ctx.save(); ctx.translate(x, Math.max(196, listBot[i] + 40)); ctx.scale(pop, pop);
     txt(cb.n + " HITS", 0, 0, 34, rgba("#FFD98A", a), al, FD, 2);
     txt(cb.dmg + " DAMAGE", 0, 22, 12, rgba("#E7E3FB", a * 0.8), al, FM, 2);
     ctx.restore();
   }
+}
+
+/* numpad digits drawn as arrows, turned to the way this Axie is facing, so
+   a fireball reads ↓↘→ on the left and ↓↙← on the right */
+const SF_ARROW = { 1: "↙", 2: "↓", 3: "↘", 4: "←", 6: "→", 7: "↖", 8: "↑", 9: "↗" };
+function sfArrows(dirs, facing) {
+  const flip = { 1: 3, 3: 1, 4: 6, 6: 4, 7: 9, 9: 7 };
+  return dirs.map(d => SF_ARROW[facing < 0 && flip[d] ? flip[d] : d]).join("");
+}
+/* every line is [stick, buttons, name, note] for one Axie */
+function sfMoveLines(ch) {
+  const M = SF_MOVES[ch], k = SF_KIT[ch], L = [];
+  L.push([[2, 3, 6], "P", M.fbL.name, M.afbL ? "AIR TOO" : M.fbH.proj[0].vy > M.fbL.proj[0].vy + 3 ? "HP GOES UP" : ""]);
+  L.push([[6, 2, 3], "P", M.dpL.name, "ANTI-AIR"]);
+  if (M.qpL) L.push([[2, 1, 4], "P", M.qpL.name, "GRAB"]);
+  L.push([[2, 1, 4], "K", M.qkL.name, M.qkL.air ? "IN AIR" : ""]);
+  L.push([[2, 3, 6, 2, 3, 6], "P", M.sup.name, "SUPER"]);
+  if (k.floatMax) L.push([[8], "", "FLOAT", "HOLD, IN AIR"]);
+  if (k.airJumps) L.push([[8], "", "DOUBLE JUMP", "IN AIR"]);
+  return L;
+}
+
+function drawMoveList(p, side, top) {
+  const W = 300, PAD = 11, LH = 18, n = "p" + (side + 1);
+  /* a lone comma or full stop disappears in a sentence; give it a key cap */
+  const key = b => { const k = keyName(BINDS[n + b]); return /^[A-Z0-9]+$/.test(k) ? k : "[" + k + "]"; };
+  const lines = sfMoveLines(p.ch);
+  /* target combos in the keys you would actually press, two to a row */
+  const btnKey = id => (id[0] === "2" ? sfArrows([2], p.facing) : id[0] === "j" ? "AIR " : "") + key(id.slice(1).toLowerCase());
+  const tcs = SF_MOVES[p.ch].tc.map(([from, b, to]) => btnKey(from) + " > " + btnKey(to));
+  const tcRows = [];
+  for (let k = 0; k < tcs.length; k += 2) tcRows.push(tcs.slice(k, k + 2).join("   "));
+  const H = PAD * 2 + LH * (3 + lines.length + tcRows.length) + 10;
+  const x = side ? STAGE_W - 14 - W : 14;
+  ctx.fillStyle = rgba("#08070F", 0.58); ctx.fillRect(x, top, W, H);
+  ctx.fillStyle = rgba(PCOL[side], 0.8); ctx.fillRect(side ? x + W - 3 : x, top, 3, H);
+  const c1 = x + PAD + 2, c2 = x + 104, c3 = x + W - PAD;
+  let y = top + PAD + 12;
+  const dim = rgba("#E7E3FB", 0.6), lit = "#E7E3FB", gold = "#FFD98A", F = -12.5;
+  /* the buttons first: P and K are what every line below asks for */
+  txt("P = PUNCH", c1, y, F, gold, "left", FM, 0.5);
+  txt(key("lp") + " light  " + key("hp") + " heavy", c2 + 20, y, F, lit, "left", FM, 0.5); y += LH;
+  txt("K = KICK", c1, y, F, gold, "left", FM, 0.5);
+  txt(key("lk") + " light  " + key("hk") + " heavy", c2 + 20, y, F, lit, "left", FM, 0.5); y += LH;
+  txt(sfArrows([4], p.facing) + " block   " + sfArrows([1], p.facing) + " low block   " + key("lp") + "+" + key("lk") + " throw",
+    c1, y, -11.5, dim, "left", FM, 0.5);
+  y += LH + 6;
+  for (const [dirs, btn, name, note] of lines) {
+    const sup = note === "SUPER", ready = sup && p.meter >= SF_METER;
+    txt(sfArrows(dirs, p.facing) + (btn ? " " + btn : ""), c1, y, F, sup ? gold : lit, "left", FM, 0.5);
+    fitTxt(name, c2, y, (note ? c3 - 66 : c3) - c2, 12.5, ready ? gold : sup ? rgba("#FFD98A", 0.8) : lit, "left", FD, 0.5);
+    if (note) txt(ready ? "READY" : note, c3, y, -10, ready ? gold : dim, "right", FM, 1);
+    y += LH;
+  }
+  txt("COMBO", c1, y, -11.5, dim, "left", FM, 1);
+  for (const row of tcRows) { txt(row, c2, y, -11.5, lit, "left", FM, 0.5); y += LH; }
+  return top + H;
 }
 
 function drawMatchSF(s) {
@@ -7148,6 +7215,10 @@ function settingsRows() {
     {
       label: "ANNOUNCER", value: SETTINGS.announcer ? "ON" : "OFF",
       act: () => { SETTINGS.announcer = !SETTINGS.announcer; applyAudioSettings(); saveSettings(); }
+    },
+    {
+      label: "FIGHTER MOVE LIST", value: SETTINGS.moves ? "ON" : "OFF",
+      act: () => { SETTINGS.moves = !SETTINGS.moves; saveSettings(); }
     },
     {
       label: "SCREEN SHAKE", value: SETTINGS.shake ? "ON" : "OFF",

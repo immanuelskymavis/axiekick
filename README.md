@@ -217,6 +217,12 @@ card says so.
 
 The buttons rebind under Settings → Controls. In the menus, punch moves and kick confirms.
 
+Every fight shows each human player's move list in their top corner: what P and K are
+on their keys, block and throw, every special with its stick motion drawn the way that
+Axie is facing (so it flips when you cross over), the super (lit when the meter is
+full), and the target combos in actual keys. A CPU's side is left off. Settings →
+FIGHTER MOVE LIST turns it off.
+
 Rounds are 99 seconds, best of three; time out and the bigger share of health wins.
 Hold away to block, down-away for lows; jump-ins and forward + heavy punch are
 overheads. LP + LK up close throws, and pressing it straight back techs. Light normals
