@@ -201,6 +201,59 @@ nobody can turn it off — it exists so a 0–4 match is still worth watching.
 
 Mirror matches recolour the second Axie, so Olek vs Olek is legible.
 
+## AXIE FIGHTER
+
+The switch under the logo on the title screen (left/right, or click) turns the whole
+game into a traditional Street Fighter ruleset: the same six Axies, the same menus,
+story ladder, VS CPU, stages and tutorial, but with a health bar, an eight-way stick
+and four buttons. The choice is remembered. Online is DiveKick only for now, and its
+card says so.
+
+| | Move | Light punch | Heavy punch | Light kick | Heavy kick |
+|---|---|---|---|---|---|
+| **P1** | <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> | <kbd>F</kbd> | <kbd>G</kbd> | <kbd>V</kbd> | <kbd>B</kbd> |
+| **P2** | arrows | <kbd>K</kbd> | <kbd>L</kbd> | <kbd>,</kbd> | <kbd>.</kbd> |
+| **Gamepad** | d-pad / stick | X / □ | Y / △ | A / ✕ | B / ○ |
+
+The buttons rebind under Settings → Controls. In the menus, punch moves and kick confirms.
+
+Rounds are 99 seconds, best of three; time out and the bigger share of health wins.
+Hold away to block, down-away for lows; jump-ins and forward + heavy punch are
+overheads. LP + LK up close throws, and pressing it straight back techs. Light normals
+chain into each other, any normal that touches cancels into a special, specials cancel
+into the super, and damage scales down the longer a combo runs.
+
+Every Axie has the same inputs, so anyone can pick up anyone; the frame data and
+flavour differ. The super costs all three bars of the meter and is that Axie's
+DiveKick special, taken further.
+
+| Axie | HP | ↓↘→ + P | →↓↘ + P | ↓↙← + K | Also | ↓↘→↓↘→ + P | Target combos |
+|---|---|---|---|---|---|---|---|
+| Olek | 1150 | SEED SHOT, slow and big | BRAMBLE UPPER | ROOT CREEP, low slide | ↓↙← + P ROOT GRAB | **TAIL SWEEP** | LP > HP, 2LK > 2HK |
+| Buba | 1050 | HORN WAVE, short and fast | HORN UPPER | BULL RUSH, absorbs a hit | | **METEOR** | LK > HK, HP > HK |
+| Puffy | 950 | BUBBLE, slow, floats up | GEYSER | INFLATE, counter stance | hold up to float | **BURST** | LP > LK > HK |
+| Pomodoro | 950 | SPIKE: LP straight, HP up at 45° | CLAW UPPER | HOP, crosses over | | **SPLIT**, three spikes | LP > HP, 2LP > 2HP |
+| Venoki | 1000 | VENOM SPIT, lobbed | FANG RISE | SIDEWINDER, under fireballs | | **COIL** | LK > HP, HP > HK |
+| Momo | 900 | FEATHER, also in the air | WING UPPER | in the air: DIVE KICK | double jump | **DIVEBOMB**, also in the air | j.LK > j.HK, LP > LK > HP |
+
+Story mode drafts the same Land items, each with an AXIE FIGHTER effect of its own
+(Ronin Blade is reach, Tidecaller's Draught slows their walk and their fireballs, Ward
+of the Ruins survives two finishing blows at 1 health, and so on; hover a medallion).
+The ladder's one-round stages stay one round and everything longer is best of three.
+
+It is a second simulation behind the same `newMatch` / `step` calls, so it is pure
+and deterministic like the first, and the CPU on the same four tiers reads state and
+rolls the stick like a player, fireball motions included.
+
+```bash
+node tools/fighter-test.mjs
+```
+
+checks determinism and snapshot replay, the motion parser, that every special and
+super comes out, that 2LK 2LK into a fireball and every target combo connects for every
+pairing, high/low/overhead blocking, chip, throws and techs, and that all 36 pairings
+finish at every CPU tier.
+
 ## Season pass
 
 A shallow prototype of a live-service loop, built to show the shape rather than to take
