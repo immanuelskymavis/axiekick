@@ -80,7 +80,9 @@ const expose = `
   tutStart, tutorialTick, progressOf, checkChallenges, TUT_STEPS, PAIR_TALK,
   say, claimTiers, ownedCostumes, woodPanel, drawLobby, lobbyOpen, lobbyTick, lobbyBot, ccu, net, netTick, netResync, snapTake, pairFor, MAX_ROLLBACK,
   JACK_BINDS, keyFor, rebuildKeymap, readInputs, selectTick, modeTick, drawJackCard,
-  keys, setScheme, saveSettings, netSendInputs, netRecv, NET_WINDOW, trails, ghosts, pushTrail, pushGhost, animFor
+  keys, setScheme, saveSettings, netSendInputs, netRecv, NET_WINDOW, trails, ghosts, pushTrail, pushGhost, animFor,
+  IN_UP, IN_DOWN, IN_LP, IN_HP, IN_LK, IN_HK, SF_METER, SF_MOVES, SF_KIT, sfStep, sfNewMatch, sfMotion, sfDir,
+  sfCpuInput, sfHurt, sfHitBox, sfAnimFor, drawMatchSF, drawHUDSF, setGame
 };`;
 
 const ctxv = vm.createContext(win);

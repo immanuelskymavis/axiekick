@@ -553,6 +553,8 @@ function mkPlayer(chIdx, x, facing, augs) {
 
 function newMatch(c0, c1, cpu, seed, opt) {
   opt = opt || {};
+  /* the game switch on the title picks the rules; online stays DiveKick */
+  if ((opt.rules || (net.on ? "kick" : SETTINGS.game)) === "fighter") return sfNewMatch(c0, c1, cpu, seed, opt);
   return {
     tick: 0,
     win: opt.win || WIN_ROUNDS,
@@ -831,6 +833,7 @@ function stepPlayer(p, opp, inp) {
 /* Pure w.r.t. the sim: same (state, in0, in1) always yields the same state.
    Returned sound events are advisory only and never feed back into state.   */
 function step(s, in0, in1) {
+  if (s.rules === "fighter") return sfStep(s, in0, in1);
   const ev = [];
   s.tick++;
   s.pt++;
@@ -935,6 +938,997 @@ function endRound(s, winner, kind, ev) {
   ev.push(kind === "ko" ? "hit:" + winner : kind === "trade" ? "trade" : "time");
 }
 
+/* =========================== AXIE FIGHTER ===============================
+   The street rules: the same six Axies with a health bar, an eight-way stick
+   and four buttons. It is a second simulation behind the same three calls the
+   rest of the game already makes - newMatch, step and s.score - so the menus,
+   the story ladder and the CPU hook carry over without learning anything.
+
+   Same contract as step(): pure, plain data, no clock, no RNG. Only add,
+   subtract and multiply - no trig - so a later online build can trust it.
+   ====================================================================== */
+const IN_UP = 16, IN_DOWN = 32, IN_LP = 64, IN_HP = 128, IN_LK = 256, IN_HK = 512;
+const SF_BTN = IN_LP | IN_HP | IN_LK | IN_HK;
+const SF_IN = SF_BTN | IN_UP | IN_DOWN | IN_LEFT | IN_RIGHT;
+const SF_ROUND = 99 * 60, SF_WIN = 2, SF_METER = 300;
+const SF_HIST = 32;           /* frames of stick history kept for motions */
+const SF_BUF = 5;             /* a button press waits this long for a chance to come out */
+const SF_MOTION = 14;         /* frames a quarter circle may take */
+const SF_SUPER_FREEZE = 40;
+const SF_STARTX = [330, 670];
+
+function sfOn() { return SETTINGS.game === "fighter"; }
+/* the story ladder thinks in DiveKick rounds; a health bar round is longer */
+function sfWins(w) { return !w ? SF_WIN : w <= 1 ? 1 : 2; }
+
+/* ---- moves ---------------------------------------------------------------
+   Every Axie shares one input skeleton so anyone can pick up anyone:
+   236+P projectile, 623+P anti-air, 214+K a move that goes somewhere,
+   236236+P the super. Frame data and flavour are what differ. Boxes are
+   [ahead, height, width, height] in units of the body (R = rx, B = bodyY),
+   measured from the feet, so they follow whatever the rig measured. */
+const AN = {
+  jab: "attack/melee/normal-attack", gore: "attack/melee/horn-gore",
+  smash: "attack/melee/tail-smash", roll: "attack/melee/tail-roll",
+  thrash: "attack/melee/tail-thrash", bite: "attack/melee/mouth-bite",
+  walk: "action/move-forward", block: "defense/evade", hit: "defense/hit-by-normal",
+  down: "defense/hit-by-normal-dramatic", intro: "activity/entrance"
+};
+
+const SF_NORMALS = {
+  "5LP": { su: 4, ac: 3, rc: 7, dmg: 30, hs: 16, bs: 11, guard: "mid", box: [1.25, 1.15, 1.0, 0.6], chain: 1, cancel: "sp", push: 4, btn: "lp" },
+  "5HP": { su: 8, ac: 4, rc: 18, dmg: 80, hs: 20, bs: 16, guard: "mid", box: [1.6, 1.15, 1.3, 0.8], cancel: "sp", push: 7, heavy: 1, btn: "hp" },
+  "5LK": { su: 5, ac: 3, rc: 8, dmg: 35, hs: 16, bs: 11, guard: "mid", box: [1.45, 0.6, 1.1, 0.5], chain: 1, cancel: "sp", push: 4, btn: "lk" },
+  "5HK": { su: 10, ac: 4, rc: 20, dmg: 90, hs: 21, bs: 16, guard: "mid", box: [1.8, 0.95, 1.4, 0.7], push: 8, heavy: 1, btn: "hk" },
+  "2LP": { su: 4, ac: 3, rc: 7, dmg: 25, hs: 15, bs: 10, guard: "mid", box: [1.3, 0.75, 1.0, 0.5], chain: 1, cancel: "sp", push: 4, btn: "lp", cr: 1 },
+  "2LK": { su: 5, ac: 3, rc: 8, dmg: 25, hs: 15, bs: 10, guard: "low", box: [1.5, 0.2, 1.2, 0.4], chain: 1, cancel: "sp", push: 4, btn: "lk", cr: 1 },
+  "2HP": { su: 6, ac: 5, rc: 18, dmg: 75, hs: 19, bs: 15, guard: "mid", box: [0.9, 1.9, 1.2, 1.3], cancel: "sp", push: 6, heavy: 1, btn: "hp", cr: 1, jug: 1 },
+  "2HK": { su: 9, ac: 4, rc: 24, dmg: 80, hs: 20, bs: 14, guard: "low", box: [1.85, 0.15, 1.6, 0.35], kd: 1, push: 6, heavy: 1, btn: "hk", cr: 1 },
+  "jLP": { su: 4, ac: 8, rc: 0, dmg: 35, hs: 14, bs: 10, guard: "high", box: [1.0, 0.0, 1.0, 0.7], push: 3, air: 1, btn: "lp" },
+  "jHP": { su: 7, ac: 6, rc: 0, dmg: 85, hs: 18, bs: 14, guard: "high", box: [1.15, -0.1, 1.2, 0.9], push: 5, air: 1, heavy: 1, btn: "hp" },
+  "jLK": { su: 5, ac: 8, rc: 0, dmg: 40, hs: 14, bs: 10, guard: "high", box: [1.2, -0.15, 1.1, 0.6], push: 3, air: 1, btn: "lk" },
+  "jHK": { su: 8, ac: 6, rc: 0, dmg: 90, hs: 18, bs: 14, guard: "high", box: [1.35, 0.05, 1.3, 0.8], push: 5, air: 1, heavy: 1, btn: "hk" },
+  "6HP": { su: 18, ac: 3, rc: 14, dmg: 65, hs: 16, bs: 12, guard: "high", box: [1.4, 1.1, 1.2, 0.9], push: 5, heavy: 1, btn: "hp", name: "OVERHEAD" },
+  "throw": { su: 3, ac: 2, rc: 20, dmg: 120, throw: 1, box: [1.05, 0.9, 0.9, 1.0], btn: "lp" }
+};
+
+/* per Axie: health, how it moves, which of its animations each button uses,
+   and its specials. Projectiles are { vx, vy, g, r, life, hits, gap }. */
+const SF_KIT = [
+  { /* OLEK: slow, heavy, holds the floor */
+    hp: 1150, walk: 0.82, T: 24, h: 132, jvx: 3.0, dmg: 1.08,
+    anim: { lp: AN.jab, hp: AN.smash, lk: AN.roll, hk: AN.thrash },
+    fb: { name: "SEED SHOT", kind: "seed", vx: [3.4, 4.8], vy: 0, r: 20, dmg: 70, su: 11, rc: 32 },
+    dp: { name: "BRAMBLE UPPER", vx: [1.2, 2.2], vy: [9.5, 12], dmg: [100, 125] },
+    qcbK: { name: "ROOT CREEP", type: "rush", vx: [6.4, 8.4], dur: [16, 22], guard: "low", kd: 1, dmg: [70, 90], anim: AN.roll },
+    qcbP: { name: "ROOT GRAB", type: "grab", reach: 1.5, dmg: [150, 180] },
+    tc: [["5LP", "hp", "5HP"], ["2LK", "hk", "2HK"]],
+    sup: { name: "TAIL SWEEP", type: "rush", vx: 13, dur: 32, hits: 5, gap: 5, dmg: 55, guard: "low", kd: 1, anim: AN.smash }
+  },
+  { /* BUBA: rushdown, armour, does not care */
+    hp: 1050, walk: 1.08, T: 19, h: 128, jvx: 3.8, dmg: 1.04,
+    anim: { lp: AN.jab, hp: AN.gore, lk: AN.roll, hk: AN.smash },
+    fb: { name: "HORN WAVE", kind: "wave", vx: [8.5, 11], vy: 0, r: 16, y: 0.45, life: 34, dmg: 60, su: 9, rc: 26 },
+    dp: { name: "HORN UPPER", vx: [2.0, 3.0], vy: [10, 12.5], dmg: [105, 130] },
+    qcbK: { name: "BULL RUSH", type: "rush", vx: [7.5, 9.5], dur: [20, 26], guard: "mid", kd: 1, armor: 1, dmg: [80, 100], anim: AN.gore },
+    tc: [["5LK", "hk", "5HK"], ["5HP", "hk", "5HK"]],
+    sup: { name: "METEOR", type: "meteor", up: 14, dive: [9, -17], hits: 4, gap: 4, dmg: 70, anim: AN.gore }
+  },
+  { /* PUFFY: floats, counters, keeps you out */
+    hp: 950, walk: 0.95, T: 24, h: 140, jvx: 3.2, dmg: 1.0, floatMax: 40,
+    anim: { lp: AN.jab, hp: AN.roll, lk: AN.roll, hk: AN.thrash },
+    fb: { name: "BUBBLE", kind: "bubble", vx: [2.6, 3.6], vy: 0.35, r: 18, life: 200, dmg: 60, su: 10, rc: 28 },
+    dp: { name: "GEYSER", vx: [0.8, 1.6], vy: [10.5, 13], dmg: [95, 115] },
+    qcbK: { name: "INFLATE", type: "counter", win: 22, dmg: 120 },
+    tc: [["5LP", "lk", "5LK"], ["5LK", "hk", "5HK"]],
+    sup: { name: "BURST", type: "rush", vx: 16, dur: 30, hits: 5, gap: 5, dmg: 55, guard: "mid", kd: 1, anim: AN.roll }
+  },
+  { /* POMODORO: aims everything */
+    hp: 950, walk: 1.0, T: 22, h: 150, jvx: 3.4, dmg: 1.0,
+    anim: { lp: AN.jab, hp: AN.gore, lk: AN.roll, hk: AN.thrash },
+    fb: { name: "SPIKE", kind: "spike", vx: [6.5, 4.8], vy: [0, 4.8], r: 12, dmg: 65, su: 10, rc: 26 },
+    dp: { name: "CLAW UPPER", vx: [1.6, 2.6], vy: [10, 12.5], dmg: [100, 120] },
+    qcbK: { name: "HOP", type: "hop", vx: [5.5, 7.5], vy: [9, 10.5], dmg: [70, 85] },
+    tc: [["5LP", "hp", "5HP"], ["2LP", "hp", "2HP"]],
+    sup: { name: "SPLIT", type: "projs", su: 10, rc: 30, kind: "spike", r: 15, dmg: 55, hits: 2, gap: 6, vel: [[8, 0], [7, 3.6], [6, 6.4]] }
+  },
+  { /* VENOKI: slithers under things */
+    hp: 1000, walk: 0.95, T: 23, h: 135, jvx: 3.2, dmg: 1.0,
+    anim: { lp: AN.jab, hp: AN.thrash, lk: AN.roll, hk: AN.smash },
+    fb: { name: "VENOM SPIT", kind: "spit", vx: [5.5, 5.0], vy: [2.5, 8.0], g: 0.36, r: 14, dmg: 70, su: 10, rc: 28 },
+    dp: { name: "FANG RISE", vx: [1.4, 2.4], vy: [10, 12.5], dmg: [100, 120] },
+    qcbK: { name: "SIDEWINDER", type: "rush", vx: [6.5, 8.5], dur: [18, 24], guard: "low", kd: 1, pinv: 1, dmg: [70, 85], anim: AN.thrash, low: 1 },
+    tc: [["5LK", "hp", "5HP"], ["5HP", "hk", "5HK"]],
+    sup: { name: "COIL", type: "rush", vx: 18, dur: 26, hits: 6, gap: 4, dmg: 50, guard: "mid", kd: 1, anim: AN.thrash }
+  },
+  { /* MOMO: lives in the air */
+    hp: 900, walk: 1.05, T: 21, h: 140, jvx: 3.8, dmg: 0.98, airJumps: 1,
+    anim: { lp: AN.jab, hp: AN.bite, lk: AN.roll, hk: AN.smash },
+    fb: { name: "FEATHER", kind: "feather", vx: [6.0, 8.0], vy: 0, r: 11, dmg: 55, su: 9, rc: 24, air: [6.0, -5.0] },
+    dp: { name: "WING UPPER", vx: [1.8, 2.8], vy: [10.5, 13], dmg: [95, 115] },
+    qcbK: { name: "DIVE KICK", type: "dive", vx: [7, 9], vy: [-7.5, -9], dmg: [70, 85], anim: AN.smash },
+    tc: [["jLK", "hk", "jHK"], ["5LP", "lk", "5LK"], ["5LK", "hp", "5HP"]],
+    sup: { name: "DIVEBOMB", type: "meteor", up: 13, dive: [11, -14], hits: 4, gap: 4, dmg: 70, anim: AN.bite, air: 1 }
+  }
+];
+
+/* build the full move list for one Axie once; state only ever names a move */
+const SF_MOVES = SF_KIT.map((k, ch) => {
+  const M = {};
+  for (const id in SF_NORMALS) {
+    const n = Object.assign({ id, kind: "normal" }, SF_NORMALS[id]);
+    n.anim = n.throw ? AN.bite : n.btn === "lp" && !n.air ? AN.jab : k.anim[n.btn];
+    n.dmg = Math.round(n.dmg * k.dmg);
+    M[id] = n;
+  }
+  for (let s = 0; s < 2; s++) {
+    const H = s ? "H" : "L", f = k.fb;
+    const at = (v, i) => Array.isArray(v) ? v[i] : v;
+    M["fb" + H] = {
+      id: "fb" + H, kind: "special", name: f.name, su: f.su + s, ac: 1, rc: f.rc, anim: AN.bite, cancel: "su",
+      proj: [{ kind: f.kind, vx: at(f.vx, s), vy: at(f.vy, s) || 0, g: f.g || 0, r: f.r, y: f.y || 1.05,
+        life: f.life || 160, dmg: f.dmg + s * 10, hits: 1 }]
+    };
+    if (f.air) M["afb" + H] = Object.assign({}, M["fb" + H], {
+      id: "afb" + H, air: 1, su: 9, rc: 14,
+      proj: [Object.assign({}, M["fb" + H].proj[0], { vx: f.air[0] + s, vy: f.air[1] })]
+    });
+    M["dp" + H] = {
+      id: "dp" + H, kind: "special", name: k.dp.name, type: "dp", su: 3, ac: 12, rc: 18, anim: AN.gore,
+      vx: k.dp.vx[s], vy: k.dp.vy[s], dmg: k.dp.dmg[s], hs: 30, bs: 18, guard: "mid", inv: 6 + s * 2,
+      kd: 1, jug: 1, launch: 9, push: 3, box: [0.95, 1.4, 1.2, 1.6], cancel: "su"
+    };
+    const q = k.qcbK;
+    if (q.type === "rush") M["qk" + H] = {
+      id: "qk" + H, kind: "special", name: q.name, type: "rush", su: 8, ac: q.dur[s], rc: 16, anim: q.anim,
+      vx: q.vx[s], dmg: q.dmg[s], hs: 22, bs: 14, guard: q.guard, kd: q.kd, armor: q.armor, pinv: q.pinv,
+      push: 6, box: q.low ? [1.3, 0.3, 1.5, 0.5] : [1.3, 0.8, 1.4, 0.9], low: q.low, cancel: "su"
+    };
+    else if (q.type === "counter") M["qk" + H] = {
+      id: "qk" + H, kind: "special", name: q.name, type: "counter", su: 2, ac: q.win + s * 4, rc: 16, anim: AN.block,
+      dmg: q.dmg, hs: 30, bs: 0, kd: 1, launch: 8, push: 6, box: [1.4, 1.0, 1.8, 1.6]
+    };
+    else if (q.type === "hop") M["qk" + H] = {
+      id: "qk" + H, kind: "special", name: q.name, type: "hop", su: 5, ac: 99, rc: 10, anim: AN.thrash,
+      vx: q.vx[s], vy: q.vy[s], dmg: q.dmg[s], hs: 20, bs: 14, guard: "high", push: 4, box: [0.8, -0.2, 1.4, 0.8]
+    };
+    else if (q.type === "dive") M["qk" + H] = {
+      id: "qk" + H, kind: "special", name: q.name, type: "dive", air: 1, su: 3, ac: 99, rc: 8, anim: q.anim,
+      vx: q.vx[s], vy: q.vy[s], dmg: q.dmg[s], hs: 20, bs: 14, guard: "high", push: 5, box: [0.9, -0.3, 1.2, 0.8]
+    };
+    if (k.qcbP) M["qp" + H] = {
+      id: "qp" + H, kind: "special", name: k.qcbP.name, su: 5 + s, ac: 3, rc: 26, anim: AN.bite,
+      grab: 1, reach: k.qcbP.reach, dmg: k.qcbP.dmg[s], box: [k.qcbP.reach, 0.9, 1.0, 1.2]
+    };
+  }
+  const u = k.sup;
+  const sup = { id: "sup", kind: "super", name: u.name, type: u.type, anim: u.anim || AN.bite, inv: 14, guard: u.guard || "mid" };
+  if (u.type === "rush") Object.assign(sup, { su: 6, ac: u.dur, rc: 22, vx: u.vx, dmg: u.dmg, hits: u.hits, gap: u.gap, hs: 18, bs: 10, kd: u.kd, jug: 1, push: 2, box: [1.3, 0.7, 1.6, 1.2] });
+  if (u.type === "meteor") Object.assign(sup, { su: 4, ac: 99, rc: 20, up: u.up, dive: u.dive, dmg: u.dmg, hits: u.hits, gap: u.gap, hs: 18, bs: 10, kd: 1, jug: 1, launch: 6, push: 2, box: [0.9, 0.3, 1.8, 1.6] });
+  if (u.type === "projs") Object.assign(sup, { su: u.su, ac: 1, rc: u.rc, proj: u.vel.map(v => ({ kind: u.kind, vx: v[0], vy: v[1], g: 0, r: u.r, y: 1.05, life: 140, dmg: u.dmg, hits: u.hits, gap: u.gap, sup: 1 })) });
+  M.sup = sup;
+  if (u.air) M.asup = Object.assign({}, sup, { id: "asup", su: 2, air: 1 });
+  /* the counter's answer: an Axie that was not there a moment ago */
+  M.ctr = { id: "ctr", kind: "special", name: "COUNTER", su: 1, ac: 6, rc: 18, anim: AN.roll,
+    dmg: (k.qcbK.dmg || 110), hs: 30, bs: 0, kd: 1, jug: 1, launch: 8, push: 6, box: [1.3, 1.0, 1.9, 1.6], guard: "mid" };
+  M.tc = k.tc;
+  return M;
+});
+function sfMove(p) { return p.mv ? SF_MOVES[p.ch][p.mv] : null; }
+
+/* ---- stats -------------------------------------------------------------- */
+/* An augment that bends DiveKick (reach, dive angle) bends Fighter through
+   its own table; the stat block is still a copy, so the sim never learns
+   which items exist. */
+function sfStatsFor(chIdx, augs) {
+  const c = Object.assign({}, CHARS[chIdx]);
+  const k = SF_KIT[chIdx];
+  const j = arc(k.T, k.h);
+  Object.assign(c, {
+    hpMax: k.hp, walkF: 3.1 * k.walk, walkB: 2.5 * k.walk, jumpV: j.jumpV, g: j.g, jumpVX: k.jvx,
+    reachMul: 1, dmgMul: 1, projSpd: 1, hurtMul: 1, recMul: 1, meterMul: 1, airJumps: k.airJumps || 0,
+    floatMax: k.floatMax || 0, heavyBox: 1, heavyDmg: 1, extraRec: 0, armedBack: 0
+  });
+  if (augs) for (const id of augs) { const a = AUG[id]; if (a && a.sf) a.sf(c); }
+  return c;
+}
+function sfLinkAugs(ps) {
+  for (let i = 0; i < 2; i++) for (const id of ps[i].augs) {
+    const a = AUG[id];
+    if (a && a.sfFoe) a.sfFoe(ps[1 - i].c);
+  }
+  return ps;
+}
+
+function sfPlayer(chIdx, x, facing, augs) {
+  const c = sfStatsFor(chIdx, augs);
+  const cos = costumeFor(chIdx);
+  return {
+    sf: 1, ch: chIdx, c, augs: augs || [], cos: cos ? cos.id : null, tint: false,
+    x, y: 0, vx: 0, vy: 0, facing, st: "stand", t: 0, walk: 0, cr: 0,
+    hp: c.hpMax, hpMax: c.hpMax, meter: 0, ward: c.wardStart || 0, band: c.band || 0, dead: false, kf: 0,
+    mv: null, mf: 0, mcon: 0, mhits: 0, lastHit: -99, chainN: 0, airAtk: 0, airJ: 0, floatT: 0,
+    stun: 0, combo: 0, cdmg: 0, jug: 0, kdNext: 0, inv: 0, armor: 0, pushV: 0,
+    hist: [], prevIn: 0, buf: 0, bufT: 0, jdir: 0, foe: 0, tech: 0, back: 0, ctrHit: 0
+  };
+}
+
+function sfNewMatch(c0, c1, cpu, seed, opt) {
+  return {
+    rules: "fighter", tick: 0, win: sfWins(opt.win),
+    cpu: cpu === null || cpu === undefined ? null
+      : { diff: cpu, seed: (20220429 + (seed || 0) * 2654435761) & 0x7fffffff, wait: 30, err: 0, seen: null, plan: [] },
+    phase: "intro", pt: 0, round: 1, score: [0, 0], timer: SF_ROUND, result: null,
+    p: mirrorMark(sfLinkAugs([sfPlayer(c0, SF_STARTX[0], 1, opt.a0), sfPlayer(c1, SF_STARTX[1], -1, opt.a1)])),
+    proj: [], fx: [], hitstop: 0, freeze: 0, freezeBy: -1, shake: 0, flash: 0
+  };
+}
+
+function sfResetRound(s) {
+  const keep = s.p.map(p => [p.meter, p.ward]);
+  s.p = mirrorMark(sfLinkAugs([
+    sfPlayer(s.p[0].ch, SF_STARTX[0], 1, s.p[0].augs), sfPlayer(s.p[1].ch, SF_STARTX[1], -1, s.p[1].augs)]));
+  for (let i = 0; i < 2; i++) { s.p[i].meter = keep[i][0]; s.p[i].ward = keep[i][1]; }
+  s.proj = []; s.fx = [];
+  s.timer = SF_ROUND; s.result = null; s.phase = "intro"; s.pt = 0;
+  s.hitstop = 0; s.freeze = 0;
+}
+
+/* ---- input -------------------------------------------------------------- */
+/* numpad notation, turned to face the opponent: 6 is towards them */
+function sfDir(inp, facing) {
+  const fwd = facing > 0 ? IN_RIGHT : IN_LEFT, bk = facing > 0 ? IN_LEFT : IN_RIGHT;
+  const x = (inp & fwd ? 1 : 0) - (inp & bk ? 1 : 0);
+  const y = (inp & IN_UP ? 1 : 0) - (inp & IN_DOWN ? 1 : 0);
+  return 5 + x + 3 * y;
+}
+
+const SF_QCF = [[2], [3], [6]], SF_QCB = [[2], [1], [4]], SF_DP = [[6], [2, 1], [3]];
+const SF_SUPER = [[2], [3], [6], [2], [3], [6]];
+/* Walk back through the stick history looking for the motion's steps in
+   reverse order. Anything else in between is ignored - that is the leniency
+   a sloppy quarter circle needs - but it all has to fit inside the window. */
+function sfMotion(p, seq, win) {
+  const h = p.hist;
+  let k = seq.length - 1;
+  for (let i = h.length - 1; i >= 0 && h.length - 1 - i < win; i--) {
+    if (seq[k].includes(sfDir(h[i], p.facing))) { if (--k < 0) return true; }
+  }
+  return false;
+}
+
+/* ---- boxes -------------------------------------------------------------- */
+function sfHurt(p) {
+  const c = p.c, m = c.hurtMul, low = p.st === "crouch" || (p.cr && (p.st === "block" || p.st === "hit")) ||
+    (p.mv && sfMove(p).cr) || (p.mv && sfMove(p).low);
+  return low ? [p.x, p.y + c.bodyY * 0.72, c.rx * m, c.ry * 0.7 * m] : [p.x, p.y + c.bodyY, c.rx * m, c.ry * m];
+}
+/* the move's box in world space: centre x, centre y, half width, half height */
+function sfHitBox(p, m) {
+  const c = p.c, R = c.rx, B = c.bodyY, b = m.box;
+  let reach = c.reachMul, size = m.heavy ? c.heavyBox : 1;
+  return [p.x + p.facing * b[0] * R * reach, p.y + b[1] * B, b[2] * R * 0.5 * size * (m.kind === "normal" ? reach : 1), b[3] * B * 0.5 * size];
+}
+/* rect against ellipse: squash space until the ellipse is a unit circle */
+function sfRectHitsEll(r, e) {
+  const sx = 1 / e[2], sy = 1 / e[3];
+  const cx = (r[0] - e[0]) * sx, cy = (r[1] - e[1]) * sy, hw = r[2] * sx, hh = r[3] * sy;
+  const dx = Math.max(0, Math.abs(cx) - hw), dy = Math.max(0, Math.abs(cy) - hh);
+  return dx * dx + dy * dy <= 1;
+}
+/* a swinging limb is part of you: stick it out and it can be hit */
+function sfLimb(hb, d) {
+  const m = sfMove(d);
+  if (!m || !m.box || m.kind !== "normal" || d.mf <= m.su) return false;
+  const l = sfHitBox(d, m);
+  return Math.abs(hb[0] - l[0]) < hb[2] + l[2] * 0.7 && Math.abs(hb[1] - l[1]) < hb[3] + l[3] * 0.7;
+}
+function sfActive(p) {
+  const m = sfMove(p);
+  if (!m || !m.box) return false;
+  if (m.type === "hop" || m.type === "dive") return p.mf > m.su && (m.type === "dive" || p.vy < 2);
+  if (m.type === "meteor") return p.mf > m.su;
+  return p.mf > m.su && p.mf <= m.su + m.ac;
+}
+
+/* ---- one fighter, one tick ---------------------------------------------- */
+function sfGrounded(p) { return p.y <= 0 && (p.st === "stand" || p.st === "crouch"); }
+function sfFace(p, o) { if (o.x !== p.x) p.facing = o.x > p.x ? 1 : -1; }
+
+function sfStart(s, i, id, ev) {
+  const p = s.p[i], o = s.p[1 - i], m = SF_MOVES[p.ch][id];
+  if (!m.air) sfFace(p, o);
+  p.mv = id; p.mf = 0; p.mcon = 0; p.mhits = 0; p.lastHit = -99; p.buf = 0; p.bufT = 0; p.ctrHit = 0;
+  p.armor = m.armor ? 1 : 0;
+  if (!m.air && p.y <= 0) { p.st = "atk"; p.t = 0; p.vx = 0; }
+  if (m.kind === "normal" && !m.air) p.chainN = m.chain ? p.chainN + 1 : p.chainN;
+  if (m.inv) p.inv = m.inv;
+  if (m.air) p.airAtk = 1;
+  if (m.kind === "super") {
+    p.meter -= SF_METER;
+    s.freeze = SF_SUPER_FREEZE; s.freezeBy = i; s.flash = 8;
+    ev.push("spec:" + i);
+  } else if (m.kind === "special") {
+    p.meter = Math.min(SF_METER, p.meter + Math.round(12 * p.c.meterMul));
+    ev.push("sfspec:" + i);
+  } else ev.push((m.heavy ? "kick:" : "whiff:") + i);
+  if (m.type === "dive") { p.vx = m.vx * p.facing; p.vy = m.vy; }
+}
+
+/* the single place a button becomes a move: throws, then the motion list in
+   priority order (so 6236 is an uppercut, as everybody expects), then normals */
+function sfTry(s, i, d, how, ev) {
+  const p = s.p[i], o = s.p[1 - i], M = SF_MOVES[p.ch];
+  const b = p.buf;
+  if (!b) return false;
+  const P = b & (IN_LP | IN_HP), K = b & (IN_LK | IN_HK);
+  const air = p.y > 0;
+  const H = (b & (IN_HP | IN_HK)) ? "H" : "L";
+  const Hp = (b & IN_HP) ? "H" : "L", Hk = (b & IN_HK) ? "H" : "L";
+  const own = s.proj.some(q => q.owner === i && !q.sup);
+  if (how.sp) {
+    if (P && p.meter >= SF_METER && sfMotion(p, SF_SUPER, SF_MOTION * 2)) {
+      if (!air && M.sup && !M.sup.airOnly) { sfStart(s, i, "sup", ev); return true; }
+      if (air && M.asup) { sfStart(s, i, "asup", ev); return true; }
+    }
+  }
+  if (how.sp && !how.suOnly) {
+    if (!air && P && sfMotion(p, SF_DP, SF_MOTION)) { sfStart(s, i, "dp" + Hp, ev); return true; }
+    if (P && sfMotion(p, SF_QCF, SF_MOTION) && !own) {
+      if (!air) { sfStart(s, i, "fb" + Hp, ev); return true; }
+      if (M["afb" + Hp] && !p.mv) { sfStart(s, i, "afb" + Hp, ev); return true; }
+    }
+    if (!air && P && M["qpL"] && sfMotion(p, SF_QCB, SF_MOTION)) { sfStart(s, i, "qp" + Hp, ev); return true; }
+    if (K && sfMotion(p, SF_QCB, SF_MOTION)) {
+      const q = M["qk" + Hk];
+      if (q && !!q.air === air && !(air && p.mv)) { sfStart(s, i, "qk" + Hk, ev); return true; }
+    }
+  }
+  if (how.tc && p.mv) {
+    for (const [from, btn, to] of M.tc) {
+      const bit = { lp: IN_LP, hp: IN_HP, lk: IN_LK, hk: IN_HK }[btn];
+      if (p.mv === from && (b & bit)) {
+        if (M[to].air) { const keep = p.airAtk; sfStart(s, i, to, ev); p.airAtk = keep; }
+        else sfStart(s, i, to, ev);
+        /* a target combo's second hit is quicker than the button on its own */
+        p.mf = Math.max(0, M[to].su - 4);
+        return true;
+      }
+    }
+  }
+  if (how.n || how.chain) {
+    if (!air && how.n && (b & IN_LP) && (b & IN_LK)) { sfStart(s, i, "throw", ev); return true; }
+    const btn = b & IN_HP ? "HP" : b & IN_HK ? "HK" : b & IN_LP ? "LP" : b & IN_LK ? "LK" : null;
+    if (!btn) return false;
+    if (air) {
+      if (how.n && !p.airAtk) { sfStart(s, i, "j" + btn, ev); return true; }
+      return false;
+    }
+    const light = btn === "LP" || btn === "LK";
+    if (how.chain && !how.n && (!light || p.chainN >= 3)) return false;
+    let id = (d <= 3 ? "2" : "5") + btn;
+    if (btn === "HP" && d === 6 && how.n) id = "6HP";
+    sfStart(s, i, id, ev);
+    return true;
+  }
+  return false;
+}
+
+function sfNeutral(p) {
+  p.mv = null; p.mf = 0; p.chainN = 0; p.armor = 0;
+  p.st = p.y > 0 ? "air" : (p.prevIn & IN_DOWN) ? "crouch" : "stand";
+  p.t = 0;
+}
+
+function sfStepPlayer(s, i, inp, ev) {
+  const p = s.p[i], o = s.p[1 - i], c = p.c;
+  inp &= SF_IN;
+  p.t++;
+  if (p.inv > 0) p.inv--;
+  /* history and the button buffer first, so a press acts on the frame it lands */
+  const prev = p.prevIn;
+  p.hist.push(inp); if (p.hist.length > SF_HIST) p.hist.shift();
+  const press = inp & SF_BTN & ~prev;
+  if (press) { p.buf |= press; p.bufT = SF_BUF; }
+  else if (p.bufT > 0 && --p.bufT === 0) p.buf = 0;
+  p.prevIn = inp;
+  const d = sfDir(inp, p.facing);
+
+  /* the body keeps moving whatever state it is in */
+  if (p.pushV) { p.x += p.pushV; p.pushV *= 0.82; if (Math.abs(p.pushV) < 0.2) p.pushV = 0; }
+
+  switch (p.st) {
+    case "stand": case "crouch": {
+      sfFace(p, o);
+      p.combo = 0; p.cdmg = 0; p.jug = 0; p.walk = 0; p.airAtk = 0; p.airJ = 0; p.floatT = 0;
+      if (sfTry(s, i, d, { sp: 1, n: 1, tc: 0 }, ev)) break;
+      if (d >= 7) { p.st = "pre"; p.t = 0; p.jdir = (d === 9 ? 1 : d === 7 ? -1 : 0) * p.facing; break; }
+      if (d <= 3) { if (p.st !== "crouch") p.t = 0; p.st = "crouch"; p.cr = 1; break; }
+      if (p.st !== "stand") p.t = 0;
+      p.st = "stand"; p.cr = 0;
+      if (d === 6) { p.walk = 1; p.x += p.facing * c.walkF; }
+      else if (d === 4) { p.walk = -1; p.x -= p.facing * c.walkB; }
+      break;
+    }
+    case "pre":
+      if (sfTry(s, i, d, { sp: 1, n: 0 }, ev)) break;
+      if (p.t >= 3) {
+        p.st = "air"; p.t = 0; p.vy = c.jumpV; p.vx = p.jdir * c.jumpVX;
+        ev.push("dive:" + i);
+      }
+      break;
+    case "air": {
+      if (p.mv) {
+        const m = sfMove(p);
+        p.mf++;
+        if (m.proj && p.mf === m.su) sfSpawn(s, i, m);
+        if (m.type === "dive") { p.vx = m.vx * p.facing; p.vy = m.vy; }
+        else if (m.type === "meteor") sfMeteor(p, m);
+        else if (p.mcon && sfTry(s, i, d, { tc: 1, sp: 1, suOnly: m.kind !== "normal" }, ev)) break;
+        if (m.proj && p.mf >= m.su + m.rc) p.mv = null;
+      } else {
+        if (sfTry(s, i, d, { sp: 1, n: 1 }, ev)) break;
+        const upEdge = (inp & IN_UP) && !(prev & IN_UP);
+        if (upEdge && p.airJ < c.airJumps && p.vy < 4) {
+          p.airJ++; p.vy = c.jumpV * 0.85; p.vx = (d === 9 ? 1 : d === 7 ? -1 : 0) * p.facing * c.jumpVX;
+          ev.push("dive:" + i);
+        }
+      }
+      /* Puffy (and anyone with Plume) holds up to hang at the top of a jump */
+      if (c.floatMax && (inp & IN_UP) && p.vy <= 0 && p.floatT < c.floatMax && !p.mv) { p.floatT++; p.vy = -0.4; }
+      else if (!(p.mv && sfMove(p).type === "dive")) p.vy -= c.g;
+      p.x += p.vx; p.y += p.vy;
+      if (p.y <= 0) {
+        const lm = sfMove(p);
+        p.y = 0; p.vy = 0; p.vx = 0; sfLand(p, ev, i);
+        if (lm && lm.kind !== "normal") p.landRc = Math.round(lm.rc * c.recMul);
+      }
+      break;
+    }
+    case "atk": {
+      const m = sfMove(p);
+      p.mf++;
+      if (m.proj && p.mf === m.su) sfSpawn(s, i, m);
+      if (m.type === "dp" && p.mf === m.su) { p.vy = m.vy; p.vx = m.vx * p.facing; }
+      if (m.type === "hop" && p.mf === m.su) { p.vy = m.vy; p.vx = m.vx * p.facing; }
+      if (m.type === "meteor") sfMeteor(p, m);
+      if (m.type === "rush") {
+        if (p.mf > m.su - 2 && p.mf <= m.su + m.ac) p.vx = m.vx * p.facing;
+        else p.vx *= 0.7;
+      }
+      if (m.grab && p.mf === m.su + 1) sfGrab(s, i, m, ev);
+      if (m.throw && p.mf === m.su + 1) sfGrab(s, i, m, ev);
+      if (p.st !== "atk") break;     /* a grab that connected moved us on */
+      /* LP and LK a frame apart is still a throw: the jab gives way to it */
+      if (!m.throw && m.chain && p.mf <= 2 && (p.buf & IN_LP) && (p.buf & IN_LK)) {
+        sfStart(s, i, "throw", ev); break;
+      }
+
+      /* cancels open once the move has touched them, hit or block */
+      if (p.mcon && p.buf) {
+        if (m.kind === "normal") {
+          if (sfTry(s, i, d, { tc: 1, sp: m.cancel === "sp", chain: m.chain }, ev)) break;
+        } else if (m.cancel === "su") {
+          if (sfTry(s, i, d, { sp: 1, suOnly: 1 }, ev)) break;
+        }
+      }
+
+      const airborne = m.type === "dp" || m.type === "hop" || m.type === "meteor" || p.y > 0;
+      if (airborne && (p.mf >= m.su || p.y > 0)) {
+        p.vy -= c.g;
+        p.y += p.vy;
+        if (p.y <= 0 && p.mf > m.su) {
+          p.y = 0; p.vy = 0; p.vx = 0;
+          p.mv = null; p.st = "land"; p.t = 0;
+          p.landRc = p.band && m.kind === "special" ? 2 : Math.round(m.rc * c.recMul);
+          if (p.band && m.kind === "special") p.band--;
+          ev.push("land:" + i);
+        }
+      } else {
+        const rc = p.band && m.kind === "special" && !p.mcon ? 0 : Math.round(m.rc * c.recMul);
+        if (p.mf >= m.su + m.ac + rc + c.extraRec) {
+          if (rc === 0 && m.kind === "special" && p.band) p.band--;
+          sfNeutral(p);
+        }
+      }
+      p.x += p.vx;
+      break;
+    }
+    case "land":
+      if (p.t >= (p.landRc || 3)) sfNeutral(p);
+      break;
+    case "hit": case "block":
+      if (p.st === "block") p.cr = d <= 3 ? 1 : 0;
+      if (--p.stun <= 0) sfNeutral(p);
+      break;
+    case "jug":
+      p.vy -= c.g * 0.9; p.x += p.vx; p.y += p.vy;
+      if (p.y <= 0) {
+        p.y = 0; p.vy = 0; p.vx = 0;
+        if (p.kdNext || p.dead) { p.st = "down"; p.t = 0; p.inv = 999; ev.push("land:" + i); }
+        else { p.st = "land"; p.landRc = 4; p.t = 0; p.inv = 4; }
+      }
+      break;
+    case "down":
+      if (p.dead) break;
+      if (p.t >= 36) { p.st = "rise"; p.t = 0; }
+      break;
+    case "rise":
+      if (p.t >= 12) { p.inv = 3; sfNeutral(p); }
+      break;
+    case "thrown":
+      /* LP+LK in the first few frames breaks it, and both of you bounce off */
+      if (p.t <= 8 && (p.buf & IN_LP) && (p.buf & IN_LK) && !o.grabNoTech) {
+        p.buf = 0;
+        for (const q of [p, o]) {
+          q.st = "hit"; q.stun = 14; q.mv = null;
+          q.pushV = (q.x < (p.x + o.x) / 2 ? -1 : 1) * 6;
+        }
+        s.fx.push({ k: "text", text: "TECH", x: (p.x + o.x) / 2, y: 150, t: 0 });
+        ev.push("sfblk:" + i);
+      }
+      break;
+    case "throwing":
+      if (p.t >= 22) {
+        sfThrowLand(s, i, ev);
+      }
+      break;
+    case "win":
+      break;
+  }
+}
+
+function sfLand(p, ev, i) {
+  p.mv = null; p.airAtk = 0; p.airJ = 0; p.floatT = 0;
+  p.st = "land"; p.t = 0; p.landRc = 3;
+  ev.push("land:" + i);
+}
+
+function sfMeteor(p, m) {
+  /* up first, then at the top of the climb it turns and comes down at an angle */
+  if (p.mf === m.su) { p.vy = p.y > 0 ? 4 : m.up; p.vx = 2 * p.facing; p.diving = 0; }
+  if (p.mf > m.su && !p.diving && p.vy <= 0) { p.diving = 1; }
+  if (p.diving) { p.vx = m.dive[0] * p.facing; p.vy = m.dive[1] + p.c.g; }
+}
+
+function sfSpawn(s, i, m) {
+  const p = s.p[i], c = p.c;
+  for (const q of m.proj) {
+    s.proj.push({
+      owner: i, kind: q.kind, sup: q.sup || 0,
+      x: p.x + p.facing * c.rx * 1.2, y: p.y + c.bodyY * q.y,
+      vx: q.vx * p.facing * c.projSpd, vy: q.vy * c.projSpd, g: q.g || 0, r: q.r * (q.sup ? 1.2 : 1),
+      dmg: q.dmg, hits: q.hits || 1, gap: q.gap || 0, cool: 0, life: q.life, t: 0
+    });
+  }
+}
+
+/* throws and command grabs: the victim is pinned in front of you for a beat */
+function sfGrab(s, i, m, ev) {
+  const p = s.p[i], o = s.p[1 - i];
+  const reach = (m.grab ? m.reach : 1.05) * p.c.rx + o.c.rx * 0.6;
+  const ok = o.y <= 0 && Math.abs(o.x - p.x) <= reach + p.c.rx * 0.5 && o.inv <= 0 &&
+    (o.st === "stand" || o.st === "crouch" || o.st === "land" || (o.st === "atk" && !sfMove(o).inv) || o.st === "pre");
+  if (!ok) return;
+  if (m.throw && o.st === "atk" && o.mv === "throw" && o.mf <= 4) {
+    /* both of you grabbed: nobody gets thrown */
+    for (const q of [p, o]) { q.st = "hit"; q.stun = 12; q.mv = null; q.pushV = (q === p ? -1 : 1) * p.facing * 6; }
+    s.fx.push({ k: "text", text: "TECH", x: (p.x + o.x) / 2, y: 150, t: 0 });
+    return;
+  }
+  p.st = "throwing"; p.t = 0; p.mv = m.id; p.grabDmg = m.dmg;
+  p.back = m.throw && sfDir(p.prevIn, p.facing) === 4 ? 1 : 0;
+  o.grabNoTech = 0; p.grabNoTech = m.grab ? 1 : 0;
+  o.st = "thrown"; o.t = 0; o.mv = null; o.buf = 0; o.vx = 0; o.pushV = 0;
+  o.x = p.x + p.facing * (p.c.rx + o.c.rx) * 0.8;
+  ev.push("kick:" + i);
+}
+function sfThrowLand(s, i, ev) {
+  const p = s.p[i], o = s.p[1 - i];
+  if (o.st !== "thrown") { sfNeutral(p); return; }
+  const dir = p.back ? -p.facing : p.facing;
+  if (p.back) o.x = p.x - p.facing * (p.c.rx + o.c.rx) * 0.8;
+  sfDamage(s, i, o, p.grabDmg, { kd: 1 }, ev, false);
+  o.st = "jug"; o.kdNext = 1; o.vy = 7; o.vx = dir * 4.5; o.t = 0;
+  s.hitstop = 10; s.shake = 14;
+  s.fx.push({ k: "spark", x: o.x, y: o.y + o.c.bodyY, t: 0, big: 1, col: p.c.trim });
+  ev.push("sfhvy:" + i);
+  sfNeutral(p);
+  p.st = "land"; p.landRc = 12;
+}
+
+/* damage with scaling, Ward and meter, shared by every way to get hurt */
+function sfDamage(s, ai, d, base, m, ev, chip) {
+  const a = s.p[ai], n = d.combo;
+  const scale = chip ? 1 : n < 2 ? 1 : Math.max(0.3, 1 - 0.1 * n);
+  let dmg = Math.max(1, Math.round(base * a.c.dmgMul * (m.heavy ? a.c.heavyDmg : 1) * scale * (d.ctrNow ? 1.2 : 1)));
+  if (!chip) { d.combo++; d.cdmg += dmg; }
+  if (d.hp - dmg <= 0 && d.ward > 0 && !chip) {
+    d.ward--; dmg = d.hp - 1;
+    s.fx.push({ k: "text", text: "WARD", x: d.x, y: sy(d.y + d.c.bodyY * 2.6), t: 0 });
+    ev.push("ward");
+  }
+  d.hp = Math.max(0, d.hp - dmg);
+  a.meter = Math.min(SF_METER, a.meter + Math.round(dmg * 0.35 * a.c.meterMul));
+  d.meter = Math.min(SF_METER, d.meter + Math.round(dmg * 0.2 * d.c.meterMul));
+  return dmg;
+}
+
+/* would d guard an attack coming from x? hold away from it, at the right height */
+function sfGuard(d, fromX, guard) {
+  const can = d.st === "stand" || d.st === "crouch" || d.st === "block" || d.st === "land" && d.t > 1;
+  if (!can || d.y > 0) return false;
+  const away = fromX > d.x ? IN_LEFT : IN_RIGHT;
+  if (!(d.prevIn & away) && d.st !== "block") return false;
+  const low = (d.prevIn & IN_DOWN) || (d.st === "block" && d.cr && !(d.prevIn & IN_UP));
+  if (guard === "low") return !!low;
+  if (guard === "high") return !low;
+  return true;
+}
+
+function sfCanHit(d, m, proj) {
+  if (d.inv > 0 || d.st === "down" || d.st === "rise" || d.st === "thrown" || d.st === "throwing") return false;
+  if (proj && d.mv && sfMove(d).pinv) return false;
+  if (d.st === "jug") return !!m.jug && d.jug < 3;
+  return true;
+}
+
+/* one hit lands. `src` is where it came from, for blocking and for sparks */
+function sfHit(s, ai, m, src, ev) {
+  const a = s.p[ai], di = 1 - ai, d = s.p[di];
+  /* INFLATE: a strike into a waiting counter gets answered */
+  const dm = sfMove(d);
+  if (!src.proj && dm && dm.type === "counter" && d.mf > dm.su && d.mf <= dm.su + dm.ac) {
+    d.inv = 24; d.mv = null; sfStart(s, di, "ctr", ev);
+    s.fx.push({ k: "text", text: "COUNTER", x: d.x, y: sy(d.y + d.c.bodyY * 2.6), t: 0 });
+    s.hitstop = 12;
+    return;
+  }
+  if (!src.proj) a.mcon = 1;
+  const blocked = sfGuard(d, src.x, m.guard || "mid");
+  const sx = (src.hx !== undefined ? src.hx : d.x - Math.sign(d.x - src.x) * d.c.rx * 0.6);
+  const sy0 = src.hy !== undefined ? src.hy : d.y + d.c.bodyY;
+  const push = (m.push || 4) * (src.x < d.x ? 1 : -1);
+  if (blocked) {
+    d.st = "block"; d.t = 0; d.stun = m.bs || 10; d.mv = null; d.cr = (d.prevIn & IN_DOWN) ? 1 : 0;
+    d.pushV = push;
+    if (m.kind !== "normal") sfDamage(s, ai, d, Math.round(m.dmg * 0.25), m, ev, true);
+    d.meter = Math.min(SF_METER, d.meter + 4);
+    s.hitstop = Math.max(s.hitstop, src.proj ? 5 : 7);
+    s.fx.push({ k: "block", x: sx, y: sy0, t: 0 });
+    ev.push("sfblk:" + di);
+    sfWallPush(s, ai, d, push);
+    return;
+  }
+  /* Bull Rush shrugs off one hit: it still hurts, it just does not stop him */
+  if (d.armor > 0 && !m.throw) {
+    d.armor = 0;
+    sfDamage(s, ai, d, m.dmg, m, ev, false);
+    d.combo = 0;
+    s.hitstop = Math.max(s.hitstop, 9);
+    s.fx.push({ k: "text", text: "ARMOR", x: d.x, y: sy(d.y + d.c.bodyY * 2.6), t: 0 });
+    s.fx.push({ k: "spark", x: sx, y: sy0, t: 0, col: "#FFFFFF" });
+    ev.push("sfblk:" + di);
+    return;
+  }
+  d.ctrNow = d.st === "atk" && dm && d.mf <= dm.su ? 1 : 0;
+  if (d.ctrNow) s.fx.push({ k: "text", text: "COUNTER", x: d.x, y: sy(d.y + d.c.bodyY * 2.6), t: 0 });
+  const dealt = sfDamage(s, ai, d, m.dmg, m, ev, false);
+  d.mv = null; d.armor = 0;
+  const air = d.y > 0 || d.st === "jug";
+  if (air || m.launch || m.kd) {
+    if (d.st === "jug") d.jug++;
+    d.st = "jug"; d.t = 0;
+    d.vy = m.launch || (air ? 5 : 4.5);
+    d.vx = (src.x < d.x ? 1 : -1) * (m.kd ? 3.2 : 2.4);
+    d.kdNext = m.kd || m.launch ? 1 : 0;
+  } else {
+    d.st = "hit"; d.t = 0; d.stun = (m.hs || 15) + (d.ctrNow ? 3 : 0);
+    d.cr = (d.prevIn & IN_DOWN) ? 1 : 0;
+    d.pushV = push;
+    sfWallPush(s, ai, d, push);
+  }
+  d.ctrNow = 0;
+  const heavy = m.kind !== "normal" || m.heavy;
+  s.hitstop = Math.max(s.hitstop, src.proj ? 7 : m.kind === "super" ? 6 : heavy ? 11 : 8);
+  if (heavy) s.shake = Math.max(s.shake, 8);
+  s.fx.push({ k: "spark", x: sx, y: sy0, t: 0, big: heavy ? 1 : 0, col: a.c.trim });
+  ev.push((heavy ? "sfhvy:" : "sfhit:") + ai);
+  return dealt;
+}
+
+/* pushback that would put someone through the wall comes back on the attacker */
+function sfWallPush(s, ai, d, push) {
+  const a = s.p[ai];
+  if (d.x <= WALL + 4 || d.x >= STAGE_W - WALL - 4) a.pushV = -push * 0.8;
+}
+
+/* bodies do not overlap, and neither does anybody leave the stage */
+function sfPushApart(s) {
+  const a = s.p[0], b = s.p[1];
+  const w = (a.c.rx + b.c.rx) * 0.72;
+  const vert = Math.abs(a.y - b.y) < (a.c.bodyY + b.c.bodyY) * 0.9;
+  if (vert && a.st !== "thrown" && b.st !== "thrown") {
+    const dx = b.x - a.x, gap = Math.abs(dx);
+    if (gap < w) {
+      const dir = dx === 0 ? (a.facing > 0 ? 1 : -1) : Math.sign(dx);
+      const over = w - gap;
+      a.x -= dir * over / 2; b.x += dir * over / 2;
+    }
+  }
+  for (const p of s.p) {
+    if (p.x < WALL) p.x = WALL;
+    if (p.x > STAGE_W - WALL) p.x = STAGE_W - WALL;
+  }
+  if (vert && a.st !== "thrown" && b.st !== "thrown" && Math.abs(b.x - a.x) < w - 0.5) {
+    /* pinned at a wall: shove the other one out instead */
+    const dir = b.x >= a.x ? 1 : -1;
+    if (a.x <= WALL || a.x >= STAGE_W - WALL) b.x = a.x + dir * w;
+    else a.x = b.x - dir * w;
+  }
+}
+
+function sfStepProj(s, ev) {
+  for (const q of s.proj) {
+    q.t++;
+    if (q.cool > 0) q.cool--;
+    q.x += q.vx; q.y += q.vy; q.vy -= q.g;
+    if (q.kind === "bubble") q.vy = q.t < 30 ? q.vy : 0.08;
+  }
+  /* projectiles that meet cancel out, hit for hit */
+  for (const a of s.proj) for (const b of s.proj) {
+    if (a.owner >= b.owner || a.hits <= 0 || b.hits <= 0) continue;
+    if (Math.abs(a.x - b.x) < a.r + b.r && Math.abs(a.y - b.y) < a.r + b.r) {
+      const n = Math.min(a.hits, b.hits);
+      a.hits -= n; b.hits -= n;
+      s.fx.push({ k: "spark", x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, t: 0, col: "#FFFFFF" });
+      ev.push("sfblk:0");
+    }
+  }
+  for (const q of s.proj) {
+    if (q.hits <= 0 || q.cool > 0) continue;
+    const d = s.p[1 - q.owner];
+    const m = { kind: q.sup ? "super" : "special", dmg: q.dmg, hs: 18, bs: 14, guard: "mid", push: 5, jug: q.sup };
+    if (!sfCanHit(d, m, true)) continue;
+    if (sfRectHitsEll([q.x, q.y, q.r, q.r], sfHurt(d))) {
+      sfHit(s, q.owner, m, { x: q.x - q.vx * 4, proj: 1, hx: q.x, hy: q.y }, ev);
+      q.hits--; q.cool = q.gap || 99;
+    }
+  }
+  s.proj = s.proj.filter(q => q.hits > 0 && q.t < q.life && q.x > -40 && q.x < STAGE_W + 40 && q.y > (q.g ? 0 : -10));
+}
+
+function sfStep(s, in0, in1) {
+  const ev = [];
+  s.tick++;
+  s.pt++;
+  if (s.shake > 0) s.shake--;
+  if (s.flash > 0) s.flash--;
+  for (const f of s.fx) f.t++;
+  if (s.fx.length) s.fx = s.fx.filter(f => f.t < (f.k === "text" ? 50 : 22));
+
+  if (s.phase === "intro") {
+    if (s.pt === 1) ev.push(s.score[0] === s.win - 1 || s.score[1] === s.win - 1 ? "matchpoint" : "round");
+    sfStepPlayer(s, 0, 0, []); sfStepPlayer(s, 1, 0, []);
+    if (s.pt >= INTRO_TICKS) { s.phase = "fight"; s.pt = 0; ev.push("fight"); }
+    return ev;
+  }
+  if (s.phase === "ko") {
+    if (s.pt === KO_FREEZE) ev.push("settle");
+    /* half speed while the KO lands, then the winner gets to stand up */
+    if (s.pt > KO_FREEZE || s.pt % 2 === 0) {
+      for (let i = 0; i < 2; i++) sfStepPlayer(s, i, 0, []);
+      sfStepProj(s, []);
+      sfPushApart(s);
+    }
+    const w = s.result && s.result.winner;
+    if (w >= 0 && s.pt > KO_FREEZE && s.p[w].st === "stand") { s.p[w].st = "win"; s.p[w].t = 0; }
+    if (s.pt >= KO_FREEZE + KO_RESET + 30) {
+      if (s.score[0] >= s.win || s.score[1] >= s.win) {
+        s.phase = "matchend"; s.pt = 0;
+        s.announce = (s.score[0] === 0 || s.score[1] === 0) ? "flawless" : "winner";
+      } else { s.round++; sfResetRound(s); }
+    }
+    return ev;
+  }
+  if (s.phase === "matchend") return ev;
+
+  /* the super flash and hit-stop freeze the world but not your hands: motions
+     typed during them still count */
+  if (s.freeze > 0 || s.hitstop > 0) {
+    if (s.freeze > 0) s.freeze--; else s.hitstop--;
+    for (let i = 0; i < 2; i++) {
+      const p = s.p[i], inp = (i ? in1 : in0) & SF_IN;
+      p.hist.push(inp); if (p.hist.length > SF_HIST) p.hist.shift();
+      const press = inp & SF_BTN & ~p.prevIn;
+      if (press) { p.buf |= press; p.bufT = SF_BUF; }
+      p.prevIn = inp;
+    }
+    return ev;
+  }
+
+  sfStepPlayer(s, 0, in0, ev);
+  sfStepPlayer(s, 1, in1, ev);
+  sfPushApart(s);
+
+  /* strikes: gather both first, so two that land on the same frame trade */
+  const hits = [];
+  for (let i = 0; i < 2; i++) {
+    const a = s.p[i], d = s.p[1 - i], m = sfMove(a);
+    if (!m || m.throw || m.grab || m.type === "counter" || !sfActive(a)) continue;
+    if (m.hits ? (a.mhits >= m.hits || a.mf - a.lastHit < m.gap) : a.mhits > 0) continue;
+    if (!sfCanHit(d, m, false)) continue;
+    const hb = sfHitBox(a, m);
+    if (sfRectHitsEll(hb, sfHurt(d)) || sfLimb(hb, d)) hits.push([i, m, hb]);
+  }
+  for (const [i, m, hb] of hits) {
+    const a = s.p[i];
+    a.mhits++; a.lastHit = a.mf;
+    sfHit(s, i, m, { x: a.x, hx: hb[0] - a.facing * hb[2] * 0.4, hy: hb[1] }, ev);
+  }
+  sfStepProj(s, ev);
+
+  const d0 = s.p[0].hp <= 0, d1 = s.p[1].hp <= 0;
+  if (d0 || d1) { sfEndRound(s, d0 && d1 ? -1 : d0 ? 1 : 0, "ko", ev); return ev; }
+
+  s.timer--;
+  if (s.timer <= 0) {
+    const r0 = s.p[0].hp / s.p[0].hpMax, r1 = s.p[1].hp / s.p[1].hpMax;
+    sfEndRound(s, r0 > r1 ? 0 : r1 > r0 ? 1 : -1, r0 === r1 ? "trade" : "time", ev);
+  }
+  return ev;
+}
+
+function sfEndRound(s, winner, kind, ev) {
+  if (winner < 0) {
+    const i0 = s.p[0].c.ironroot, i1 = s.p[1].c.ironroot;
+    if (i0 && !i1) winner = 0; else if (i1 && !i0) winner = 1;
+    if (winner >= 0) { kind = "ko"; if (s.p[winner].c.ironDrain) s.p[1 - winner].meter = 0; }
+  } else if (s.p[winner].c.ironDrain) s.p[1 - winner].meter = 0;
+  s.result = { winner, kind };
+  s.phase = "ko"; s.pt = 0;
+  s.shake = 22; s.flash = 10; s.hitstop = 0; s.freeze = 0;
+  const losers = winner >= 0 ? [1 - winner] : [0, 1];
+  for (const p of s.p) { p.buf = 0; p.bufT = 0; }
+  if (winner >= 0) s.score[winner]++;
+  for (const l of losers) {
+    const p = s.p[l];
+    p.dead = true; p.mv = null;
+    if (p.st !== "jug" && p.st !== "down") {
+      p.st = "jug"; p.t = 0; p.vy = 7; p.vx = (p.x < s.p[1 - l].x ? -1 : 1) * 3.5;
+    }
+    p.kdNext = 1;
+  }
+  ev.push(kind === "ko" ? "hit:" + winner : kind === "trade" ? "trade" : "time");
+}
+
+
+/* =========================== AXIE FIGHTER CPU ===========================
+   Same contract as the DiveKick CPU: it reads state and returns the input a
+   player would, through the same motion parser - a fireball is the CPU
+   actually rolling the stick, frame by frame, from a queued plan. Difficulty
+   is how often it blocks what it sees, how fast it sees it, whether it
+   uppercuts a jump, and whether it turns a hit into a combo.
+   ====================================================================== */
+const SF_AI = [
+  { think: 30, react: 16, block: 0.2, aa: 0.08, punish: 0.15, combo: 0, fb: 0.3, jump: 0.12, poke: 0.35, fwd: 0.5 },
+  { think: 18, react: 10, block: 0.55, aa: 0.4, punish: 0.5, combo: 0.45, fb: 0.4, jump: 0.15, poke: 0.5, fwd: 0.6 },
+  { think: 9, react: 5, block: 0.85, aa: 0.85, punish: 0.9, combo: 0.9, fb: 0.45, jump: 0.12, poke: 0.55, fwd: 0.7 },
+  { think: 3, react: 2, block: 0.94, aa: 0.95, punish: 1, combo: 1, fb: 0.4, jump: 0.1, poke: 0.6, fwd: 0.85 }
+];
+/* a plan step is [numpad direction, buttons, frames] */
+const SF_PLANS = {
+  qcf: b => [[2, 0, 2], [3, 0, 2], [6, b, 1], [5, 0, 1]],
+  qcb: b => [[2, 0, 2], [1, 0, 2], [4, b, 1], [5, 0, 1]],
+  dp: b => [[6, 0, 2], [2, 0, 2], [3, b, 1], [5, 0, 1]],
+  sup: () => [[2, 0, 2], [3, 0, 2], [6, 0, 2], [2, 0, 2], [3, 0, 2], [6, IN_LP, 1], [5, 0, 1]],
+  hit: (d, b, n) => [[d, b, 1], [d, 0, n || 8]]
+};
+function sfPadMask(n, facing) {
+  const fwd = facing > 0 ? IN_RIGHT : IN_LEFT, bk = facing > 0 ? IN_LEFT : IN_RIGHT;
+  let m = 0;
+  if (n === 1 || n === 4 || n === 7) m |= bk;
+  if (n === 3 || n === 6 || n === 9) m |= fwd;
+  if (n >= 7) m |= IN_UP;
+  if (n <= 3) m |= IN_DOWN;
+  return m;
+}
+
+function sfCpuInput(s) {
+  const cpu = s.cpu, A = SF_AI[cpu.diff] || SF_AI[0];
+  const me = s.p[1], foe = s.p[0], M = SF_MOVES[me.ch];
+  if (s.phase !== "fight") { cpu.plan = []; return 0; }
+  if (!cpu.plan) cpu.plan = [];
+  if (!cpu.seen || s.tick % A.react === 0) {
+    const fm = sfMove(foe);
+    cpu.seen = { x: foe.x, y: foe.y, vy: foe.vy, st: foe.st, mv: foe.mv, mf: foe.mf,
+      atk: !!fm && fm.kind !== undefined, low: !!fm && fm.guard === "low",
+      rec: !!fm && fm.box && foe.mf > fm.su + Math.min(fm.ac, 20) && foe.st === "atk" };
+  }
+  const f = cpu.seen;
+  const gap = Math.abs(f.x - me.x) - (me.c.rx + foe.c.rx) * 0.72;
+
+  /* a queued plan plays out first - motions have to be typed in full */
+  if (cpu.plan.length) {
+    const st = cpu.plan[0];
+    const out = sfPadMask(st[0], me.facing) | st[1];
+    if (--st[2] <= 0) cpu.plan.shift();
+    return out;
+  }
+  const free = me.st === "stand" || me.st === "crouch";
+  /* in the air: kick on the way down if it will land on them */
+  if (me.st === "air" && !me.mv) {
+    if (me.vy < 0 && me.y < 110 && Math.abs(foe.x - me.x) < me.c.rx * 3.2) return cpuRand(cpu) < 0.6 ? IN_HK : IN_HP;
+    return 0;
+  }
+  if (!free) {
+    /* mash a target combo or a cancel after something connects */
+    if (me.mcon && me.mv && cpuRand(cpu) < A.combo * 0.25) {
+      for (const [from, btn, to] of M.tc) if (from === me.mv) return { lp: IN_LP, hp: IN_HP, lk: IN_LK, hk: IN_HK }[btn];
+    }
+    return 0;
+  }
+  const r = cpuRand(cpu);
+  const back = sfPadMask(4, me.facing), downBack = sfPadMask(1, me.facing);
+  const own = s.proj.some(q => q.owner === 1 && !q.sup);
+  const incoming = s.proj.find(q => q.owner === 0 && Math.sign(me.x - q.x) === Math.sign(q.vx) &&
+    Math.abs(q.x - me.x) < 260);
+
+  /* full meter and something to spend it on */
+  if (me.meter >= SF_METER && gap < 70 && (f.rec || foe.st === "hit") && r < A.combo + 0.1) {
+    cpu.plan = SF_PLANS.sup(); return 0;
+  }
+  /* defence first: guard what is coming, uppercut what is jumping in */
+  if (f.y > 25 && f.vy < 2 && gap < 150 && Math.abs(f.x - me.x) > 10) {
+    if (r < A.aa) { cpu.plan = SF_PLANS.dp(cpu.diff >= 2 ? IN_HP : IN_LP); return 0; }
+    if (r < A.aa + A.block * 0.6) { cpu.hold = [back, 12]; }
+  }
+  if (incoming) {
+    if (r < A.block) cpu.hold = [incoming.y < me.c.bodyY * 0.6 ? downBack : back, 10];
+    else if (r < A.block + A.jump && Math.abs(incoming.x - me.x) > 90) { cpu.plan = [[9, 0, 1], [5, 0, 4]]; return 0; }
+  }
+  if (f.atk && !f.rec && gap < 130 && r < A.block) cpu.hold = [f.low || cpuRand(cpu) < 0.5 ? downBack : back, 14];
+  if (cpu.hold && cpu.hold[1] > 0) { cpu.hold[1]--; return cpu.hold[0]; }
+
+  /* punish: whatever they just did is still coming back */
+  if (f.rec && gap < 70 && r < A.punish) {
+    cpu.plan = cpuRand(cpu) < A.combo
+      ? [[2, IN_LK, 1], [2, 0, 9], [2, IN_LK, 1], [2, 0, 6], [3, 0, 2], [6, IN_HP, 1], [5, 0, 1]]
+      : SF_PLANS.hit(5, IN_HP, 20);
+    return 0;
+  }
+  if (cpu.wait > 0) {
+    cpu.wait--;
+    /* between decisions: drift in, or hold back and wait */
+    return cpuRand(cpu) < A.fwd ? sfPadMask(gap > 30 ? 6 : 5, me.facing) : back;
+  }
+  cpu.wait = A.think + Math.floor(cpuRand(cpu) * A.think);
+  const q = cpuRand(cpu);
+  if (gap < 22) {
+    if (q < 0.25) { cpu.plan = [[5, IN_LP | IN_LK, 1], [5, 0, 10]]; return 0; }
+    if (q < 0.25 + A.combo * 0.6) {
+      const tc = M.tc[Math.floor(cpuRand(cpu) * M.tc.length)];
+      if (tc[0][0] !== "j") {
+        const d = tc[0][0] === "2" ? 2 : 5, b0 = { LP: IN_LP, HP: IN_HP, LK: IN_LK, HK: IN_HK }[tc[0].slice(1)];
+        const b1 = { lp: IN_LP, hp: IN_HP, lk: IN_LK, hk: IN_HK }[tc[1]];
+        cpu.plan = [[d, b0, 1], [d, 0, 9], [d, b1, 1], [5, 0, 14]];
+        return 0;
+      }
+    }
+    cpu.plan = [[2, IN_LK, 1], [2, 0, 9], [2, IN_LK, 1], [2, 0, 6], [3, 0, 2], [6, IN_LP, 1], [5, 0, 1]];
+    return 0;
+  }
+  if (gap < 90) {
+    if (q < A.poke) { cpu.plan = SF_PLANS.hit(cpuRand(cpu) < 0.5 ? 2 : 5, IN_HK, 16); return 0; }
+    if (q < A.poke + 0.2) { cpu.plan = [[6, 0, 14]]; return 0; }
+    if (q < A.poke + 0.3 && M.qkL) { cpu.plan = SF_PLANS.qcb(IN_LK); return 0; }
+    return back;
+  }
+  if (!own && q < A.fb) { cpu.plan = SF_PLANS.qcf(cpuRand(cpu) < 0.5 ? IN_LP : IN_HP); return 0; }
+  if (q < A.fb + A.jump) { cpu.plan = [[9, 0, 1], [5, 0, 10]]; return 0; }
+  cpu.plan = [[6, 0, 10 + Math.floor(cpuRand(cpu) * 20)]];
+  return 0;
+}
 
 /* =========================== CPU OPPONENT ===============================
    The CPU is not part of the simulation: it reads state and returns the same
@@ -975,6 +1969,7 @@ function cpuRand(cpu) {
 }
 
 function cpuInput(s) {
+  if (s.rules === "fighter") return sfCpuInput(s);
   const cpu = s.cpu;
   const d = DIFFS[cpu.diff];
   const me = s.p[1], opp = s.p[0];
@@ -1136,7 +2131,13 @@ function kickSolution(me, c, seen, oc, lead) {
 
 /* =========================== INPUT ====================================== */
 const keys = Object.create(null);
-const DEFAULT_BINDS = { p1dive: "KeyA", p1kick: "KeyS", p2dive: "KeyK", p2kick: "KeyL" };
+const DEFAULT_BINDS = {
+  p1dive: "KeyA", p1kick: "KeyS", p2dive: "KeyK", p2kick: "KeyL",
+  /* AXIE FIGHTER: four buttons under the right hand of each half of the keyboard */
+  p1lp: "KeyF", p1hp: "KeyG", p1lk: "KeyV", p1hk: "KeyB",
+  p2lp: "KeyK", p2hp: "KeyL", p2lk: "Comma", p2hk: "Period"
+};
+const SF_BIND = /^p[12](lp|hp|lk|hk)$/;
 const BINDS = Object.assign({}, DEFAULT_BINDS);
 
 /* Jack Controls: the layout somebody who has played a fighting game before
@@ -1157,6 +2158,26 @@ let KEYMAP = {};
 function rebuildKeymap() {
   KEYMAP = {};
   const bind = (code, p, bit) => { if (code) KEYMAP[code] = [p, bit]; };
+  if (sfOn()) {
+    /* Fighter: the stick is fixed (WASD and the arrows), the buttons rebind */
+    for (let p = 0; p < 2; p++) {
+      const j = JACK_BINDS[p], n = "p" + (p + 1);
+      bind(j.dive, p, IN_UP); bind(j.kick, p, IN_DOWN); bind(j.left, p, IN_LEFT); bind(j.right, p, IN_RIGHT);
+      bind(BINDS[n + "lp"], p, IN_LP); bind(BINDS[n + "hp"], p, IN_HP);
+      bind(BINDS[n + "lk"], p, IN_LK); bind(BINDS[n + "hk"], p, IN_HK);
+    }
+    const L = document.getElementById("legend-keys");
+    if (L) {
+      const leg = p => {
+        const n = "p" + (p + 1), j = JACK_BINDS[p];
+        return "<kbd>" + (p ? "ARROWS" : [j.dive, j.left, j.kick, j.right].map(keyName).join("")) + "</kbd> move <kbd>" +
+          keyName(BINDS[n + "lp"]) + "</kbd><kbd>" + keyName(BINDS[n + "hp"]) + "</kbd> punch <kbd>" +
+          keyName(BINDS[n + "lk"]) + "</kbd><kbd>" + keyName(BINDS[n + "hk"]) + "</kbd> kick";
+      };
+      L.innerHTML = "<b>P1</b> " + leg(0) + " &nbsp; <b>P2</b> " + leg(1);
+    }
+    return;
+  }
   for (let p = 0; p < 2; p++) {
     if (SETTINGS.scheme[p] === "jack") {
       const j = JACK_BINDS[p];
@@ -1194,7 +2215,8 @@ function keyName(code) {
 /* everything the settings panel owns, remembered between visits */
 const SETTINGS = {
   master: 0.55, music: 0.24, sfx: 1, announcer: true, shake: true,
-  scheme: ["dive", "dive"]        /* per player: "dive" | "jack" */
+  scheme: ["dive", "dive"],       /* per player: "dive" | "jack" */
+  game: "kick"                    /* "kick" | "fighter": the switch on the title */
 };
 function loadSettings() {
   try {
@@ -1202,6 +2224,7 @@ function loadSettings() {
     if (raw.s) Object.assign(SETTINGS, raw.s);
     if (raw.b) Object.assign(BINDS, raw.b);
     if (!Array.isArray(SETTINGS.scheme)) SETTINGS.scheme = ["dive", "dive"];
+    if (SETTINGS.game !== "fighter") SETTINGS.game = "kick";
   } catch (e) { }
   announcer = SETTINGS.announcer;
 }
@@ -1224,7 +2247,10 @@ addEventListener("keydown", e => {
   if (app.pause && app.pause.bind) {
     e.preventDefault();
     if (e.code !== "Escape") {
-      for (const k in BINDS) if (BINDS[k] === e.code) BINDS[k] = null;
+      /* the two games keep separate layouts, so only clash within one */
+      for (const k in BINDS) {
+        if (BINDS[k] === e.code && SF_BIND.test(k) === SF_BIND.test(app.pause.bind)) BINDS[k] = null;
+      }
       BINDS[app.pause.bind] = e.code;
       rebuildKeymap(); saveSettings();
     }
@@ -1255,6 +2281,19 @@ function readInputs() {
     if (!g || !g.connected) continue;
     const b = g.buttons;
     let v = 0;
+    if (sfOn()) {
+      /* standard layout: X/Y punch, A/B kick, d-pad or stick for direction */
+      const on = k => b[k] && b[k].pressed;
+      if (on(2)) v |= IN_LP; if (on(3)) v |= IN_HP; if (on(0)) v |= IN_LK; if (on(1)) v |= IN_HK;
+      const ax = g.axes && g.axes[0] || 0, ay = g.axes && g.axes[1] || 0;
+      if (on(12) || ay < -0.5) v |= IN_UP; if (on(13) || ay > 0.5) v |= IN_DOWN;
+      if (on(14) || ax < -0.5) v |= IN_LEFT; if (on(15) || ax > 0.5) v |= IN_RIGHT;
+      if ((v & SF_BTN) && !(padPrev[slot] & SF_BTN)) { anyPressEdge = true; audioWake(); }
+      padPrev[slot] = v;
+      m[slot] |= v;
+      slot++;
+      continue;
+    }
     if (b[0] && b[0].pressed) v |= IN_DIVE;
     if (b[1] && b[1].pressed) v |= IN_KICK;
     if (b[2] && b[2].pressed) v |= IN_DIVE;
@@ -1271,6 +2310,15 @@ function readInputs() {
   /* Movement bits stop at the edge of the match for anyone on DiveKick
      controls - in the menus they are just a cursor, in a fight they would be a
      different game. */
+  if (sfOn()) {
+    /* every menu speaks DIVE (move) and KICK (confirm): a punch is a DIVE and
+       a kick is a KICK. The fight itself never reads those two bits. */
+    for (let p = 0; p < 2; p++) {
+      if (m[p] & (IN_LP | IN_HP)) m[p] |= IN_DIVE;
+      if (m[p] & (IN_LK | IN_HK)) m[p] |= IN_KICK;
+    }
+    return m;
+  }
   if (app.screen === "match") {
     for (let p = 0; p < 2; p++) {
       if (SETTINGS.scheme[p] !== "jack") m[p] &= IN_DIVE | IN_KICK;
@@ -1407,7 +2455,12 @@ const SFX = {
   fight: () => { tone(520, 520, 0.09, "square", 0.15); setTimeout(() => tone(780, 780, 0.18, "square", 0.15), 110); },
   move: () => tone(560, 560, 0.05, "square", 0.09),
   lock: () => { tone(660, 990, 0.1, "square", 0.13); },
-  settle: () => tone(120, 90, 0.2, "sine", 0.1)
+  settle: () => tone(120, 90, 0.2, "sine", 0.1),
+  /* Fighter: hits are frequent, so they are short */
+  sfhit: () => { noise(0.08, 6000, 700, 0.2); tone(260, 120, 0.08, "square", 0.1); },
+  sfhvy: () => { noise(0.18, 8000, 300, 0.3); tone(170, 60, 0.2, "sawtooth", 0.18); },
+  sfblk: () => { tone(900, 700, 0.05, "square", 0.08); noise(0.05, 3000, 1500, 0.1); },
+  sfspec: () => { tone(380, 900, 0.16, "triangle", 0.13); noise(0.12, 4000, 600, 0.08); }
 };
 /* Event names carry the player index ("kick:0"), which is how a sound picks up
    the right class: Buba gores, Olek smashes, Puffy throws. */
@@ -1443,7 +2496,7 @@ function playEv(name) {
   const ev = bits[0];
   const who = bits.length > 1 ? CHARS[app.m.p[+bits[1]].ch] : null;
   /* announcer first: it is the loudest thing in the room */
-  if (ev === "kick" && bits[1] === "0") track("kicks");
+  if (ev === "kick" && bits[1] === "0" && !(app.m && app.m.rules)) track("kicks");
   if (ev === "spec" && bits[1] === "0") track("specials");
 
   if (ev === "round") say("round" + Math.min(5, (app.m && app.m.round) || 1), 2);
@@ -1831,6 +2884,7 @@ for (const c of CHARS) spineFor(c);
 
 /* which animation and how far into it, for a player state */
 function animFor(p, c) {
+  if (p.sf) return sfAnimFor(p, c);
   const t = p.t / 60;
   const A = c.anim;
   switch (p.st) {
@@ -2206,15 +3260,16 @@ function drawAxie(p, c, opt) {
   sp.pose(anim, at);
   sp.world();
 
-  let rot = 0;
-  if (p.st === "kick") rot = Math.atan2(-p.vy, Math.abs(p.vx) || 0.001) * c.kickTilt;
-  else if (p.st === "rise") rot = -0.1;
-  else if (p.st === "fall") rot = 0.08;
-  else if (p.st === "kb") rot = -0.18;
-
-  let sqx = 1, sqy = 1;
-  if (p.st === "land" && p.t < 7) { sqx = 1.14; sqy = 0.88; }
-  if (p.st === "rise" && p.t < 6) { sqx = 0.92; sqy = 1.12; }
+  let rot = 0, sqx = 1, sqy = 1;
+  if (p.sf) [rot, sqx, sqy] = opt.portrait ? [0, 1, 1] : sfPose(p);
+  else {
+    if (p.st === "kick") rot = Math.atan2(-p.vy, Math.abs(p.vx) || 0.001) * c.kickTilt;
+    else if (p.st === "rise") rot = -0.1;
+    else if (p.st === "fall") rot = 0.08;
+    else if (p.st === "kb") rot = -0.18;
+    if (p.st === "land" && p.t < 7) { sqx = 1.14; sqy = 0.88; }
+    if (p.st === "rise" && p.t < 6) { sqx = 0.92; sqy = 1.12; }
+  }
   const inf = 1 + p.inflate * 0.3;
   const S = (opt.scale || 1) * sp.fit;
 
@@ -2723,6 +3778,35 @@ const TUT_STEPS = [
   { key: null, text: "NOW HIT HIM", sub: "one hit wins the round. that is the whole game", done: null }
 ];
 
+/* Fighter's lesson: eight prompts, each with a sparring partner doing
+   whatever makes that prompt possible to do */
+const SF_TUT_STEPS = [
+  { text: "WALK", sub: "the stick moves you. hold towards them", keys: () => "→", done: s => s.p[0].walk === 1 && s.p[0].t > 20 },
+  {
+    text: "BLOCK", sub: "hold AWAY from them to guard - hold down-away for low attacks", keys: () => "←",
+    foe: (s, t) => t % 70 === 30 ? IN_HK : 0, near: 1, done: s => s.p[0].st === "block"
+  },
+  { text: "PUNCH AND KICK", sub: "four buttons: light and heavy, punch and kick", keys: () => "LP HP LK HK", btns: 1, near: 1, done: s => { const m = sfMove(s.p[0]); return !!m && m.kind === "normal" && s.p[0].mf > 6; } },
+  { text: "FIREBALL", sub: "roll the stick down, down-forward, forward, and punch", keys: () => "↓ ↘ → + PUNCH", done: s => /^fb/.test(s.p[0].mv || "") },
+  {
+    text: "ANTI-AIR", sub: "forward, down, down-forward and punch: an uppercut that beats a jump", keys: () => "→ ↓ ↘ + PUNCH",
+    foe: (s, t) => t % 80 === 20 ? sfPadMask(9, s.p[1].facing) : 0, near: 2, done: s => /^dp/.test(s.p[0].mv || "")
+  },
+  {
+    text: "COMBO", sub: "a crouching light kick, then the fireball before they recover", keys: () => "↓ + LK  →  ↓ ↘ → + PUNCH",
+    near: 1, done: s => s.p[1].combo >= 2
+  },
+  {
+    text: "SUPER", sub: "a full meter buys the move that is that Axie taken too far", keys: () => "↓ ↘ → ↓ ↘ → + PUNCH",
+    meter: 1, done: s => s.p[0].mv === "sup"
+  },
+  { text: "NOW FINISH HIM", sub: "empty the bar. that is the whole game", keys: () => "", finish: 1, done: null }
+];
+function sfTutKeys(d) {
+  if (!d.btns) return d.keys();
+  return ["lp", "hp", "lk", "hk"].map(k => keyName(BINDS["p1" + k])).join(" ");
+}
+
 function tutStart() {
   app.cpu = null; app.arcade = false; app.vsAug = false; run.on = false;
   app.m = newMatch(1, 0, null, 0, { win: 1 });
@@ -2731,16 +3815,37 @@ function tutStart() {
   app.tut = { step: 0, t: 0, done: false };
   app.bg = BG_MENU;
   app.screen = "tutorial";
+  if (app.m.rules) sfTutSetup();
+}
+function sfTutSetup() {
+  const s = app.m, d = SF_TUT_STEPS[app.tut.step];
+  /* every prompt starts from a clean stand-off, whatever the last one left */
+  sfResetRound(s);
+  s.phase = "fight";
+  s.p[0].x = d.near ? 420 : 330;
+  s.p[1].x = d.near === 2 ? 600 : d.near ? 420 + (s.p[0].c.rx + s.p[1].c.rx) * 0.95 : 670;
+  if (d.finish) s.p[1].hp = 160;
 }
 
 function tutorialTick(inp) {
   const s = app.m, tut = app.tut;
   tut.t++;
-  s.timer = ROUND_TICKS;                    /* no clock pressure while learning */
+  s.timer = s.rules ? SF_ROUND : ROUND_TICKS;   /* no clock pressure while learning */
   if (tut.done) {
     const m = inp[0] | inp[1];
     if ((m & IN_KICK) && !(tut.prev & IN_KICK)) { app.screen = "mode"; SFX.move(); }
     tut.prev = m;
+    return;
+  }
+  if (s.rules) {
+    const d = SF_TUT_STEPS[tut.step];
+    for (const e of step(s, inp[0], d.foe ? d.foe(s, tut.t) : 0)) playEv(e);
+    /* nobody loses while learning, until the last prompt */
+    if (!d.finish) for (const p of s.p) p.hp = p.hpMax;
+    if (d.meter) s.p[0].meter = SF_METER;
+    if (!d.finish) {
+      if (d.done(s)) { tut.step++; tut.t = 0; SFX.lock(); sfTutSetup(); }
+    } else if (s.phase !== "fight") { tut.done = true; tut.prev = IN_KICK; say("winner", 2); }
     return;
   }
   for (const e of step(s, inp[0], 0)) playEv(e);
@@ -2764,10 +3869,23 @@ function drawTutorial(t) {
   ctx.fillRect(0, 122, STAGE_W, 118);
   if (tut.done) {
     txt("THAT IS THE WHOLE GAME", STAGE_W / 2, 164, 34, "#FFD98A", "center", FD, 6);
-    txt("two buttons · one hit · first to five", STAGE_W / 2, 190, 13,
+    txt(app.m.rules ? "eight ways · four buttons · best of three" : "two buttons · one hit · first to five", STAGE_W / 2, 190, 13,
       rgba("#E7E3FB", 0.7), "center", FM, 3);
     drawHintButtons(STAGE_W / 2, STAGE_H - 12, [["KICK", "BACK TO MENU"]],
       [() => { app.screen = "mode"; SFX.move(); }]);
+    return;
+  }
+  if (app.m.rules) {
+    const d = SF_TUT_STEPS[tut.step], flash = 0.7 + 0.3 * Math.sin(t * 0.16);
+    txt(d.text, STAGE_W / 2, 158, 36, rgba("#FFD98A", flash), "center", FD, 8);
+    txt(d.sub, STAGE_W / 2, 182, 13, rgba("#E7E3FB", 0.75), "center", FM, 3);
+    const k = sfTutKeys(d);
+    if (k) drawHints(STAGE_W / 2, 210, [[k, ""]]);
+    for (let i = 0; i < SF_TUT_STEPS.length; i++) {
+      const x = STAGE_W / 2 - (SF_TUT_STEPS.length - 1) * 11 + i * 22;
+      ctx.fillStyle = i < tut.step ? "#7CF0B4" : i === tut.step ? "#FFD98A" : rgba("#E7E3FB", 0.2);
+      ctx.beginPath(); ctx.arc(x, 232, 5, 0, 7); ctx.fill();
+    }
     return;
   }
   const d = TUT_STEPS[tut.step];
@@ -3134,7 +4252,10 @@ cv.addEventListener("click", e => {
 });
 
 /* A keycap and what it does, drawn as one object so they read as a pair. */
+/* Fighter's menus move on punch, so the DIVE key cap says so */
+function hintKey(k) { return k === "DIVE" && sfOn() ? "PUNCH" : k; }
 function hintWidth(pairs) {
+  pairs = pairs.map(([k, l]) => [hintKey(k), l]);
   ctx.save();
   let w = 0;
   for (let i = 0; i < pairs.length; i++) {
@@ -3148,6 +4269,7 @@ function hintWidth(pairs) {
 }
 
 function drawHints(cx, y, pairs, tone) {
+  pairs = pairs.map(([k, l]) => [hintKey(k), l]);
   const total = hintWidth(pairs);
   let x = cx - total / 2;
   const col = tone || "#FFD98A";
@@ -3312,13 +4434,15 @@ function skewPath(x, y, w, h, lean) {
   ctx.closePath();
 }
 
-function drawMeter(p, c, side, tick) {
+function drawMeter(p, c, side, tick, opt) {
+  /* Fighter reuses the three cells as a super meter: 300, one super */
+  const MAX = opt ? opt.max : METER_MAX;
   const W = 300, H = 22, LEAN = 14, PAD = 5;
   const y = STAGE_H - 58;
   const x = side === 0 ? 26 : STAGE_W - 26 - W;
   const lean = side === 0 ? LEAN : -LEAN;
   const col = side && p.tint ? "#7CE0C8" : c.col;
-  const full = p.meter >= METER_MAX;
+  const full = p.meter >= MAX;
   const pulse = 0.72 + 0.28 * Math.sin(tick * 0.22);
 
   ctx.save();
@@ -3333,7 +4457,7 @@ function drawMeter(p, c, side, tick) {
   const cells = 3, cw = (W - PAD * (cells - 1)) / cells;
   for (let i = 0; i < cells; i++) {
     const at = side === 0 ? x + i * (cw + PAD) : x + W - (i + 1) * cw - i * PAD;
-    const lo = (i / cells) * METER_MAX, k = Math.max(0, Math.min(1, (p.meter - lo) / (METER_MAX / cells)));
+    const lo = (i / cells) * MAX, k = Math.max(0, Math.min(1, (p.meter - lo) / (MAX / cells)));
 
     ctx.save();
     skewPath(at, y, cw, H, lean);
@@ -3375,8 +4499,8 @@ function drawMeter(p, c, side, tick) {
   /* the tab above the bar: what it is, or what it buys */
   const lx = side === 0 ? x + 4 : x + W - 4;
   const align = side === 0 ? "left" : "right";
-  if (full && c.spec) {
-    const label = c.spec.name + "  ·  DIVE+KICK";
+  if (full && (opt || c.spec)) {
+    const label = opt ? opt.name + "  ·  " + opt.how : c.spec.name + "  ·  DIVE+KICK";
     ctx.save();
     ctx.font = '600 11px ' + FM;
     ctx.letterSpacing = "1.4px";
@@ -3388,7 +4512,7 @@ function drawMeter(p, c, side, tick) {
     ctx.restore();
     txt(label, tx + tw / 2 + lean * 0.25, y - 10, -11, "#17110A", "center", FM, 1.4);
   } else {
-    txt("KICK METER", lx, y - 10, -10, rgba("#E7E3FB", 0.45), align, FM, 3);
+    txt(opt ? opt.label + " METER" : "KICK METER", lx, y - 10, -10, rgba("#E7E3FB", 0.45), align, FM, 3);
   }
 
   const tags = [];
@@ -3497,6 +4621,7 @@ function drawBoxes(s) {
 
 /* --- match scene --- */
 function drawMatch(s) {
+  if (s.rules === "fighter") return drawMatchSF(s);
   ctx.save();
   if (s.shake > 0 && SETTINGS.shake) {
     const k = s.shake / 22;
@@ -3523,7 +4648,11 @@ function drawMatch(s) {
     txt(p.c.spec.name, p.x, sy(p.y) - 110 - p.t * 1.6, 26,
       rgba("#FFD98A", a), "center", FD, 6);
   }
+  drawRoundBanners(s);
+}
 
+/* the flash, the round callouts and the winner card are the same in both games */
+function drawRoundBanners(s) {
   if (s.flash > 0) {
     ctx.fillStyle = rgba("#FFFFFF", (s.flash / 10) * 0.35);
     ctx.fillRect(0, 0, STAGE_W, STAGE_H);
@@ -3537,7 +4666,7 @@ function drawMatch(s) {
     const r = s.result;
     const col = r.winner >= 0 ? CHARS[s.p[r.winner].ch].col : "#FF8A8A";
     const main = r.kind === "ko" ? "K.O." : r.kind === "ward" ? "WARD BROKEN"
-      : r.kind === "trade" ? "TRADE" : "TIME";
+      : r.kind === "trade" ? (s.rules === "fighter" ? (s.timer <= 0 ? "DRAW" : "DOUBLE K.O.") : "TRADE") : "TIME";
     const sub = r.kind === "ward" ? "THE RUINS TAKE THAT ONE" :
       r.kind === "trade" ? "NOBODY SCORES" :
       r.kind === "line" ? CHARS[s.p[r.winner].ch].name + " HELD THE LINE" :
@@ -3566,6 +4695,306 @@ function drawMatch(s) {
   }
 }
 
+
+/* =========================== AXIE FIGHTER: drawing ====================== */
+/* which animation and how far into it. A move is mapped so its first active
+   frame lands about two fifths of the way into the clip, which is roughly
+   where every Origins attack makes contact. */
+function sfAnimFor(p, c) {
+  const S = SPINES[c.id];
+  const dur = n => (S && S.dur[n]) || 1;
+  const t = p.t / 60;
+  const m = sfMove(p);
+  if (m && (p.st === "atk" || p.st === "air" || p.st === "throwing")) {
+    const D = dur(m.anim);
+    let k;
+    if (p.st === "throwing") k = Math.min(1, p.t / 22);
+    else if (p.mf <= m.su) k = (p.mf / Math.max(1, m.su)) * 0.42;
+    else k = 0.42 + Math.min(1, (p.mf - m.su) / Math.max(1, Math.min(m.ac, 30) + m.rc)) * 0.58;
+    return [m.anim, Math.min(D * 0.999, k * D)];
+  }
+  switch (p.st) {
+    case "hit": case "thrown": return [AN.hit, Math.min(dur(AN.hit), t * 1.4)];
+    case "block": return [AN.block, Math.min(dur(AN.block) * 0.35, t)];
+    case "jug": return [AN.down, Math.min(dur(AN.down) * 0.5, t)];
+    case "down": return [AN.down, Math.min(dur(AN.down), dur(AN.down) * 0.5 + t)];
+    case "air": case "pre": return [c.anim.air, t % dur(c.anim.air)];
+    case "land": return [c.anim.idle, 0];
+    case "win": return [c.anim.win, Math.min(dur(c.anim.win) * 0.999, t)];
+    default:
+      if (p.walk) return [AN.walk, (t * (p.walk > 0 ? 1 : 0.75)) % dur(AN.walk)];
+      return [c.anim.idle, t % dur(c.anim.idle)];
+  }
+}
+
+/* lean and squash: crouching is the idle squashed, which reads instantly */
+function sfPose(p) {
+  let rot = 0, sqx = 1, sqy = 1;
+  const m = p.mv ? SF_MOVES[p.ch][p.mv] : null;
+  if (p.st === "crouch" || (p.cr && (p.st === "block" || p.st === "hit")) || (m && m.cr)) { sqx = 1.1; sqy = 0.74; }
+  if (m && m.low) { sqx = 1.16; sqy = 0.68; }
+  if (p.st === "pre") { sqx = 1.08; sqy = 0.9; }
+  if (p.st === "land" && p.t < 5) { sqx = 1.1; sqy = 0.9; }
+  if (p.st === "air" && !m) rot = p.vy > 0 ? -0.1 : 0.08;
+  if (m && m.type === "dp" && p.y > 0) rot = -0.5;
+  if (m && (m.type === "dive" || (m.type === "meteor" && p.diving))) rot = 0.55;
+  if (p.st === "hit") rot = -0.14;
+  if (p.st === "jug") rot = -0.3 - Math.min(0.5, p.t * 0.03);
+  if (p.st === "down") sqy = 0.86;
+  return [rot, sqx, sqy];
+}
+
+function drawProjectiles(s) {
+  for (const q of s.proj) {
+    const o = s.p[q.owner], c = o.c;
+    const col = o.tint ? "#7CE0C8" : c.col, trim = c.trim;
+    const x = q.x, y = sy(q.y), r = q.r, dir = q.vx >= 0 ? 1 : -1;
+    const wob = Math.sin(q.t * 0.4);
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    for (let k = 6; k >= 1; k--) {
+      ctx.fillStyle = rgba(col, 0.09 * (7 - k) / 6);
+      ctx.beginPath();
+      ctx.arc(x - q.vx * k * 1.7, y + q.vy * k * 1.7, r * (1 - k * 0.1), 0, 7);
+      ctx.fill();
+    }
+    const g = ctx.createRadialGradient(x, y, r * 0.2, x, y, r * 2.4);
+    g.addColorStop(0, rgba(trim, 0.55)); g.addColorStop(1, rgba(col, 0));
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(x, y, r * 2.4, 0, 7); ctx.fill();
+    ctx.restore();
+
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.fillStyle = col; ctx.strokeStyle = rgba("#FFFFFF", 0.85); ctx.lineWidth = 2;
+    if (q.kind === "spike" || q.kind === "feather") {
+      ctx.rotate(Math.atan2(-q.vy, q.vx));
+      ctx.beginPath();
+      if (q.kind === "spike") { ctx.moveTo(r * 1.5, 0); ctx.lineTo(-r, -r * 0.7); ctx.lineTo(-r * 0.5, 0); ctx.lineTo(-r, r * 0.7); }
+      else ctx.ellipse(0, 0, r * 1.6, r * 0.55, 0, 0, 7);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+    } else if (q.kind === "wave") {
+      ctx.scale(dir, 1);
+      ctx.lineWidth = r * 0.6; ctx.strokeStyle = rgba(trim, 0.9);
+      ctx.beginPath(); ctx.arc(-r, 0, r * 1.6, -1.1, 1.1); ctx.stroke();
+      ctx.lineWidth = r * 0.3; ctx.strokeStyle = rgba("#FFFFFF", 0.8);
+      ctx.beginPath(); ctx.arc(-r * 1.2, 0, r * 1.5, -0.9, 0.9); ctx.stroke();
+    } else if (q.kind === "bubble") {
+      ctx.fillStyle = rgba(col, 0.28);
+      ctx.beginPath(); ctx.ellipse(0, 0, r * (1 + wob * 0.06), r * (1 - wob * 0.06), 0, 0, 7); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = rgba("#FFFFFF", 0.8);
+      ctx.beginPath(); ctx.arc(-r * 0.35, -r * 0.35, r * 0.22, 0, 7); ctx.fill();
+    } else if (q.kind === "spit") {
+      ctx.rotate(Math.atan2(-q.vy, q.vx));
+      ctx.beginPath(); ctx.moveTo(r * 1.3, 0);
+      ctx.quadraticCurveTo(0, -r, -r, 0); ctx.quadraticCurveTo(0, r, r * 1.3, 0);
+      ctx.fill(); ctx.stroke();
+    } else {
+      /* seed: a fat glowing pod with a leaf that spins */
+      ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); ctx.fill(); ctx.stroke();
+      ctx.rotate(q.t * 0.25 * dir);
+      ctx.fillStyle = trim;
+      ctx.beginPath(); ctx.ellipse(r * 0.55, 0, r * 0.5, r * 0.22, 0, 0, 7); ctx.fill();
+    }
+    if (q.sup) {
+      ctx.strokeStyle = rgba("#FFE9AE", 0.7 + 0.3 * wob); ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(0, 0, r * 1.5, 0, 7); ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+
+function drawFx(s) {
+  for (const f of s.fx) {
+    if (f.k === "spark") {
+      const k = f.t / 22, x = f.x, y = sy(f.y), big = f.big ? 1.6 : 1;
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      ctx.strokeStyle = rgba(f.col || "#FFFFFF", (1 - k) * 0.9);
+      ctx.lineWidth = (1 - k) * 5 * big + 1;
+      ctx.beginPath(); ctx.arc(x, y, (10 + k * 46) * big, 0, 7); ctx.stroke();
+      ctx.strokeStyle = rgba("#FFFFFF", (1 - k) * 0.95);
+      ctx.lineWidth = (1 - k) * 3 + 1;
+      for (let i = 0; i < 8; i++) {
+        const a = i * 0.785 + (f.x % 7) * 0.1;
+        const r0 = 6 + k * 30 * big, r1 = r0 + 26 * big * (1 - k);
+        ctx.beginPath();
+        ctx.moveTo(x + Math.cos(a) * r0, y + Math.sin(a) * r0);
+        ctx.lineTo(x + Math.cos(a) * r1, y + Math.sin(a) * r1);
+        ctx.stroke();
+      }
+      ctx.restore();
+    } else if (f.k === "block") {
+      const k = f.t / 22, x = f.x, y = sy(f.y);
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      ctx.strokeStyle = rgba("#7CC8FF", (1 - k) * 0.95); ctx.lineWidth = (1 - k) * 6 + 1;
+      ctx.beginPath();
+      for (let i = 0; i <= 6; i++) {
+        const a = i * Math.PI / 3, r = 22 + k * 18;
+        if (i) ctx.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r); else ctx.moveTo(x + r, y);
+      }
+      ctx.stroke();
+      ctx.restore();
+    } else if (f.k === "text") {
+      const a = Math.max(0, 1 - f.t / 50);
+      txt(f.text, f.x, f.y - f.t * 0.6, 20, rgba("#FFD98A", a), "center", FD, 4);
+    }
+  }
+}
+
+function drawBoxesSF(s) {
+  if (!showBoxes) return;
+  for (let i = 0; i < 2; i++) {
+    const p = s.p[i], h = sfHurt(p);
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = rgba(p.inv > 0 ? "#FFFFFF" : "#66E0FF", 0.85);
+    ctx.beginPath(); ctx.ellipse(h[0], sy(h[1]), h[2], h[3], 0, 0, 7); ctx.stroke();
+    const w = p.c.rx * 0.72 / 2 * 2;
+    ctx.strokeStyle = rgba("#FFD84A", 0.6);
+    ctx.strokeRect(p.x - w / 2, sy(p.y + p.c.bodyY * 1.6), w, p.c.bodyY * 1.6);
+    const m = sfMove(p);
+    if (m && m.box) {
+      const b = sfHitBox(p, m);
+      ctx.strokeStyle = rgba(sfActive(p) ? "#FF5470" : "#FF5470", sfActive(p) ? 0.95 : 0.25);
+      ctx.strokeRect(b[0] - b[2], sy(b[1] + b[3]), b[2] * 2, b[3] * 2);
+    }
+    txt(`${p.st}${p.mv ? " " + p.mv + ":" + p.mf : ""} hp=${p.hp} x=${p.x.toFixed(0)} y=${p.y.toFixed(0)} cb=${p.combo}`,
+      i ? STAGE_W - 12 : 12, STAGE_H - 12, 11, rgba("#66E0FF", 0.8), i ? "right" : "left", FM);
+  }
+  ctx.strokeStyle = rgba("#FF5470", 0.9);
+  for (const q of s.proj) ctx.strokeRect(q.x - q.r, sy(q.y + q.r), q.r * 2, q.r * 2);
+}
+
+/* the health bars keep a red ghost of what you just lost, which drains after
+   a beat - render-side only, the sim only knows the number */
+const sfLag = [{ v: 1, hold: 0 }, { v: 1, hold: 0 }];
+const sfCombo = [{ n: 0, dmg: 0, at: -999 }, { n: 0, dmg: 0, at: -999 }];
+function drawHUDSF(s) {
+  ctx.fillStyle = rgba("#08070F", 0.55); ctx.fillRect(0, 0, STAGE_W, 84);
+  ctx.strokeStyle = rgba("#8E7BD8", 0.25); ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, 84.5); ctx.lineTo(STAGE_W, 84.5); ctx.stroke();
+  const W = 392, H = 22, Y = 18, LEAN = 10;
+  for (let i = 0; i < 2; i++) {
+    const p = s.p[i], c = p.c;
+    const col = i && p.tint ? "#7CE0C8" : c.col;
+    const k = Math.max(0, p.hp / p.hpMax);
+    const lag = sfLag[i];
+    if (s.phase === "intro" && s.pt < 3) { lag.v = k; lag.hold = 0; }
+    if (lag.v < k) lag.v = k;
+    else if (lag.v > k) { if (lag.hold < 34) lag.hold++; else lag.v = Math.max(k, lag.v - 0.008); }
+    if (lag.v === k) lag.hold = 0;
+    const x0 = i ? STAGE_W / 2 + 46 : STAGE_W / 2 - 46 - W;
+    const lean = i ? -LEAN : LEAN;
+    /* bars are anchored at the clock and drain towards the outside edge */
+    const seg = (a, b) => {
+      const xa = i ? x0 + W * a : x0 + W * (1 - b), w = W * (b - a);
+      skewPath(xa, Y, w, H, lean);
+    };
+    ctx.save();
+    seg(0, 1); ctx.fillStyle = rgba("#08070F", 0.8); ctx.fill();
+    ctx.save(); seg(0, 1); ctx.clip();
+    if (lag.v > k) { seg(k, lag.v); ctx.fillStyle = "#FF4D4D"; ctx.fill(); }
+    if (k > 0) {
+      const low = k < 0.3, pulse = 0.75 + 0.25 * Math.sin(s.tick * 0.3);
+      const g = ctx.createLinearGradient(0, Y, 0, Y + H);
+      g.addColorStop(0, low ? rgba("#FF8A5C", pulse) : "#FFE98A");
+      g.addColorStop(0.6, low ? rgba("#E8432F", pulse) : "#F2B53C");
+      g.addColorStop(1, low ? rgba("#FF8A5C", pulse) : "#FFD45A");
+      seg(0, k); ctx.fillStyle = g; ctx.fill();
+    }
+    ctx.restore();
+    seg(0, 1); ctx.strokeStyle = rgba(col, 0.9); ctx.lineWidth = 2; ctx.stroke();
+    ctx.restore();
+
+    const nx = i ? STAGE_W - 26 : 26, al = i ? "right" : "left";
+    txt(c.name, nx, Y + H + 26, 22, col, al, FD, 1);
+    const who = i === 0 ? "P1" : s.foeName ? s.foeName : s.cpu ? "CPU " + DIFFS[s.cpu.diff].name : "P2";
+    txt(i ? c.cls + " · " + who : "P1 · " + c.cls, nx, Y + H + 42, 10.5, rgba("#E7E3FB", 0.55), al, FM, 1.2);
+    for (let r = 0; r < s.win; r++) {
+      pip(i ? STAGE_W / 2 + 62 + r * 24 : STAGE_W / 2 - 62 - r * 24, Y + H + 18, 7, r < s.score[i], c.col);
+    }
+    const augs = p.augs;
+    for (let a = 0; a < augs.length; a++) drawAugMedal(augs[a], i === 0 ? 30 + a * 32 : STAGE_W - 30 - a * 32, 112, 30);
+  }
+  if (run.on) txt("STAGE " + (run.level + 1) + " / 10", STAGE_W / 2, 78, -10, rgba("#FFD98A", 0.85), "center", FM, 4);
+  const secs = Math.max(0, Math.ceil(s.timer / 60));
+  txt(String(secs).padStart(2, "0"), STAGE_W / 2, 50, 38, secs <= 10 ? "#FF6B6B" : "#E7E3FB", "center", FM, 1);
+  txt("ROUND " + s.round, STAGE_W / 2, 66, 9.5, rgba("#E7E3FB", 0.5), "center", FM, 3);
+
+  /* combo counter on the attacker's side, held a moment after it drops */
+  for (let i = 0; i < 2; i++) {
+    const d = s.p[1 - i], cb = sfCombo[i];
+    if (d.combo >= 2) { cb.n = d.combo; cb.dmg = d.cdmg; cb.at = app.t; }
+    const age = app.t - cb.at;
+    if (age > 80 || cb.n < 2) continue;
+    const a = Math.min(1, (80 - age) / 20);
+    const x = i ? STAGE_W - 36 : 36, al = i ? "right" : "left";
+    const pop = age < 6 ? 1.25 - age * 0.04 : 1;
+    ctx.save(); ctx.translate(x, 196); ctx.scale(pop, pop);
+    txt(cb.n + " HITS", 0, 0, 34, rgba("#FFD98A", a), al, FD, 2);
+    txt(cb.dmg + " DAMAGE", 0, 22, 12, rgba("#E7E3FB", a * 0.8), al, FM, 2);
+    ctx.restore();
+  }
+}
+
+function drawMatchSF(s) {
+  ctx.save();
+  if (s.shake > 0 && SETTINGS.shake) {
+    const k = Math.min(1, s.shake / 22);
+    ctx.translate(Math.sin(s.tick * 2.7) * 9 * k, Math.cos(s.tick * 3.1) * 6 * k);
+  }
+  drawStage(s);
+  if (s.freeze > 0) {
+    ctx.fillStyle = rgba("#06040E", 0.62 * Math.min(1, s.freeze / 8));
+    ctx.fillRect(-20, -20, STAGE_W + 40, STAGE_H + 40);
+  }
+  /* whoever is swinging is drawn in front */
+  const order = s.p[0].mv && !s.p[1].mv ? [1, 0] : [0, 1];
+  for (const i of order) {
+    const p = s.p[i];
+    if (s.freeze > 0 && s.freezeBy === i) {
+      const r = p.c.hurtR * (1.7 + 0.15 * Math.sin(s.tick * 0.5));
+      const g = ctx.createRadialGradient(p.x, sy(p.y + p.c.bodyY), r * 0.2, p.x, sy(p.y + p.c.bodyY), r);
+      g.addColorStop(0, rgba(p.c.trim, 0.55)); g.addColorStop(1, rgba(p.c.trim, 0));
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x, sy(p.y + p.c.bodyY), r, 0, 7); ctx.fill();
+    }
+    ctx.save();
+    if (p.st === "hit" && p.t < 3) ctx.filter = "brightness(2.2)";
+    drawAxie(p, p.c, {});
+    ctx.restore();
+  }
+  drawProjectiles(s);
+  drawFx(s);
+  drawBoxesSF(s);
+  ctx.restore();
+
+  drawHUDSF(s);
+  for (let i = 0; i < 2; i++) {
+    const p = s.p[i];
+    drawMeter(p, p.c, i, s.tick, { max: SF_METER, name: SF_MOVES[p.ch].sup.name, how: "↓↘→↓↘→ P", label: "SUPER" });
+  }
+  /* the name of a special, over the Axie that threw it */
+  for (let i = 0; i < 2; i++) {
+    const p = s.p[i], m = sfMove(p);
+    if (!m || m.kind === "normal" || p.mf > 28) continue;
+    const a = Math.max(0, 1 - p.mf / 28);
+    txt(m.name, p.x, sy(p.y) - 120 - p.mf, m.kind === "super" ? 24 : 18,
+      rgba(m.kind === "super" ? "#FFD98A" : "#E7E3FB", a), "center", FD, 5);
+  }
+  if (s.freeze > 0 && s.freezeBy >= 0) {
+    const p = s.p[s.freezeBy], k = 1 - s.freeze / SF_SUPER_FREEZE;
+    const a = Math.min(1, s.freeze / 10);
+    ctx.save();
+    ctx.translate(STAGE_W / 2, 300);
+    ctx.scale(1.3 - 0.3 * Math.min(1, k * 4), 1.3 - 0.3 * Math.min(1, k * 4));
+    txt(SF_MOVES[p.ch].sup.name, 0, 0, 64, rgba("#FFD98A", a), "center", FD, 8);
+    txt("SUPER", 0, 28, 14, rgba("#E7E3FB", a * 0.8), "center", FM, 10);
+    ctx.restore();
+  }
+  drawRoundBanners(s);
+}
+
 /* --- title --- */
 function drawTitle(t) {
   drawStage(null);
@@ -3580,14 +5009,45 @@ function drawTitle(t) {
     drawAxie(d, CHARS[d.ch], { anim: CHARS[d.ch].anim.idle, animT: t / 60 + i * 0.9, scale: 0.82 });
   });
   const glow = 0.5 + 0.5 * Math.sin(t * 0.05);
-  txt("AXIE", STAGE_W / 2 - 8, 214, 104, "#E7E3FB", "right", FD, 6);
-  txt("KICK", STAGE_W / 2 - 4, 214, 104, rgba("#F2D492", 0.72 + glow * 0.28), "left", FD, 8);
-  txt("TWO BUTTONS · ONE HIT · FIRST TO FIVE", STAGE_W / 2, 250, 13, rgba("#E7E3FB", 0.55), "center", FM, 5);
+  if (sfOn()) {
+    txt("AXIE", STAGE_W / 2 - 150, 214, 96, "#E7E3FB", "right", FD, 6);
+    txt("FIGHTER", STAGE_W / 2 - 138, 214, 96, rgba("#FF8A5C", 0.72 + glow * 0.28), "left", FD, 8);
+    txt("EIGHT WAYS · FOUR BUTTONS · BEST OF THREE", STAGE_W / 2, 250, 13, rgba("#E7E3FB", 0.55), "center", FM, 5);
+  } else {
+    txt("AXIE", STAGE_W / 2 - 8, 214, 104, "#E7E3FB", "right", FD, 6);
+    txt("KICK", STAGE_W / 2 - 4, 214, 104, rgba("#F2D492", 0.72 + glow * 0.28), "left", FD, 8);
+    txt("TWO BUTTONS · ONE HIT · FIRST TO FIVE", STAGE_W / 2, 250, 13, rgba("#E7E3FB", 0.55), "center", FM, 5);
+  }
+  drawGameSwitch(STAGE_W / 2, 296);
   if ((t >> 5) % 2 === 0) txt("PRESS ANY BUTTON", STAGE_W / 2, FLOOR_Y + 60, 18, "#E7E3FB", "center", FD, 8);
   txt("SKY MAVIS INTERNAL GAMEJAM DEMO      ESC  MENU", STAGE_W / 2, STAGE_H - 16, 10,
     rgba("#E7E3FB", 0.4), "center", FM, 4);
 }
 
+
+/* The two games share every screen but this one: a switch under the logo,
+   left/right or a click. Remembered with the rest of the settings. */
+function setGame(g) {
+  if (SETTINGS.game === g) return;
+  SETTINGS.game = g;
+  for (const k in keys) keys[k] = false;
+  rebuildKeymap(); saveSettings();
+  SFX.move();
+}
+function drawGameSwitch(cx, y) {
+  const W = 190, H = 34, opts = [["kick", "AXIE KICK", "#F2D492"], ["fighter", "AXIE FIGHTER", "#FF8A5C"]];
+  for (let i = 0; i < 2; i++) {
+    const [key, name, col] = opts[i];
+    const x = cx - W - 6 + i * (W + 12), on = SETTINGS.game === key, over = hovered(x, y, W, H);
+    ctx.fillStyle = rgba(on ? "#2A2150" : "#100C22", on ? 0.95 : 0.75);
+    ctx.fillRect(x, y, W, H);
+    ctx.strokeStyle = rgba(col, on ? 1 : over ? 0.7 : 0.3); ctx.lineWidth = on ? 2 : 1;
+    ctx.strokeRect(x + 0.5, y + 0.5, W - 1, H - 1);
+    txt(name, x + W / 2, y + 23, 16, on ? col : rgba("#E7E3FB", over ? 0.8 : 0.45), "center", FD, 3);
+    hot(x, y, W, H, () => setGame(key));
+  }
+  txt("◀ ▶  SWITCH GAME", cx, y + H + 20, -10, rgba("#E7E3FB", 0.4), "center", FM, 3);
+}
 
 /* --- mode select ---------------------------------------------------------
    Four panels, left to right, each one showing you what it is rather than
@@ -3705,7 +5165,8 @@ function drawMode(cur, t) {
   const PW = 228, GAP = 14, X0 = (STAGE_W - (PW * 4 + GAP * 3)) / 2;
   const PH = 286, TOP = 92, BOT = STAGE_H - 30;
   const B = TOP + ((BOT - TOP) - (PH + 74)) / 2;
-  txt("SELECT MODE", STAGE_W / 2, B + 28, 28, "#E7E3FB", "center", FD, 10);
+  txt(sfOn() ? "AXIE FIGHTER · SELECT MODE" : "SELECT MODE", STAGE_W / 2, B + 28, 28,
+    sfOn() ? "#FF8A5C" : "#E7E3FB", "center", FD, 10);
   drawHints(STAGE_W / 2, B + 50, [["DIVE", "MOVE"], ["KICK", "CONFIRM"], ["ESC", "BACK"]]);
   const Y = B + 74;
 
@@ -3739,11 +5200,16 @@ function drawMode(cur, t) {
       txt(line, x + PW / 2, by, -10.5, rgba("#E7E3FB", on ? 0.62 : 0.32), "center", FM);
       by += 12;
     }
+    if (m.key === "net" && sfOn()) {
+      ctx.fillStyle = rgba("#08070F", 0.66); ctx.fillRect(x, Y, PW, PH);
+      txt("OFFLINE ONLY", x + PW / 2, Y + PH / 2 - 14, 18, "#FF8A5C", "center", FD, 3);
+      txt("IN AXIE FIGHTER", x + PW / 2, Y + PH / 2 + 6, -11, rgba("#E7E3FB", 0.6), "center", FM, 2);
+    }
     ctx.restore();
     hot(x, Y, PW, PH, () => { app.mode.cur = i; modeConfirm(); }, () => { app.mode.cur = i; });
   }
 
-  txt("THE CPU READS THE SAME TWO BUTTONS YOU DO", STAGE_W / 2, STAGE_H - 14, 10,
+  txt(sfOn() ? "THE CPU READS THE SAME STICK AND BUTTONS YOU DO" : "THE CPU READS THE SAME TWO BUTTONS YOU DO", STAGE_W / 2, STAGE_H - 14, 10,
     rgba("#E7E3FB", 0.28), "center", FM, 4);
 }
 
@@ -3872,6 +5338,7 @@ function setupTick(inp) {
 
 function modeConfirm() {
   const m = MODES[app.mode.cur];
+  if (m.key === "net" && sfOn()) { SFX.whiff(); return; }
   if (m.key === "net") { SFX.lock(); lobbyOpen(); return; }
   if (m.rack) { setupStart(m.rack); return; }
   startChosenMode();
@@ -5636,7 +7103,12 @@ function rollArena() {
 function volLabel(v) { return Math.round(v * 100) + "%"; }
 
 function settingsRows() {
+  const inFight = app.screen === "match" || app.screen === "tutorial";
   return [
+    {
+      label: "GAME", value: (sfOn() ? "AXIE FIGHTER" : "AXIE KICK") + (inFight ? " (AFTER THIS FIGHT)" : ""),
+      act: () => { if (!inFight) setGame(sfOn() ? "kick" : "fighter"); }
+    },
     { label: "MASTER VOLUME", value: volLabel(SETTINGS.master), act: () => bump("master") },
     { label: "MUSIC", value: volLabel(SETTINGS.music), act: () => bump("music") },
     { label: "SOUND EFFECTS", value: volLabel(SETTINGS.sfx), act: () => bump("sfx") },
@@ -5689,6 +7161,21 @@ function controlRows() {
     label, value: app.pause.bind === key ? "PRESS A KEY" : keyName(BINDS[key]),
     act: () => { app.pause.bind = key; }
   });
+  if (sfOn()) {
+    /* Fighter: the stick is WASD / arrows, the four buttons rebind */
+    const rows = [];
+    for (let p = 0; p < 2; p++) {
+      for (const [k, n] of [["lp", "LIGHT PUNCH"], ["hp", "HEAVY PUNCH"], ["lk", "LIGHT KICK"], ["hk", "HEAVY KICK"]]) {
+        rows.push(row("P" + (p + 1) + " · " + n, "p" + (p + 1) + k));
+      }
+    }
+    rows.push({
+      label: "RESET TO DEFAULTS", value: "",
+      act: () => { for (const k in DEFAULT_BINDS) if (SF_BIND.test(k)) BINDS[k] = DEFAULT_BINDS[k]; rebuildKeymap(); saveSettings(); }
+    });
+    rows.push({ label: "BACK", value: "", act: () => { app.pause.tab = "settings"; app.pause.cur = 0; } });
+    return rows;
+  }
   const rows = [schemeRow(0), schemeRow(1)];
   for (let p = 0; p < 2; p++) {
     if (SETTINGS.scheme[p] === "jack") continue;      /* Jack's layout is fixed */
@@ -6025,6 +7512,12 @@ function endTick(inp) {
 /* one tick of whichever screen is up, from a pair of player inputs */
 function runScreenTick(inp) {
   if (app.screen === "title") {
+    const lr = (inp[0] | inp[1]) & (IN_LEFT | IN_RIGHT);
+    if (lr && !(app.titlePrev & (IN_LEFT | IN_RIGHT))) {
+      setGame(sfOn() ? "kick" : "fighter");
+      anyPressEdge = false;
+    }
+    app.titlePrev = inp[0] | inp[1];
     if (anyPressEdge) {
       anyPressEdge = false; app.screen = "mode"; app.mode.prev = inp.slice(); SFX.lock();
     }
