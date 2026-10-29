@@ -79,8 +79,8 @@ button{font:inherit;cursor:pointer}
 .lvl .row{display:flex;gap:10px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap}
 /* end */
 .end .panel{max-width:760px;text-align:center}
-.end canvas.banner{width:min(420px,90%);height:auto;display:block;margin:-8px auto 0}
-.end canvas.cardimg{width:min(480px,100%);height:auto;border:3px solid var(--ink);border-radius:14px;display:block;margin:8px auto}
+.end canvas.banner{width:min(340px,80%);height:auto;display:block;margin:-60px auto -50px}
+.end canvas.cardimg{width:min(400px,100%,52vh);height:auto;border:3px solid var(--ink);border-radius:14px;display:block;margin:8px auto}
 .end .row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:10px}
 .stats{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:6px 0}
 .stat{background:var(--wood2);border:2px solid var(--ink);border-radius:10px;padding:4px 10px;font-size:13px}
@@ -729,7 +729,7 @@ function offerEvolve(cr) {
   const awake = p.lvl === 0;
   return { key: `evo:${slot}`, tier: awake ? 1 : 2, kind: "evolve", slot, src: p.src, chimId: p.chim, cls: partClass(p),
     title: awake ? `Awaken ${SLOT_NAME[slot]}` : `Evolve ${SLOT_NAME[slot]} ${"I".repeat(Math.min(3, p.lvl + 1)) + (p.lvl + 1 > 3 ? "+" : "")}`,
-    desc: awake ? `Your ${SLOT_NAME[slot].toLowerCase()} starts fighting. ${w.name}: ${w.desc}` : `Bigger and meaner. ${w.name} damage +25%, faster.`,
+    desc: awake ? `Wakes up and fights. ${w.name}: ${w.desc}` : `Bigger and meaner. ${w.name} damage +25%, faster.`,
     apply: c => { c.slots[slot].lvl++; for (const e of c.extras) if (e.part === slot) e.lvl = c.slots[slot].lvl; } };
 }
 function offerDuplicate(cr) {
@@ -1838,7 +1838,7 @@ function endRun(won) {
   music(won ? "menu" : "menu");
   setTimeout(() => {
     show("end");
-    $("#stats").innerHTML = [["Time", `${mm}:${ss}`], ["Level", G.level], ["Eaten", G.kills], ["Abomination", `${abomStage(G.abom)} ${G.abom}`], ["Parts", 6 + p.cr.extras.length]]
+    $("#stats").innerHTML = [["Time", `${mm}:${ss}`], ["Level", G.level], ["Eaten", G.kills], [abomStage(G.abom), G.abom], ["Parts", 6 + p.cr.extras.length]]
       .map(([k, v]) => `<div class="stat"><b>${v}</b>${k}</div>`).join("");
     G.endBanner = won ? "victory" : "defeated"; G.endT = 0;
     renderCreatureCard($("#cardimg"), won);
