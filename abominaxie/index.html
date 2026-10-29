@@ -208,7 +208,7 @@ kbd{background:var(--cream);color:var(--ink);border-radius:4px;padding:0 5px;fon
    art, grafted live onto the player's Spine rig; enemies are the Origins
    chimeras, baked to frames by tools/abx_bake.mjs.
    ===================================================================== */
-const A = window.ABX_ASSETS, CH = window.ABX_CHIMERAS;
+let A = window.ABX_ASSETS, CH = window.ABX_CHIMERAS;   // or fetched as JSON in boot()
 const $ = s => document.querySelector(s);
 const cv = $("#game"), ctx = cv.getContext("2d");
 const QS = new URLSearchParams(location.search);
@@ -1990,6 +1990,12 @@ function drawPreview(time) {
 }
 
 (async function boot() {
+  if (!A || !CH) {
+    // hosts that only allow fetching sibling files get the same data as JSON
+    $("#loadtxt").textContent = "Downloading Axies (about 20 MB)…";
+    [A, CH] = await Promise.all([fetch("assets.json").then(r => r.json()), fetch("chimeras.json").then(r => r.json())]);
+    $("#loadtxt").textContent = "Loading Axies…";
+  }
   await loadAll();
   try { await document.fonts.load('20px "Changa One"'); } catch (e) {}
   for (const id of Object.keys(A.rigs)) rigOf(id);
