@@ -8,6 +8,7 @@ internal gamejam. One hit ends a round. First to five wins the match.
 - **[PITCH.md](PITCH.md)** — the one-page pitch
 - **[docs/PRD.html](docs/PRD.html)** — the full PRD (open in a browser)
 - **[game/index.html](game/index.html)** — the game
+- **[abominaxie/](abominaxie/README.md)** — ABOMINAXIE, a survivors-style mutation roguelite (separate game)
 
 ## Run it
 
