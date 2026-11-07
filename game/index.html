@@ -2441,6 +2441,12 @@ function music(track) {
   setMusicGain();
 }
 
+/* silence whichever kit track is playing; BAKBAKAN brings its own */
+function musicOff() {
+  musicWant = null;
+  if (musicSrc) { try { musicSrc.stop(); } catch (e) { } musicSrc = null; }
+  musicNow = null;
+}
 function setMusicGain() {
   if (!musicBus || !ac) return;
   const want = muted ? 0 : (app && app.pause ? 0.3 : 1) * SETTINGS.music;
@@ -7563,18 +7569,10 @@ const BK_LEVELS = ["EASY", "NORMAL", "HARD"];
 
 function bkOn() { return SETTINGS.game === "bakbakan"; }
 
-/* ---- who is allowed to be named ----------------------------------------
-   Historical figures and folklore always are. Living people's names and
-   likenesses are a right-of-publicity question rather than an IP one, so they
-   are fine on this machine and nowhere else: served from any other host, the
-   build shows an original stand-in instead. Every name, title and bio is in
-   the rows below, so replacing someone for good is one edit. */
-const BK_REAL = (() => {
-  try {
-    const h = location.hostname || "";
-    return location.protocol === "file:" || h === "localhost" || h === "127.0.0.1" || h === "[::1]";
-  } catch (e) { return false; }
-})();
+/* ---- names ----------------------------------------------------------------
+   Historical figures and folklore go by their own names. The four modern
+   icons are parodies - a made-up name, a made-up bio, no real facts - so
+   the build can be public. Every name and bio is one row below. */
 
 /* ---- moves ---------------------------------------------------------------
    Frame data, forward-facing, relative to the fighter's feet (y up is
@@ -7718,10 +7716,8 @@ const BK_ROSTER = [
               fn(s, i, p, f, ev) { if (f === 20) { p.moon = 420; p.night = 0; p.form = "beast"; ev.push("moon:" + i); } } }
   },
   {
-    id: "pacquiao", name: "MANNY PACQUIAO", stand: "THE SOUTHPAW CHAMP", role: "RUSHDOWN",
-    living: 1, col: "#FF6A3D",
-    bio: "Southpaw from General Santos City. World titles in eight weight divisions.",
-    standBio: "A southpaw from the provinces with the fastest hands in the building.",
+    id: "pakyaw", name: "MANNY PAKYAW", role: "RUSHDOWN", parody: 1, col: "#FF6A3D",
+    bio: "Takes every fight pakyaw: the whole lot, all at once. Throws more punches between breaths than most people throw all year.",
     sig: "FOOTWORK · step out of any jab. Every hit in a combo hits harder",
     look: { skin: "#B07850", hair: "#121010", top: null, low: "#2050C0", trim: "#F2F2F2", weapon: "gloves", glove: "#D42A2A" },
     W: 28, H: 66, weight: 92, walk: 4.8, air: 3.8, jump: 13.2, djump: 12, grav: 0.7, fall: 11, ffall: 16,
@@ -7735,10 +7731,8 @@ const BK_ROSTER = [
     }
   },
   {
-    id: "reyes", name: "EFREN \"BATA\" REYES", stand: "THE MAGICIAN OF THE CUE", role: "TRICKSTER",
-    living: 1, col: "#5FD08A",
-    bio: "Pool legend from Pampanga, famous for shots nobody else in the room could see.",
-    standBio: "A pool hall legend who sees angles nobody else in the room can.",
+    id: "bilyar", name: "PEPENG \"BATA\" BILYAR", role: "TRICKSTER", parody: 1, col: "#5FD08A",
+    bio: "Calls one shot, plays a different one, and it goes in anyway. Nobody in the hall has worked out how.",
     sig: "BANK SHOT · rack balls, then hit them with the cue. They ricochet",
     look: { skin: "#A87652", hair: "#2A2626", top: "#EDEDED", low: "#1C1C22", weapon: "cue" },
     W: 28, H: 68, weight: 90, walk: 3.7, air: 3.3, jump: 12.2, djump: 11.2, grav: 0.62, fall: 9.6, ffall: 14,
@@ -7752,10 +7746,8 @@ const BK_ROSTER = [
     }
   },
   {
-    id: "bruno", name: "BRUNO MARS", stand: "THE CROONER", role: "RHYTHM",
-    living: 1, col: "#FFC23D",
-    bio: "Singer and showman from Honolulu, with Filipino roots. Lands everything on the beat.",
-    standBio: "A showman who lands everything on the beat.",
+    id: "venus", name: "BRUNO VENUS", role: "RHYTHM", parody: 1, col: "#FFC23D",
+    bio: "A crooner from a slightly different planet. Every move lands on the beat, and every entrance has a key change.",
     sig: "ON THE BEAT · attacks that start on the pulse hit 40% harder",
     look: { skin: "#C08A60", hair: "#1A1414", top: "#E8B34B", low: "#16161C", hat: "#22222A", band: "#E8B34B", open: 1, weapon: "mic" },
     W: 28, H: 70, weight: 96, walk: 4.1, air: 3.5, jump: 12.8, djump: 11.8, grav: 0.64, fall: 10, ffall: 15,
@@ -7769,10 +7761,8 @@ const BK_ROSTER = [
     }
   },
   {
-    id: "eala", name: "ALEX EALA", stand: "THE RISING ACE", role: "REFLECTOR",
-    living: 1, col: "#6FD4FF",
-    bio: "Left-handed tennis pro from Manila. Serves from range and sends everything back faster.",
-    standBio: "A young tennis ace who serves from range and sends everything back faster.",
+    id: "acela", name: "ALEX ACE-LA", role: "REFLECTOR", parody: 1, col: "#6FD4FF",
+    bio: "Serves from the baseline and returns from anywhere. Whatever you throw at her comes back faster, with interest.",
     sig: "SERVE AND RETURN · the strongest reflector here: back it goes, faster and harder",
     look: { skin: "#C8946A", hair: "#141012", top: "#F5F5F5", low: "#F5F5F5", trim: "#2A7BD8", visor: "#F5F5F5", pony: 1, skirt: 1, weapon: "racket" },
     W: 26, H: 66, weight: 84, walk: 4.4, air: 3.7, jump: 13, djump: 12.2, grav: 0.64, fall: 10, ffall: 15,
@@ -7795,8 +7785,8 @@ const BK_ROSTER = [
 ];
 const BK_AXIE = BK_ROSTER.findIndex(c => c.id === "axie");
 
-function bkName(c) { return c.living && !BK_REAL ? c.stand : c.name; }
-function bkBio(c) { return c.living && !BK_REAL ? c.standBio : c.bio; }
+function bkName(c) { return c.name; }
+function bkBio(c) { return c.bio; }
 
 /* the finished kits, normals built once */
 for (const c of BK_ROSTER) {
@@ -7814,10 +7804,11 @@ for (const slot in BK_PARTS) for (const o of BK_PARTS[slot]) o.m = bkMove(Object
    stock is lost. */
 const BK_STAGES = [
   {
-    id: "mactan", name: "MACTAN SHORE", blurb: "Sand, surf and two bangka at anchor",
+    id: "mactan", name: "MACTAN SHORE", blurb: "Two bangka at anchor, and a tide that comes in hard",
     main: { x0: -320, x1: 320, y: 0, bot: 150 },
     plats: [{ x: -175, y: -112, w: 128 }, { x: 175, y: -112, w: 128 }, { x: 0, y: -214, w: 136 }],
-    blast: { l: -780, r: 780, t: -640, b: 420 }
+    blast: { l: -780, r: 780, t: -640, b: 420 },
+    tide: { calm: 70, high: -18 }
   },
   {
     id: "grove", name: "LUNACIA GROVE", blurb: "A floating island; the side platforms drift",
@@ -7837,9 +7828,9 @@ function bkNewMatch(slots, opt) {
   const S = BK_STAGES[st];
   const span = Math.min(S.main.x1 - S.main.x0 - 120, 150 * (n - 1));
   const s = {
-    rules: "bakbakan", tick: 0, phase: "intro", pt: 0, stage: st, stocks,
+    rules: "bakbakan", tick: 0, phase: "intro", pt: 0, stage: st, stocks, hazards: opt.hazards !== false,
     time: BK_TIME, rng: (opt.seed || 1) * 2654435761 >>> 0, proj: [], winner: -1, order: [],
-    beat: slots.some(sl => BK_ROSTER[sl.ch].id === "bruno"),
+    beat: slots.some(sl => BK_ROSTER[sl.ch].id === "venus"),
     p: slots.map((sl, i) => {
       const x = n === 1 ? 0 : -span / 2 + (span * i) / (n - 1);
       return bkFighter(sl, i, x, x <= 0 ? 1 : -1, stocks, opt.seed || 1);
@@ -7857,6 +7848,7 @@ function bkFighter(sl, i, x, face, stocks, seed) {
     st: "idle", t: 0, mv: null, mk: null, mf: 0, hitIds: [], hitAt: 0,
     dmg: 0, stocks, inv: 0, lag: 0, stun: 0, extraStun: 0, shield: BK_SHIELD, drop: 0,
     jumps: 2, ff: false, upUsed: false, adUsed: false, prev: 0, jumpHeld: false,
+    ledge: 0, ledgeCd: 0, ledgeInvUsed: false, grabbed: -1, climbDo: null,
     lastBy: -1, lastAt: -9999, flash: 0,
     /* the signature mechanics' state */
     book: 0, form: "human", night: 0, moon: 0, combo: 0, comboAt: -999, onBeat: false,
@@ -7925,6 +7917,10 @@ function bkPhysics(s, p) {
     const pl = S.plats[p.gr - 1];
     if (pl.dx) p.x += bkPlatX(pl, s.tick) - bkPlatX(pl, s.tick - 1);
   }
+  /* the tide: anyone with their feet in the water on the beach is carried */
+  const td = bkTide(s);
+  if (td && (td.phase === "surge" || td.phase === "rise") && p.gr <= 0 && p.y >= td.level - 2 &&
+      p.x > m.x0 - 60 && p.x < m.x1 + 60) p.x += td.dir * BK_TIDE_PUSH * (td.phase === "rise" ? td.u : 1);
   const ox = p.x, oy = p.y;
   p.x += p.vx + p.kbx;
   p.y += p.vy + p.kby;
@@ -7961,20 +7957,13 @@ function bkPhysics(s, p) {
     if (lo === pb) { p.y = m.bot + c.H; if (p.vy < 0) p.vy = 0; if (p.kby < 0) p.kby = -p.kby * 0.4; }
     else {
       const side = lo === pl ? -1 : 1;
-      const toward = side < 0 ? p.vx + p.kbx > 0 : p.vx + p.kbx < 0;
-      /* a recovering fighter heading in just under the lip is pulled up onto
-         it: the forgiving stand-in for a ledge grab */
-      if (toward && p.y - m.y < 34 && p.stun <= 0 && p.st !== "hurt" && p.st !== "dizzy") {
-        p.x = side < 0 ? m.x0 + 4 : m.x1 - 4;
-        bkLand(s, p, 0, m.y);
-      } else {
-        p.x = side < 0 ? m.x0 - c.W / 2 : m.x1 + c.W / 2;
-        if (side < 0 ? p.vx > 0 : p.vx < 0) p.vx = 0;
-        if (side < 0 ? p.kbx > 0 : p.kbx < 0) p.kbx = -p.kbx * 0.5;
-      }
+      p.x = side < 0 ? m.x0 - c.W / 2 : m.x1 + c.W / 2;
+      if (side < 0 ? p.vx > 0 : p.vx < 0) p.vx = 0;
+      if (side < 0 ? p.kbx > 0 : p.kbx < 0) p.kbx = -p.kbx * 0.5;
     }
   }
   if (p.drop > 0) p.drop--;
+  if (p.gr < 0) bkTryLedge(s, p);
   return ox !== p.x || oy !== p.y;
 }
 
@@ -7988,7 +7977,7 @@ function bkLand(s, p, g, y) {
   /* a fighter launched into the floor bounces off it rather than landing */
   if (wasHurt && p.kby > 5) { p.kby = -p.kby * 0.55; p.vy = 0; p.y = y; return; }
   p.gr = g; p.y = y; p.vy = 0; if (p.kby > 0) p.kby = 0;
-  p.jumps = 2; p.ff = false; p.upUsed = false; p.adUsed = false;
+  p.jumps = 2; p.ff = false; p.upUsed = false; p.adUsed = false; p.ledgeInvUsed = false; p.ledgeCd = 0;
   if (p.st === "move") {
     const m = bkCurMove(p);
     if (m && !m.keep && !(p.mk[0] === "S" && p.mf < m.s + m.a && !m.helpless)) { p.st = "land"; p.t = 0; p.landLag = 9; p.mk = null; }
@@ -7996,6 +7985,53 @@ function bkLand(s, p, g, y) {
   else if (p.st === "hurt") { p.st = "land"; p.t = 0; p.landLag = 12; p.stun = 0; }
   else if (p.st === "airdodge") { p.st = "land"; p.t = 0; p.landLag = 8; }
   else if (p.st === "air" || p.st === "spawn") { p.st = "land"; p.t = 0; p.landLag = 3; }
+}
+
+/* ---- ledges ----------------------------------------------------------------
+   Falling past a corner of the main stage close enough to reach it, you
+   catch it and hang there. From the ledge: jump, climb (up or toward the
+   stage), climb into an attack, roll in with shield, or let go (down or
+   away). One fighter per ledge; a fresh grab is briefly intangible, and you
+   cannot regrab for half a second after letting go. */
+const BK_LEDGE_HANG = 300, BK_LEDGE_INV = 36, BK_CLIMB = 18;
+function bkLedgeX(S, side, c) { return side < 0 ? S.main.x0 - c.W / 2 + 4 : S.main.x1 + c.W / 2 - 4; }
+function bkTryLedge(s, p) {
+  if (p.ledgeCd > 0 || p.stun > 0) return false;
+  const ok = p.st === "air" || p.st === "helpless" || (p.st === "move" && p.mk !== "TIDE");
+  if (!ok || p.vy + p.kby < -1) return false;
+  const S = BK_STAGES[s.stage], m = S.main, c = bkStats(p);
+  const head = p.y - c.H;
+  if (head < m.y - 46 || head > m.y + 24) return false;
+  let side = 0;
+  if (p.x < m.x0 + 6 && p.x > m.x0 - c.W / 2 - 22) side = -1;
+  else if (p.x > m.x1 - 6 && p.x < m.x1 + c.W / 2 + 22) side = 1;
+  if (!side || s.p.some(q => q !== p && q.st === "ledge" && q.ledge === side)) return false;
+  p.st = "ledge"; p.t = 0; p.ledge = side; p.mk = null;
+  p.x = bkLedgeX(S, side, c); p.y = m.y + c.H - 14;
+  p.vx = p.vy = p.kbx = p.kby = 0; p.face = -side; p.ff = false;
+  p.jumps = 1; p.upUsed = false; p.adUsed = false;
+  if (!p.ledgeInvUsed) { p.inv = Math.max(p.inv, BK_LEDGE_INV); p.ledgeInvUsed = true; }
+  p.grabbed = s.tick;
+  return true;
+}
+function bkLetGo(p, cd) { p.st = "air"; p.t = 0; p.ledge = 0; p.ledgeCd = cd; }
+
+/* ---- the tide ---------------------------------------------------------------
+   Mactan's hazard. Every thirty seconds the sea gives a warning, rises over
+   the sand and runs along the beach one way or the other, pushing everyone
+   standing on it toward an edge. Walk against it or get up on a boat. It is
+   a pure function of the tick, so it costs the sim no state. */
+const BK_TIDE_CYCLE = 1800, BK_TIDE_PUSH = 2.3;
+function bkTide(s) {
+  const S = BK_STAGES[s.stage];
+  if (!S.tide || !s.hazards) return null;
+  const k = s.tick + 300, c = k % BK_TIDE_CYCLE, n = Math.floor(k / BK_TIDE_CYCLE);
+  const dir = n % 2 ? 1 : -1, lo = S.tide.calm, hi = S.tide.high;
+  if (c < 1200) return { phase: "calm", level: lo, dir, u: c / 1200 };
+  if (c < 1380) return { phase: "warn", level: lo + (hi * 0.4 + lo * 0.6 - lo) * ((c - 1200) / 180), dir, u: (c - 1200) / 180 };
+  if (c < 1410) return { phase: "rise", level: lo + (hi - lo) * (0.4 + 0.6 * (c - 1380) / 30), dir, u: (c - 1380) / 30 };
+  if (c < 1680) return { phase: "surge", level: hi, dir, u: (c - 1410) / 270 };
+  return { phase: "ebb", level: hi + (lo - hi) * ((c - 1680) / 120), dir, u: (c - 1680) / 120 };
 }
 
 /* ---- projectiles ------------------------------------------------------ */
@@ -8141,7 +8177,7 @@ function bkHit(s, ai, ti, h, dir, ev) {
   if (a) {
     const ac = bkChar(a);
     if (ac.beast && (a.form === "beast" || a.moon)) d *= a.moon ? 1.25 : 1;
-    if (ac.id === "bruno" && h.beat) { d *= 1.4; ev.push("beat:" + ai); }
+    if (ac.id === "venus" && h.beat) { d *= 1.4; ev.push("beat:" + ai); }
   }
   d = Math.round(d * 10) / 10;
 
@@ -8160,12 +8196,12 @@ function bkHit(s, ai, ti, h, dir, ev) {
   t.dmg = Math.min(999, t.dmg + d);
   const tc = bkStats(t);
   let kb = bkKnock(t.dmg, d, tc.weight, h.kb, h.kg);
-  if (a && bkChar(a).id === "pacquiao") kb *= 1 + 0.08 * Math.min(6, a.combo);
+  if (a && bkChar(a).id === "pakyaw") kb *= 1 + 0.08 * Math.min(6, a.combo);
   if (bkChar(t).beast && t.form === "beast") kb *= 0.88;
   if (a) {
     a.dealt += d;
     if (bkChar(a).beast && !a.moon) a.night = Math.min(100, a.night + d * 3.2);
-    if (bkChar(a).id === "pacquiao") { a.combo = s.tick - a.comboAt < 50 ? a.combo + 1 : 1; a.comboAt = s.tick; }
+    if (bkChar(a).id === "pakyaw") { a.combo = s.tick - a.comboAt < 50 ? a.combo + 1 : 1; a.comboAt = s.tick; }
   }
   t.lastBy = ai; t.lastAt = s.tick; t.flash = 6;
 
@@ -8184,7 +8220,7 @@ function bkHit(s, ai, ti, h, dir, ev) {
   if (t.kby < 0) t.gr = -1;
   t.vx = 0; t.vy = 0;
   t.stun = Math.floor(kb * BK_STUN) + (h.stun || 0);
-  t.st = "hurt"; t.t = 0; t.mk = null; t.ff = false;
+  t.st = "hurt"; t.t = 0; t.mk = null; t.ff = false; t.ledge = 0;
   if (t.jumps < 1) t.jumps = 1;
   t.upUsed = false;
   return "hit";
@@ -8204,8 +8240,8 @@ function bkResolveHits(s, ev) {
     a.hitAt = f;
     const h = fin ? Object.assign({}, m, m.fin) : m;
     const boxes = m.hb.map(r => bkBox(a, r));
-    /* Reyes' cue sends his racked balls flying */
-    if (bkChar(a).id === "reyes") {
+    /* Bilyar's cue sends his racked balls flying */
+    if (bkChar(a).id === "bilyar") {
       for (const q of s.proj) {
         if (q.kind !== "ball" || q.owner !== a.i || q.cueAt === s.tick) continue;
         if (!boxes.some(b => bkOverlap(b, bkProjBox(q)))) continue;
@@ -8286,6 +8322,35 @@ function bkStepFighter(s, p, inp, ev) {
     bkPhysics(s, p);
     return;
   }
+  if (p.ledgeCd > 0) p.ledgeCd--;
+  if (p.st === "ledge") {
+    const S = BK_STAGES[s.stage], c2 = bkStats(p), inward = -p.ledge;
+    if (p.t < 6) return;
+    const away = hdir === p.ledge;
+    if (jumpPress) { bkLetGo(p, 30); p.vy = -c2.jump * 1.02; p.vx = inward * 1.5; ev.push("jump:" + p.i); }
+    else if ((prs & (BK_ATK | BK_SPC | BK_SHD)) || (prs & IN_UP) || (hdir === inward && (prs & (IN_LEFT | IN_RIGHT)))) {
+      p.st = "climb"; p.t = 0; p.inv = Math.max(p.inv, BK_CLIMB + 4);
+      p.climbDo = prs & (BK_ATK | BK_SPC) ? "attack" : prs & BK_SHD ? "roll" : null;
+    }
+    else if ((prs & IN_DOWN) || (away && (prs & (IN_LEFT | IN_RIGHT))) || p.t > BK_LEDGE_HANG) {
+      bkLetGo(p, 30); p.x += p.ledge * 6; p.vy = 1;
+    }
+    return;
+  }
+  if (p.st === "climb") {
+    const S = BK_STAGES[s.stage], c2 = bkStats(p), inward = -p.ledge;
+    const k = Math.min(1, p.t / BK_CLIMB), x0 = bkLedgeX(S, p.ledge, c2);
+    const x1 = (p.ledge < 0 ? S.main.x0 : S.main.x1) + inward * (c2.W / 2 + 6);
+    p.x = x0 + (x1 - x0) * k; p.y = S.main.y + (c2.H - 14) * (1 - Math.min(1, k * 1.4));
+    if (p.t >= BK_CLIMB) {
+      p.y = S.main.y; p.gr = 0; p.ledge = 0; p.face = inward; p.st = "idle"; p.t = 0;
+      p.jumps = 2; p.ledgeInvUsed = false;
+      if (p.climbDo === "attack") { bkStartMove(s, p, "N:down", ev); }
+      else if (p.climbDo === "roll") { p.st = "roll"; p.rollDir = inward; p.face = -inward; }
+      p.climbDo = null;
+    }
+    return;
+  }
   if (p.st === "dizzy") {
     p.vx *= 0.85;
     p.vy = air ? Math.min(c.fall, p.vy + c.grav) : 0;
@@ -8317,8 +8382,8 @@ function bkStepFighter(s, p, inp, ev) {
       p.vy = Math.min(p.ff ? c.ffall : c.fall, p.vy + c.grav);
     }
 
-    /* Pacquiao's footwork: step out of the recovery of any jab or tilt */
-    if (ch.id === "pacquiao" && p.mk[0] === "N" && f >= m.s + m.a && hdir && (prs & (IN_LEFT | IN_RIGHT)) && p.gr >= 0) {
+    /* Pakyaw's footwork: step out of the recovery of any jab or tilt */
+    if (ch.id === "pakyaw" && p.mk[0] === "N" && f >= m.s + m.a && hdir && (prs & (IN_LEFT | IN_RIGHT)) && p.gr >= 0) {
       p.st = "step"; p.t = 0; p.vx = hdir * 7.5; p.mk = null;
       ev.push("step:" + p.i);
       bkPhysics(s, p);
@@ -8466,6 +8531,9 @@ function bkStep(s, inputs) {
   }
 
   if (s.beat && s.tick % BK_BEAT === 0) ev.push("pulse");
+  const td = bkTide(s);
+  if (td && td.phase === "warn" && td.u === 0) ev.push("tidewarn:" + td.dir);
+  if (td && td.phase === "rise" && td.u === 0) ev.push("tide:" + td.dir);
   const ins = s.p.map((p, i) => (p.cpu ? bkCpuInput(s, i) : (inputs && inputs[i]) || 0));
   for (let i = 0; i < s.p.length; i++) bkStepFighter(s, s.p[i], ins[i], ev);
   bkResolveHits(s, ev);
@@ -8480,7 +8548,7 @@ function bkStep(s, inputs) {
     p.stocks--; p.falls++;
     if (p.lastBy >= 0 && p.lastBy !== p.i && s.tick - p.lastAt < 600) s.p[p.lastBy].ko++;
     ev.push("ko:" + p.i + ":" + (p.x < B.l ? "l" : p.x > B.r ? "r" : p.y > B.b ? "b" : "t") + ":" + Math.round(Math.max(B.l, Math.min(B.r, p.x))) + ":" + Math.round(Math.max(B.t, Math.min(B.b, p.y))));
-    p.vx = p.vy = p.kbx = p.kby = 0; p.mk = null; p.stun = 0; p.lag = 0;
+    p.vx = p.vy = p.kbx = p.kby = 0; p.mk = null; p.stun = 0; p.lag = 0; p.ledge = 0;
     if (p.stocks <= 0) { p.st = "out"; p.outAt = s.tick; s.order.unshift(p.i); }
     else { p.st = "dead"; p.t = 0; p.x = 0; p.y = -2000; }
   }
@@ -8520,6 +8588,15 @@ function bkCpuInput(s, i) {
   /* off the stage: get back */
   const offX = p.x < m.x0 - 4 || p.x > m.x1 + 4, below = p.y > m.y + 4;
   if (p.st === "spawn") { out = IN_DOWN; b.prev = out; return out; }
+  if (p.st === "ledge") {
+    /* hang a moment, then get up one of three ways */
+    if (p.t < 8 + L.react) { b.prev = 0; return 0; }
+    const r = bkCpuRand(b);
+    out = r < 0.45 ? (p.ledge < 0 ? IN_RIGHT : IN_LEFT) : r < 0.7 ? BK_JMP : r < 0.85 ? BK_ATK : BK_SHD;
+    out &= ~b.prev; b.prev = out;
+    return out;
+  }
+  if (p.st === "climb") { b.prev = 0; return 0; }
   if ((offX || below) && p.st !== "hurt") {
     const home = p.x < 0 ? IN_RIGHT : IN_LEFT;
     out |= home;
@@ -8539,6 +8616,14 @@ function bkCpuInput(s, i) {
     if (d < best) { best = d; tgt = q; }
   }
   if (!tgt) { b.prev = 0; return 0; }
+  /* lean into the tide rather than ride it off the beach */
+  const td = bkTide(s);
+  if (td && td.phase === "surge" && p.gr === 0 && bkCpuRand(b) < L.recover) {
+    out = td.dir > 0 ? IN_LEFT : IN_RIGHT;
+    if (Math.abs(p.x) > 180 && bkCpuRand(b) < 0.1) out |= press(BK_JMP);
+    b.prev = out;
+    return out;
+  }
   const dx = tgt.x - p.x, dy = tgt.y - p.y, adx = Math.abs(dx);
   const toward = dx > 0 ? IN_RIGHT : IN_LEFT;
 
@@ -8556,13 +8641,13 @@ function bkCpuInput(s, i) {
   b.think = L.react + Math.floor(bkCpuRand(b) * L.react);
 
   const ch = bkChar(p).id;
-  const zoner = ch === "rizal" || ch === "eala" || ch === "bruno";
+  const zoner = ch === "rizal" || ch === "acela" || ch === "venus";
   const reach = 46 + c.W / 2;
   const r = bkCpuRand(b);
 
   if (zoner && adx > 170 && adx < 460 && Math.abs(dy) < 80 && r < L.aggro) {
     out = (dx > 0 ? 1 : -1) === p.face ? press(BK_SPC) : toward;
-  } else if (ch === "reyes" && adx > 120 && r < L.aggro * 0.5) {
+  } else if (ch === "bilyar" && adx > 120 && r < L.aggro * 0.5) {
     out = r < 0.25 ? press(BK_SPC) : press(BK_SPC) | IN_DOWN;
   } else if (adx > reach || Math.abs(dy) > 90) {
     out = toward;
@@ -8679,6 +8764,11 @@ function bkPose(p, c) {
     P.lean = -0.45; P.aF = -1.9 + Math.sin(t * 0.6) * 0.4; P.eF = P.aF - 0.4; P.aB = -1.2; P.eB = -1.6;
     P.lF = D - 0.8; P.kF = D - 0.2; P.lB = D - 0.2; P.kB = D + 0.3;
     if (Math.hypot(p.kbx, p.kby) > 9) P.rot = -t * 0.45;
+  } else if (st === "ledge") {
+    const sw = Math.sin(t * 0.06) * 0.08;
+    P.aF = -1.7; P.eF = -1.55; P.aB = -1.5; P.eB = -1.4; P.lF = D + 0.1 + sw; P.kF = D + 0.25 + sw; P.lB = D - 0.15 + sw; P.kB = D + sw;
+  } else if (st === "climb") {
+    P.lean = 0.45; P.crouch = 4; P.aF = -0.3; P.eF = 0.6; P.aB = -0.1; P.eB = 0.8; P.lF = D - 1.1; P.kF = D + 0.6; P.lB = D - 0.2; P.kB = D + 0.7;
   } else if (st === "dizzy") {
     P.lean = Math.sin(t * 0.12) * 0.25; P.aF = D + 0.4; P.eF = D + 0.6; P.aB = D + 0.4; P.eB = D + 0.6; P.crouch = 1;
   } else if (st === "shield") {
@@ -8790,7 +8880,7 @@ function bkDoll(g, c, P, p) {
   k = bkLimb(g, cx + 1, hy, P.lF, 8, 4, L.skirt || L.dress ? skin : legC);
   k = bkLimb(g, k[0], k[1], P.kF, 8, 4, L.skirt || L.dress ? skin : (L.pantsLeg === false ? skin : legC));
   bkDot(g, k[0] - 2, k[1] - 1, 5, 2, "#241C1C");
-  e = bkLimb(g, shx + 1, shy + 2, P.aF, armA, armTh, L.coat || (top && !L.open && c.id !== "pacquiao" && c.id !== "lapulapu") ? (top || skin) : skin);
+  e = bkLimb(g, shx + 1, shy + 2, P.aF, armA, armTh, L.coat || (top && !L.open && c.id !== "pakyaw" && c.id !== "lapulapu") ? (top || skin) : skin);
   const hF = bkLimb(g, e[0], e[1], P.eF, armB, armTh, skin);
   if (beast) bkClaws(g, hF, P.eF);
   else bkWeapon(g, c, L, hF, P.eF, P);
@@ -8868,7 +8958,7 @@ function bkDrawAxie(p, x, y, h, opt) {
   let anim = c.anim.idle, at = (p.t || 0) / 60;
   if (p.st === "walk") anim = c.anim.air;
   else if (p.st === "air" || p.st === "jsq" || p.st === "helpless" || p.st === "airdodge") anim = c.anim.air;
-  else if (p.st === "hurt" || p.st === "dizzy") anim = c.anim.kb;
+  else if (p.st === "hurt" || p.st === "dizzy" || p.st === "ledge" || p.st === "climb") anim = c.anim.kb;
   else if (p.st === "move") { anim = c.anim.kick; at = Math.min(0.5, p.mf / 40); }
   else if (p.st === "land") anim = c.anim.land;
   const fake = { facing: p.face || 1, st: "", t: p.t || 0, inflate: 0, tint: false, cos: null, x, y: 0, dead: false };
@@ -8997,11 +9087,16 @@ function bkDrawStage(s, t) {
     for (let j = 0; j < 5; j++) ctx.fillRect(m.x0 + 20 + j * 8, 26 + j * 22, m.x1 - m.x0 - 40 - j * 16, 6);
     ctx.fillStyle = "#EBD29A"; ctx.fillRect(m.x0, m.y, m.x1 - m.x0, 12);
     ctx.fillStyle = "#D9BC80"; for (let x = m.x0 + 6; x < m.x1; x += 22) ctx.fillRect(x, m.y + 4, 6, 2);
-    /* water in front of the rock */
+    /* water in front of the rock, as high as the tide has it */
+    const td = bkTide(s), lvl = (td ? td.level : 70) + Math.sin(t * 0.04) * 3;
+    const run = td && (td.phase === "surge" || td.phase === "rise") ? td.dir * t * 3 : 0;
     ctx.fillStyle = rgba("#2E6C8A", 0.72);
-    ctx.fillRect(m.x0 - 900, 70 + Math.sin(t * 0.04) * 3, m.x1 - m.x0 + 1800, 400);
+    ctx.fillRect(m.x0 - 900, lvl, m.x1 - m.x0 + 1800, 470 - lvl);
     ctx.fillStyle = rgba("#E8F6FF", 0.5);
-    for (let x = m.x0 - 880; x < m.x1 + 880; x += 60) ctx.fillRect(x + Math.sin(t * 0.05 + x) * 8, 70 + Math.sin(t * 0.04) * 3, 26, 3);
+    for (let x = m.x0 - 880; x < m.x1 + 880; x += 60) {
+      const xx = ((x + run + Math.sin(t * 0.05 + x) * 8) - (m.x0 - 900)) % (m.x1 - m.x0 + 1800);
+      ctx.fillRect(m.x0 - 900 + (xx < 0 ? xx + m.x1 - m.x0 + 1800 : xx), lvl, 26, 3);
+    }
     for (let k = 0; k < S.plats.length; k++) bkBangka(S.plats[k], bkPlatX(S.plats[k], s.tick), k === 2);
   } else {
     /* the floating island */
@@ -9074,6 +9169,8 @@ function bkPlayEv(s, e) {
   else if (k === "reflect") { SFX.kb(); bkPop(p.x, p.y - 96, "RETURN!", "#6FD4FF", 18); }
   else if (k === "beat") bkPop(p.x, p.y - 96, "ON BEAT", "#FFC23D", 16);
   else if (k === "pulse") tone(1320, 1320, 0.035, "sine", 0.035);
+  else if (k === "tidewarn") { noise(0.9, 600, 200, 0.12); }
+  else if (k === "tide") { noise(1.4, 1800, 160, 0.22); bkShake = Math.max(bkShake, 8); }
   else if (k === "bank") tone(900, 1200, 0.05, "square", 0.06);
   else if (k === "cue") { tone(1400, 600, 0.06, "square", 0.08); }
   else if (k === "shift") { SFX.float(); bkPop(p.x, p.y - 96, p.form === "beast" ? "BEAST" : "HUMAN", "#C04A6A", 14); }
@@ -9288,9 +9385,9 @@ function bkDrawHUD(s, t) {
     /* the signature mechanic's state, where it has one */
     let meter = null;
     if (c.beast) meter = p.moon ? ["FULL MOON", p.moon / 420, "#F2E6B0"] : [p.form === "beast" ? "BEAST · NIGHT" : "HUMAN · NIGHT", p.night / 100, "#C04A6A"];
-    else if (c.id === "pacquiao" && p.combo > 1 && s.tick - p.comboAt < 50) meter = ["COMBO ×" + p.combo, Math.min(1, p.combo / 6), "#FF6A3D"];
+    else if (c.id === "pakyaw" && p.combo > 1 && s.tick - p.comboAt < 50) meter = ["COMBO ×" + p.combo, Math.min(1, p.combo / 6), "#FF6A3D"];
     else if (c.id === "rizal") meter = [p.book ? "NEXT: FILI · FAST" : "NEXT: NOLI · STUNS", 1, p.book ? "#8FB3FF" : "#E07A6A"];
-    else if (c.id === "reyes") { const nb = s.proj.filter(q => q.kind === "ball" && q.owner === p.i).length; meter = ["BALLS " + nb + "/3", nb / 3, "#5FD08A"]; }
+    else if (c.id === "bilyar") { const nb = s.proj.filter(q => q.kind === "ball" && q.owner === p.i).length; meter = ["BALLS " + nb + "/3", nb / 3, "#5FD08A"]; }
     else if (c.id === "lapulapu") meter = [p.shield < BK_SHIELD ? "SHIELD" : "KALASAG UP", p.shield / BK_SHIELD, "#E0563B"];
     if (meter) {
       txt(meter[0], x + 80, y + 73, -8.5, rgba(meter[2], 0.95), "left", FM, 1.5);
@@ -9299,7 +9396,15 @@ function bkDrawHUD(s, t) {
     }
     ctx.restore();
   }
-  /* the clock, and Bruno's pulse when he is in the match */
+  /* the tide, coming or here */
+  const td = bkTide(s);
+  if (td && td.phase !== "calm" && s.phase === "fight") {
+    const arrows = td.dir > 0 ? "▶ ▶ ▶" : "◀ ◀ ◀";
+    const warn = td.phase === "warn", a = warn ? 0.55 + 0.45 * Math.sin(t * 0.3) : td.phase === "ebb" ? 1 - td.u : 1;
+    txt(warn ? "HIGH TIDE COMING" : "THE TIDE IS IN", STAGE_W / 2, 64, 18, rgba("#9FE6FF", a), "center", FD, 5);
+    txt(arrows, STAGE_W / 2, 84, 14, rgba("#E8F6FF", a * 0.85), "center", FD, 6);
+  }
+  /* the clock, and Bruno Venus' pulse when he is in the match */
   const sec = Math.max(0, Math.ceil(s.time / 60));
   txt(Math.floor(sec / 60) + ":" + String(sec % 60).padStart(2, "0"), STAGE_W / 2, 30, 20, rgba("#E7E3FB", 0.85), "center", FM, 2);
   if (s.beat) {
@@ -9375,7 +9480,7 @@ function bkSlotsDefault() {
   ];
 }
 function bkOpen() {
-  if (!app.bk) app.bk = { slots: bkSlotsDefault(), stage: 0, stocks: 3, lvl: 1, row: 0, prev: [0, 0, 0, 0], t: 0, m: null };
+  if (!app.bk) app.bk = { slots: bkSlotsDefault(), stage: 0, stocks: 3, lvl: 1, hazards: true, row: 0, prev: [0, 0, 0, 0], t: 0, m: null };
   const b = app.bk;
   for (const sl of b.slots) if (sl.kind === "human") { sl.lock = false; sl.focus = "grid"; }
   b.prev = bkIn.slice(); b.t = 0;
@@ -9383,13 +9488,15 @@ function bkOpen() {
 }
 function bkToSelect() { SFX.move(); bkOpen(); }
 
-const BK_RULE_ROWS = ["STAGE", "STOCKS", "CPU LEVEL", "P2", "P3", "P4", "FIGHT"];
+const BK_RULE_ROWS = ["STAGE", "STOCKS", "CPU LEVEL", "HAZARDS", "P2", "P3", "P4", "FIGHT"];
+const BK_SLOT_ROW = 4;       /* the rules row for P2; P3 and P4 follow */
 function bkRuleValue(b, r) {
   if (r === 0) return BK_STAGES[b.stage].name;
   if (r === 1) return b.stocks + (b.stocks === 1 ? " STOCK" : " STOCKS");
   if (r === 2) return BK_LEVELS[b.lvl];
-  if (r >= 3 && r <= 5) {
-    const sl = b.slots[r - 2];
+  if (r === 3) return !BK_STAGES[b.stage].tide ? "NONE HERE" : b.hazards ? "THE TIDE" : "OFF";
+  if (r >= BK_SLOT_ROW && r < BK_SLOT_ROW + 3) {
+    const sl = b.slots[r - BK_SLOT_ROW + 1];
     return sl.kind === "human" ? "PLAYER" : sl.kind === "off" ? "OFF" : "CPU · " + bkName(BK_ROSTER[sl.ch]);
   }
   return "";
@@ -9399,9 +9506,10 @@ function bkRuleBump(b, r, d) {
   if (r === 0) b.stage = (b.stage + d + BK_STAGES.length) % BK_STAGES.length;
   else if (r === 1) b.stocks = clamp(b.stocks + d, 1, 5);
   else if (r === 2) b.lvl = clamp(b.lvl + d, 0, BK_LEVELS.length - 1);
-  else if (r >= 3 && r <= 5) {
+  else if (r === 3) b.hazards = !b.hazards;
+  else if (r >= BK_SLOT_ROW && r < BK_SLOT_ROW + 3) {
     /* OFF -> CPU with each fighter in turn -> OFF */
-    const sl = b.slots[r - 2], n = BK_ROSTER.length;
+    const sl = b.slots[r - BK_SLOT_ROW + 1], n = BK_ROSTER.length;
     if (sl.kind === "human") { sl.kind = "cpu"; sl.lock = true; }
     else if (sl.kind === "off") { sl.kind = "cpu"; sl.ch = d > 0 ? 0 : n - 1; sl.lock = true; }
     else if ((d > 0 && sl.ch === n - 1) || (d < 0 && sl.ch === 0)) sl.kind = "off";
@@ -9422,7 +9530,7 @@ function bkStart() {
     slots.push({ ch: sl.ch, cpu: sl.kind === "cpu" ? b.lvl : null, parts: Object.assign({}, sl.parts), src: b.slots.indexOf(sl) });
   }
   b.map = slots.map(sl => sl.src);      /* match fighter -> input slot */
-  b.m = bkNewMatch(slots, { stage: b.stage, stocks: b.stocks, seed: (app.t % 9973) + 1 });
+  b.m = bkNewMatch(slots, { stage: b.stage, stocks: b.stocks, hazards: b.hazards, seed: (app.t % 9973) + 1 });
   bkFx.length = 0; bkShake = 0;
   bkCamera(b.m, true);
   SFX.lock();
@@ -9430,7 +9538,7 @@ function bkStart() {
 }
 function bkRematch() {
   const b = app.bk, s = b.m;
-  b.m = bkNewMatch(s.p.map(p => ({ ch: p.ch, cpu: p.cpu ? p.cpu.lvl : null, parts: p.parts })), { stage: s.stage, stocks: s.stocks, seed: (app.t % 9973) + 1 });
+  b.m = bkNewMatch(s.p.map(p => ({ ch: p.ch, cpu: p.cpu ? p.cpu.lvl : null, parts: p.parts })), { stage: s.stage, stocks: s.stocks, hazards: s.hazards, seed: (app.t % 9973) + 1 });
   bkFx.length = 0; bkShake = 0;
   bkCamera(b.m, true);
   SFX.lock();
@@ -9556,31 +9664,30 @@ function bkDrawSel(t) {
   for (const ln of wrapText(bkBio(me), 184, 12, FD)) { txt(ln, 24, yy, -12, rgba("#E7E3FB", 0.82), "left", FD); yy += 16; }
   yy += 8;
   for (const ln of wrapText(me.sig, 184, 11, FM)) { txt(ln, 24, yy, -10.5, "#FFD98A", "left", FM); yy += 14; }
-  if (me.living && BK_REAL) txt("LIVING PERSON · INTERNAL BUILD ONLY", 24, 322, -8.5, rgba("#FF8A5C", 0.75), "left", FM, 1.5);
 
   /* rules */
   const RX = 732, RY = 84, RW = 254;
-  ctx.fillStyle = rgba("#120E28", 0.9); ctx.fillRect(RX, RY, RW, 248);
+  ctx.fillStyle = rgba("#120E28", 0.9); ctx.fillRect(RX, RY, RW, 254);
   const p1rules = b.slots[0].focus === "rules";
   BK_RULE_ROWS.forEach((label, r) => {
-    const y = RY + 10 + r * 33, cur = p1rules && b.row === r;
+    const y = RY + 6 + r * 30, cur = p1rules && b.row === r;
     if (label === "FIGHT") {
       const ok = bkCanStart(b);
       const bx = RX + 10, bw = RW - 20;
-      ctx.fillStyle = rgba(ok ? "#3A2E16" : "#1A1436", 0.96); ctx.fillRect(bx, y + 2, bw, 30);
-      ctx.strokeStyle = rgba("#FFD98A", cur ? 1 : ok ? 0.6 : 0.2); ctx.lineWidth = cur ? 2 : 1; ctx.strokeRect(bx + 0.5, y + 2.5, bw - 1, 29);
+      ctx.fillStyle = rgba(ok ? "#3A2E16" : "#1A1436", 0.96); ctx.fillRect(bx, y + 4, bw, 30);
+      ctx.strokeStyle = rgba("#FFD98A", cur ? 1 : ok ? 0.6 : 0.2); ctx.lineWidth = cur ? 2 : 1; ctx.strokeRect(bx + 0.5, y + 4.5, bw - 1, 29);
       const why = b.slots.filter(sl => sl.kind !== "off").length < 2 ? "ADD A FIGHTER" : "LOCK IN FIRST";
-      txt(ok ? "FIGHT!" : why, bx + bw / 2, y + 23, 15, ok ? "#FFD98A" : rgba("#E7E3FB", 0.4), "center", FD, 3);
-      hot(bx, y + 2, bw, 30, () => { b.row = r; bkStart(); });
+      txt(ok ? "FIGHT!" : why, bx + bw / 2, y + 25, 15, ok ? "#FFD98A" : rgba("#E7E3FB", 0.4), "center", FD, 3);
+      hot(bx, y + 4, bw, 30, () => { b.row = r; bkStart(); });
       return;
     }
-    if (cur) { ctx.fillStyle = rgba("#FFD98A", 0.1); ctx.fillRect(RX + 4, y, RW - 8, 30); ctx.fillStyle = "#FFD98A"; ctx.fillRect(RX + 4, y, 3, 30); }
-    txt(label, RX + 14, y + 20, -10, rgba("#E7E3FB", 0.55), "left", FM, 2);
-    fitTxt(bkRuleValue(b, r), RX + RW - 34, y + 20, 140, 12, cur ? "#FFD98A" : "#E7E3FB", "right", FD, 1);
-    txt("◀", RX + RW - 154 - 10, y + 20, 11, rgba("#E7E3FB", 0.35), "center");
-    txt("▶", RX + RW - 18, y + 20, 11, rgba("#E7E3FB", 0.35), "center");
-    hot(RX + RW - 176, y, 24, 30, () => { b.row = r; bkRuleBump(b, r, -1); });
-    hot(RX + RW - 30, y, 28, 30, () => { b.row = r; bkRuleBump(b, r, 1); });
+    if (cur) { ctx.fillStyle = rgba("#FFD98A", 0.1); ctx.fillRect(RX + 4, y, RW - 8, 28); ctx.fillStyle = "#FFD98A"; ctx.fillRect(RX + 4, y, 3, 28); }
+    txt(label, RX + 14, y + 19, -10, rgba("#E7E3FB", 0.55), "left", FM, 2);
+    fitTxt(bkRuleValue(b, r), RX + RW - 34, y + 19, 140, 12, cur ? "#FFD98A" : "#E7E3FB", "right", FD, 1);
+    txt("◀", RX + RW - 154 - 10, y + 19, 11, rgba("#E7E3FB", 0.35), "center");
+    txt("▶", RX + RW - 18, y + 19, 11, rgba("#E7E3FB", 0.35), "center");
+    hot(RX + RW - 176, y, 24, 28, () => { b.row = r; bkRuleBump(b, r, -1); });
+    hot(RX + RW - 30, y, 28, 28, () => { b.row = r; bkRuleBump(b, r, 1); });
   });
 
   /* the four slots */
@@ -9595,10 +9702,10 @@ function bkDrawSel(t) {
     if (sl.kind === "off") {
       txt(i < 2 ? "PRESS " + keyName(BINDS["p" + (i + 1) + "lp"]) + " TO JOIN" : "PRESS A ON A PAD TO JOIN", x + SW / 2, SY + 92, -10, rgba("#E7E3FB", 0.45), "center", FM, 2);
       txt("OR CLICK FOR A CPU", x + SW / 2, SY + 110, -10, rgba("#E7E3FB", 0.3), "center", FM, 2);
-      hot(x, SY, SW, SH, () => { if (i > 0) bkRuleBump(b, i + 2, 1); });
+      hot(x, SY, SW, SH, () => { if (i > 0) bkRuleBump(b, i + BK_SLOT_ROW - 1, 1); });
       return;
     }
-    if (i > 0) hot(x, SY + SH - 26, SW, 26, () => bkRuleBump(b, i + 2, 1));
+    if (i > 0) hot(x, SY + SH - 26, SW, 26, () => bkRuleBump(b, i + BK_SLOT_ROW - 1, 1));
     if (sl.focus === "parts" && sl.kind === "human") {
       bkDrawPartPicker(sl, x, SY + 30, SW, t, i);
       return;
@@ -9648,6 +9755,115 @@ function bkDrawTitle(t) {
   const glow = 0.5 + 0.5 * Math.sin(t * 0.05);
   txt("BAKBAKAN", STAGE_W / 2, 214, 104, rgba("#FF8A5C", 0.78 + glow * 0.22), "center", FD, 10);
   txt("UP TO FOUR · PERCENT DAMAGE · OFF THE EDGE AND YOU'RE OUT", STAGE_W / 2, 250, 13, rgba("#E7E3FB", 0.6), "center", FM, 4);
+}
+
+
+/* =========================== BAKBAKAN: music ============================
+   Two original pieces, synthesized here, so there is nothing to license.
+   The fight is in the style of a Maguindanao kulintang ensemble: a row of
+   eight tuned gongs carrying the tune, a pair of hanging gandingan, the big
+   agung on the downbeats, the dabakan drum and the babendil keeping time.
+   It runs at 120 bpm off the match's own tick, so Bruno Venus' beat pulse is
+   the music's beat. The menus get a rondalla harana in 3/4: bandurria
+   tremolo over a guitar and a bass. Both go through the music bus, so the
+   music volume, mute and pause all apply. */
+function bkMidi(n) { return 440 * Math.pow(2, (n - 69) / 12); }
+function bkEnv(g, at, a, peak, dur) {
+  g.gain.setValueAtTime(0.0001, at);
+  g.gain.linearRampToValueAtTime(peak, at + a);
+  g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+}
+function bkOsc(type, f, at, dur, peak, dest, a) {
+  const o = ac.createOscillator(), g = ac.createGain();
+  o.type = type; o.frequency.setValueAtTime(f, at);
+  bkEnv(g, at, a || 0.004, peak, dur);
+  o.connect(g); g.connect(dest || musicBus); o.start(at); o.stop(at + dur + 0.05);
+  return o;
+}
+/* a small bossed gong: the fundamental and one inharmonic partial */
+function bkGong(f, at, peak) {
+  bkOsc("sine", f, at, 0.7, peak);
+  bkOsc("sine", f * 2.76, at, 0.18, peak * 0.22);
+  bkOsc("triangle", f * 4.1, at, 0.05, peak * 0.08);
+}
+function bkAgung(at, peak) {
+  const o = bkOsc("sine", 70, at, 1.8, peak, null, 0.012);
+  o.frequency.exponentialRampToValueAtTime(64, at + 1.8);
+  bkOsc("sine", 73.5, at, 1.4, peak * 0.55, null, 0.02);
+}
+function bkDrum(at, f, peak) {
+  const s = ac.createBufferSource(); s.buffer = noiseBuf;
+  const bp = ac.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = f; bp.Q.value = 1.4;
+  const g = ac.createGain(); bkEnv(g, at, 0.002, peak, 0.11);
+  s.connect(bp); bp.connect(g); g.connect(musicBus); s.start(at); s.stop(at + 0.15);
+  const o = bkOsc("sine", 130, at, 0.12, peak * 0.8);
+  o.frequency.exponentialRampToValueAtTime(70, at + 0.1);
+}
+function bkPluck(f, at, dur, peak) {
+  const o = ac.createOscillator(), lp = ac.createBiquadFilter(), g = ac.createGain();
+  o.type = "sawtooth"; o.frequency.setValueAtTime(f, at);
+  lp.type = "lowpass"; lp.frequency.setValueAtTime(3200, at); lp.frequency.exponentialRampToValueAtTime(700, at + dur);
+  bkEnv(g, at, 0.003, peak, dur);
+  o.connect(lp); lp.connect(g); g.connect(musicBus); o.start(at); o.stop(at + dur + 0.05);
+}
+
+/* kulintang: eight gongs, low to high, in a pentatonic row */
+const BK_KUL = [62, 64, 67, 69, 71, 74, 76, 79];
+const BK_KUL_BARS = {
+  A: [5, -1, 4, 5, 3, -1, 4, -1, 5, 6, 5, 4, 3, -1, 2, -1],
+  B: [2, -1, 3, 2, 4, -1, 3, -1, 2, 3, 4, 5, 6, -1, 5, -1],
+  C: [7, -1, 6, 7, 5, -1, 6, -1, 4, 5, 6, 5, 4, 3, 2, -1],
+  D: [3, 4, 3, 2, 1, -1, 2, -1, 0, -1, 2, 3, 4, -1, -1, -1]
+};
+const BK_KUL_FORM = "ABACABCD";
+const BK_DABAKAN = [1, 0, 0, 0.6, 0, 0, 0.8, 0, 1, 0, 0.6, 0.6, 0, 0, 0.8, 0];
+
+/* harana: 3/4, six eighths a bar; a number is a note, 0 holds the last one */
+const BK_HARANA = [
+  [74, 0, 0, 76, 78, 0], [79, 0, 78, 76, 0, 0], [74, 0, 71, 0, 69, 0], [71, 0, 0, 0, 0, 0],
+  [69, 0, 0, 71, 73, 0], [74, 0, 73, 71, 0, 0], [69, 0, 66, 0, 67, 69], [74, 0, 0, 0, 0, 0]
+];
+const BK_HARANA_CH = [[38, [62, 66, 69]], [43, [62, 67, 71]], [47, [62, 66, 71]], [43, [62, 67, 71]],
+  [45, [61, 64, 69]], [38, [62, 66, 69]], [45, [61, 64, 69]], [38, [62, 66, 69]]];
+
+const bkMus = { last: -1, track: null };
+function bkMusicStep(track, step) {
+  const at = ac.currentTime + 0.05, s16 = 0.125;
+  if (track === "fight") {
+    /* one eighth note: two sixteenths */
+    for (let h = 0; h < 2; h++) {
+      const k = step * 2 + h, bar = Math.floor(k / 16) % BK_KUL_FORM.length, i = k % 16, t = at + h * s16;
+      const g = BK_KUL_BARS[BK_KUL_FORM[bar]][i];
+      if (g >= 0) bkGong(bkMidi(BK_KUL[g]), t, 0.32);
+      if (i === 0) bkAgung(t, 0.5); else if (i === 8) bkAgung(t, 0.3);
+      if (i === 4 || i === 12) bkGong(bkMidi(i === 4 ? 50 : 55), t, 0.22);
+      if (BK_DABAKAN[i]) bkDrum(t, 240, 0.28 * BK_DABAKAN[i]);
+      if (i % 4 === 2) bkOsc("square", 1760, t, 0.03, 0.03);
+    }
+  } else {
+    const bar = Math.floor(step / 6) % BK_HARANA.length, i = step % 6;
+    const n = BK_HARANA[bar][i];
+    if (n) {
+      /* bandurria tremolo: the note is re-picked for as long as it is held */
+      let held = 1;
+      while (i + held < 6 && BK_HARANA[bar][i + held] === 0) held++;
+      for (let r = 0; r < held * 2; r++) bkPluck(bkMidi(n), at + r * s16, 0.2, r ? 0.09 : 0.14);
+    }
+    const [bass, chord] = BK_HARANA_CH[bar];
+    if (i === 0) bkPluck(bkMidi(bass), at, 0.9, 0.3);
+    if (i === 2 || i === 4) chord.forEach((c, j) => bkPluck(bkMidi(c - 12), at + j * 0.012, 0.35, 0.07));
+  }
+}
+/* once per sim tick: which piece, on which clock */
+function bkMusicTick() {
+  if (!ac || !musicBus || !noiseBuf) return;
+  const m = app.screen === "bkmatch" && app.bk && app.bk.m;
+  const fight = m && !(m.phase === "end" && m.pt >= BK_END);
+  const track = fight ? "fight" : "harana", clock = fight ? m.tick : app.t;
+  if (track !== bkMus.track) { bkMus.track = track; bkMus.last = clock - 1; }
+  if (clock === bkMus.last) return;
+  bkMus.last = clock;
+  if (clock % 15 === 0) bkMusicStep(track, Math.floor(clock / 15));
 }
 
 /* <</BAKBAKAN>> */
@@ -9877,7 +10093,8 @@ function frame(now) {
     if (app.pause) pauseTick(inp);
     else runScreenTick(inp);
 
-    music(app.screen === "match" || app.screen === "bkmatch" ? "battle" : "menu");
+    if (bkOn() && (app.screen === "title" || app.screen === "bksel" || app.screen === "bkmatch")) { musicOff(); bkMusicTick(); }
+    else music(app.screen === "match" ? "battle" : "menu");
     anyPressEdge = false;
   }
   simMs = performance.now() - t0;

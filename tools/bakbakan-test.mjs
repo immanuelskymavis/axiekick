@@ -75,13 +75,13 @@ function hash(s) {
 
 /* --- hits --------------------------------------------------------------- */
 {
-  const s = match([id("pacquiao"), 1]); place(s.p[0], 0, 1); place(s.p[1], 40, -1);
+  const s = match([id("pakyaw"), 1]); place(s.p[0], 0, 1); place(s.p[1], 40, -1);
   run(s, 12, t => [t === 0 ? A : 0]);
   ok(s.p[1].dmg > 0, "a jab in range hits (" + s.p[1].dmg + "%)");
-  const s2 = match([id("pacquiao"), 1]); place(s2.p[0], 0, 1); place(s2.p[1], 160, -1);
+  const s2 = match([id("pakyaw"), 1]); place(s2.p[0], 0, 1); place(s2.p[1], 160, -1);
   run(s2, 12, t => [t === 0 ? A : 0]);
   ok(s2.p[1].dmg === 0, "the same jab out of range misses");
-  const s3 = match([id("pacquiao"), 1]); place(s3.p[0], 0, 1); place(s3.p[1], 40, -1);
+  const s3 = match([id("pakyaw"), 1]); place(s3.p[0], 0, 1); place(s3.p[1], 40, -1);
   run(s3, 12, t => [t === 0 ? A : 0, SH]);
   ok(s3.p[1].dmg === 0 && s3.p[1].shield < 60, "a shield takes the hit instead of the fighter");
 }
@@ -102,10 +102,10 @@ function hash(s) {
   run(s, 6);
   ok(s.proj.some(q => q.kind === "tide" && q.owner === 0), "and answers with a wave");
 
-  const s2 = match([id("lapulapu"), id("eala")]); place(s2.p[0], 0, 1); place(s2.p[1], 260, -1);
+  const s2 = match([id("lapulapu"), id("acela")]); place(s2.p[0], 0, 1); place(s2.p[1], 260, -1);
   const ev2 = run(s2, 60, t => [0, t === 0 ? S : 0]);
   ok(ev2.some(e => e.startsWith("clang")) && s2.p[0].dmg === 0, "the kalasag stops a serve that comes at his front");
-  const s3 = match([id("lapulapu"), id("eala")]); place(s3.p[0], 0, -1); place(s3.p[1], 260, -1);
+  const s3 = match([id("lapulapu"), id("acela")]); place(s3.p[0], 0, -1); place(s3.p[1], 260, -1);
   run(s3, 60, t => [0, t === 0 ? S : 0]);
   ok(s3.p[0].dmg > 0, "but not one that comes at his back");
 }
@@ -133,16 +133,16 @@ function hash(s) {
   ok(G.bkStats(s.p[0]).walk === G.BK_ROSTER[id("aswang")].walk, "and under it the beast moves at human speed");
 }
 
-/* --- Pacquiao: footwork, combos ---------------------------------------- */
+/* --- Manny Pakyaw: footwork, combos ---------------------------------------- */
 {
-  const s = match([id("pacquiao"), 1]); place(s.p[0], 0, 1); place(s.p[1], 300, -1);
+  const s = match([id("pakyaw"), 1]); place(s.p[0], 0, 1); place(s.p[1], 300, -1);
   run(s, 1, [A]);
   let stepped = false;
   for (let t = 0; t < 14 && !stepped; t++) { G.bkStep(s, [t > 4 ? L : 0]); stepped = s.p[0].st === "step"; }
   ok(stepped, "a jab's recovery steps out with a direction");
-  const t0 = match([id("pacquiao"), 1]); place(t0.p[0], 0, 1); place(t0.p[1], 40, -1); t0.p[0].combo = 0;
+  const t0 = match([id("pakyaw"), 1]); place(t0.p[0], 0, 1); place(t0.p[1], 40, -1); t0.p[0].combo = 0;
   const lone = G.bkKnock(80, 3, 86, 16, 26);
-  ok(lone > 0 && G.BK_ROSTER[id("pacquiao")].N.jab.s <= 2, "the fastest jab in the cast (" + G.BK_ROSTER[id("pacquiao")].N.jab.s + " frames)");
+  ok(lone > 0 && G.BK_ROSTER[id("pakyaw")].N.jab.s <= 2, "the fastest jab in the cast (" + G.BK_ROSTER[id("pakyaw")].N.jab.s + " frames)");
   run(t0, 1, [A]);
   for (let t = 0; t < 30 && t0.p[0].st !== "idle"; t++) G.bkStep(t0, []);
   place(t0.p[1], 40, -1); t0.p[1].st = "idle";
@@ -150,14 +150,14 @@ function hash(s) {
   ok(t0.p[0].combo >= 2, "back-to-back hits build a combo (×" + t0.p[0].combo + ")");
 }
 
-/* --- Reyes: racked balls ricochet -------------------------------------- */
+/* --- Pepeng Bilyar: racked balls ricochet -------------------------------------- */
 {
-  const s = match([id("reyes"), 1]); place(s.p[0], 0, 1); place(s.p[1], 290, -1);
+  const s = match([id("bilyar"), 1]); place(s.p[0], 0, 1); place(s.p[1], 290, -1);
   run(s, 1, [S | D]);
   let bounced = false;
   for (let t = 0; t < 120 && !bounced; t++) { const ev = G.bkStep(s, []); bounced = ev.some(e => e.startsWith("bank")); }
   ok(bounced, "a bank shot ricochets off the stage");
-  const s2 = match([id("reyes"), 1]); place(s2.p[0], 0, 1); place(s2.p[1], 300, -1);
+  const s2 = match([id("bilyar"), 1]); place(s2.p[0], 0, 1); place(s2.p[1], 300, -1);
   run(s2, 1, [S]); run(s2, 40);
   const ball = s2.proj.find(q => q.kind === "ball");
   ok(ball && !ball.shot, "neutral special racks a ball that sits on the stage");
@@ -166,13 +166,13 @@ function hash(s) {
   ok(ev.some(e => e.startsWith("cue")) && ball.shot, "hitting the racked ball with the cue launches it");
 }
 
-/* --- Bruno: on the beat ------------------------------------------------- */
+/* --- Bruno Venus: on the beat ------------------------------------------------- */
 {
   /* press the same side tilt at every frame of a beat; the ones whose first
      active frame lands on the pulse hit 40% harder */
   const res = [];
   for (let off = 0; off < G.BK_BEAT; off++) {
-    const s = match([id("bruno"), 1]); place(s.p[0], 0, 1); place(s.p[1], 50, -1);
+    const s = match([id("venus"), 1]); place(s.p[0], 0, 1); place(s.p[1], 50, -1);
     run(s, off);
     place(s.p[0], 0, 1); place(s.p[1], 50, -1);
     const ev = run(s, 20, t => [t === 0 ? R | A : 0]);
@@ -184,9 +184,9 @@ function hash(s) {
   ok(G.BK_PROJ.sound.pass, "sound waves pass through the stage and platforms");
 }
 
-/* --- Eala: the strongest reflector -------------------------------------- */
+/* --- Alex Ace-la: the strongest reflector -------------------------------------- */
 {
-  const s = match([id("eala"), id("rizal")]); place(s.p[0], 0, 1); place(s.p[1], 300, -1);
+  const s = match([id("acela"), id("rizal")]); place(s.p[0], 0, 1); place(s.p[1], 300, -1);
   s.p[1].book = 1;
   run(s, 1, [0, S]);
   let q = null;
@@ -198,7 +198,7 @@ function hash(s) {
   }
   ok(q && q.owner === 0 && q.vx > 0, "Backhand Return sends a projectile back the other way");
   ok(q && Math.abs(q.vx) > G.BK_PROJ.fili.vx * 1.4 && q.d > G.BK_PROJ.fili.d * 1.4, "faster and harder (" + q.vx.toFixed(1) + " px/f, " + q.d + "%)");
-  ok(G.BK_ROSTER[id("eala")].sp.d.reflect[2] > G.BK_ROSTER[id("eala")].sp.s.reflect[2], "and her down special is the stronger of her two reflectors");
+  ok(G.BK_ROSTER[id("acela")].sp.d.reflect[2] > G.BK_ROSTER[id("acela")].sp.s.reflect[2], "and her down special is the stronger of her two reflectors");
 }
 
 /* --- Axie: parts are the moveset --------------------------------------- */
@@ -237,11 +237,64 @@ function hash(s) {
   ok(all, "4-CPU matches on both stages end, with ring-outs" + why);
 }
 
-/* --- likeness guardrail -------------------------------------------------- */
+/* --- ledges ------------------------------------------------------------- */
 {
-  const living = G.BK_ROSTER.filter(c => c.living);
-  ok(living.length === 4 && living.every(c => c.stand && c.standBio), "every living person has an original stand-in");
-  ok(living.every(c => G.bkName(c) === c.stand), "a build not served from this machine shows the stand-ins");
+  const S0 = G.BK_STAGES[0];
+  const fall = () => {
+    const s = match([0, 1]); place(s.p[1], 0, -1);
+    const p = s.p[0]; p.x = S0.main.x1 + 16; p.y = -60; p.gr = -1; p.st = "air"; p.vy = 2;
+    return s;
+  };
+  const s = fall(), p = s.p[0];
+  const ev = run(s, 30);
+  ok(p.st === "ledge" && p.inv > 0, "falling past the corner catches the ledge, briefly intangible");
+  run(s, 10, t => [t === 0 ? L : 0]);
+  run(s, 20);
+  ok(p.gr === 0 && p.y === S0.main.y && p.x < S0.main.x1, "toward the stage climbs up onto it");
+  const s2 = fall(); run(s2, 30); run(s2, 8); run(s2, 2, t => [t === 0 ? J : 0]);
+  ok(s2.p[0].st === "air" && s2.p[0].vy < -8, "jump leaves the ledge upward");
+  const s3 = fall(); run(s3, 30); run(s3, 8); run(s3, 2, t => [t === 0 ? D : 0]); run(s3, 20);
+  ok(s3.p[0].st === "air" && s3.p[0].y > S0.main.y + 60, "down lets go");
+  const s4 = fall(); run(s4, 30); run(s4, 8); run(s4, 30, t => [t === 0 ? A : 0]);
+  ok(s4.p[0].mk === "N:down" || s4.p[0].dmg === 0 && s4.p[0].gr === 0, "attack climbs into a getup attack");
+  /* one fighter per ledge */
+  const s5 = match([0, 1, 2]); place(s5.p[2], -100, 1);
+  for (const q of [s5.p[0], s5.p[1]]) { q.x = S0.main.x1 + 16; q.y = -60; q.gr = -1; q.st = "air"; q.vy = 2; }
+  run(s5, 30);
+  ok([s5.p[0], s5.p[1]].filter(q => q.st === "ledge").length === 1, "only one fighter can hang from a ledge");
+  /* intangibility does not refresh without touching the stage */
+  const s6 = fall(); run(s6, 30); run(s6, 8); run(s6, 2, t => [t === 0 ? D : 0]); s6.p[0].inv = 0; s6.p[0].ledgeCd = 0;
+  s6.p[0].x = S0.main.x1 + 16; s6.p[0].y = -60; s6.p[0].vy = 2; run(s6, 40);
+  ok(s6.p[0].st === "ledge" && s6.p[0].inv === 0, "a regrab without landing is not intangible again");
+}
+
+/* --- the tide ------------------------------------------------------------ */
+{
+  const at = (s, phase) => { while (G.bkTide(s).phase !== phase) G.bkStep(s, []); };
+  const s = match([0, 1]);
+  ok(G.bkTide(s) && G.bkTide(s).phase === "calm", "Mactan starts with a calm sea");
+  let warned = false;
+  while (G.bkTide(s).phase !== "surge") { s.p.forEach((p, i) => place(p, i ? 100 : -100, 1)); if (G.bkStep(s, []).some(e => e.startsWith("tidewarn"))) warned = true; }
+  ok(warned, "the tide gives a warning before it comes in");
+  const dir = G.bkTide(s).dir;
+  place(s.p[0], 0, 1); const x0 = s.p[0].x;
+  run(s, 60);
+  ok(Math.sign(s.p[0].x - x0) === dir && Math.abs(s.p[0].x - x0) > 80, "the surge carries anyone on the beach (" + Math.round(s.p[0].x - x0) + " px in a second)");
+  const pl = G.BK_STAGES[0].plats[1];
+  s.p[1].x = pl.x; s.p[1].y = pl.y; s.p[1].gr = 2; s.p[1].st = "idle";
+  const px = s.p[1].x; run(s, 30);
+  ok(Math.abs(s.p[1].x - px) < 1, "a fighter up on a bangka is out of it");
+  const s2 = match([0, 1], { hazards: false }); at2(s2);
+  function at2(m) { for (let t = 0; t < 2000; t++) G.bkStep(m, []); }
+  ok(G.bkTide(s2) === null, "hazards off: no tide");
+  ok(G.bkTide(match([0, 1], { stage: 1 })) === null, "Lunacia Grove has no tide");
+}
+
+/* --- names ----------------------------------------------------------------- */
+{
+  const all = G.BK_ROSTER.map(c => c.name + " " + c.bio).join(" ");
+  ok(!/PACQUIAO|EFREN|REYES|BRUNO MARS|EALA/i.test(all.replace(/ACE-LA/g, "")), "no living person's real name in the roster");
+  ok(G.BK_ROSTER.filter(c => c.parody).length === 4, "the four modern icons are parodies: " + G.BK_ROSTER.filter(c => c.parody).map(c => c.name).join(", "));
   ok(G.bkName(G.BK_ROSTER[id("rizal")]) === "JOSÉ RIZAL", "historical figures keep their names");
 }
 
