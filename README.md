@@ -260,6 +260,108 @@ super comes out, that 2LK 2LK into a fireball and every target combo connects fo
 pairing, high/low/overhead blocking, chip, throws and techs, and that all 36 pairings
 finish at every CPU tier.
 
+## BAKBAKAN
+
+The third position on the title switch is a different game: a platform fighter, with a
+Filipino roster. Damage is a percentage, knockback grows with it, and you lose a stock
+when you're knocked past the edge of the screen. Up to four fighters in any mix of
+keyboard, gamepad and CPU, on two stages, with three stocks by default. It is local only for now. *Bakbakan* is
+Tagalog for a brawl, and the name is a placeholder.
+
+| | Move | Attack | Special | Shield | Jump |
+|---|---|---|---|---|---|
+| **P1** | <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> | <kbd>F</kbd> | <kbd>G</kbd> | <kbd>V</kbd> | <kbd>B</kbd> / <kbd>Space</kbd> / up |
+| **P2** | arrows | <kbd>K</kbd> | <kbd>L</kbd> | <kbd>,</kbd> | <kbd>.</kbd> / up |
+| **Gamepad** | d-pad / stick | X / □ | B / ○ | any shoulder | A / ✕ or Y / △ |
+
+These are the AXIE FIGHTER bindings, so they rebind in the same place. Attack and
+special each take a direction, which gives jab, side, up and down on the ground,
+neutral, forward, back, up and down in the air, and four specials. Up is usually the
+recovery. You get a double jump. Down in the air fast-falls, and down on a platform
+drops through it. Shield plus left or right rolls, shield plus down is a spot dodge,
+and shield in the air is an air dodge. A shield wears down while you hold it, and if
+it breaks you're left dizzy.
+
+**Ledges.** Fall past a corner of the main stage close enough to reach it and you
+catch it and hang. From there: jump, climb (up or toward the stage), attack to climb
+into a low sweep, shield to roll in, or down / away to let go. Only one fighter can
+hang from a ledge at a time. The first grab after leaving the stage makes you
+intangible for a moment, and you can't regrab for half a second after letting go.
+
+Character select is one screen. Each human moves their own cursor and locks in with
+attack. Player one then moves to the rules panel: stage, stocks, CPU level, hazards,
+P2–P4 (off, or a CPU and which fighter), and FIGHT. To join, player two presses attack and a third
+or fourth gamepad presses A. Everything can also be clicked.
+
+| Fighter | Style | Signature |
+|---|---|---|
+| Lapu-Lapu | Kampilan and kalasag | **Mactan Tide** (↓ special): a counter. A hit in the window does no damage and sends a wave along the stage. His shield also stops any projectile that hits his front while he's standing or walking. |
+| José Rizal | Fencing foil, books | **Noli / Fili** (neutral special) alternates two books: Noli is a slow arc that stuns, Fili a fast straight shot. His jab is a two-frame pen stab. ↓ special is three pens in a spread. |
+| Aswang | Claws, two forms | **Shift** (↓ special) swaps between a fast, light human form and a heavy, armoured beast that shrugs off light hits mid-attack. Landing hits fills the night meter. When it's full, neutral special is **Bilog na Buwan**: seven seconds as the beast at human speed, hitting 25% harder. |
+| Manny Pakyaw | Fists | The fastest frame data in the cast. **Footwork**: a direction during the recovery of any ground normal steps out of it. Hits in a row build a combo counter that raises the knockback of every hit after. |
+| Pepeng "Bata" Bilyar | Cue | **Rack** (neutral special) places up to three balls at cue height. Hit one with any cue attack and it flies off, **ricocheting** up to four times, and each bounce adds damage. **Bank Shot** (↓ special) fires one into the floor at an angle. |
+| Bruno Venus | Mic, sound | **On the beat**: a pulse at the top of the screen marks 120 bpm, and an attack whose first active frame lands on it does 40% more damage. Sound waves go through the stage and platforms. |
+| Alex Ace-la | Racket | **Serve** from range. Two **reflectors**: forehand (side special) sends projectiles back 1.2× faster and harder, backhand (↓ special) 1.5×, the strongest in the cast. |
+| Axie (guest, Beast) | Body parts | Its four specials are its parts: **horn** is side, **mouth** neutral, **back** up, **tail** down. Two options per part, chosen in character select, and they change both the move and what the Axie is wearing. It's drawn with Buba's rig. |
+
+The two stages are **Mactan Shore**, a beach at sunrise with two bangka and a bamboo raft
+as platforms, and **Lunacia Grove**, a floating island whose side platforms drift.
+
+**The tide** is Mactan's hazard. Every thirty seconds a HIGH TIDE warning flashes, the
+sea rises over the sand, and for about four and a half seconds it runs along the beach
+one way, pushing everyone standing in it toward that edge at a bit over half walking
+speed. The direction alternates each time. Walk against it or get up on a bangka.
+HAZARDS in the rules turns it off. Lunacia Grove has no hazard.
+
+### Music
+
+There are two original pieces, synthesized in the browser, so there is nothing to
+license and no audio file in the build. The fight track is in the style of a
+Maguindanao **kulintang** ensemble: eight tuned gongs carrying a pentatonic tune, the
+hanging gandingan, the big agung on the downbeats, the dabakan drum and the babendil
+keeping time. It runs at 120 bpm off the match's own tick, so Bruno Venus's beat pulse
+is the music's beat. The title and character select play a **rondalla harana** in 3/4:
+bandurria tremolo over guitar and bass. Both follow the music volume, mute and pause.
+
+### Names
+
+Lapu-Lapu and Rizal are historical figures and the Aswang is folklore, so they go by
+their own names. The four modern icons are **parodies**: MANNY PAKYAW, PEPENG "BATA"
+BILYAR, BRUNO VENUS and ALEX ACE-LA, with made-up bios that state no real facts. No
+real living person's name appears in the build. Each name and bio is a single row of
+`BK_ROSTER` in `game/index.html`. A parody name lowers the risk but doesn't remove it,
+especially since the pixel art still evokes each person, so check with legal before
+using these characters in marketing. The build has no song titles or lyrics, no
+trademarked nicknames, and no logos or kits. Named, canon Axies in anything public
+still need a check with brand.
+
+### How it's built
+
+BAKBAKAN is its own simulation (`bkNewMatch` / `bkStep`). Like the other two it is pure
+and deterministic: a fixed 60 Hz tick, its random numbers kept in state, and nothing
+the browser owns. That means it runs in node and could take rollback later. Every move
+is frame data (startup, active, recovery, hitboxes, damage, base knockback, growth and
+angle), and the signature mechanics hang off that as flags (`counter`, `reflect`,
+`rehit`, `fin`, `away`, `helpless`) or a small per-frame hook. Knockback is the genre's
+usual shape, damage × weight × move. The human fighters are paper dolls drawn into
+a 64×64 canvas a pixel at a time and scaled up with smoothing off, so every pose is
+generated from the sim's state. F1 shows hurtboxes, live hitboxes, projectile boxes
+and the blast zone.
+
+```bash
+node tools/bakbakan-test.mjs
+```
+
+checks determinism and snapshot replay, that knockback grows with damage and
+shrinks with weight, one-way platforms (landing, dropping through, jumping up
+through), hits, misses and shields, every fighter's signature mechanic (counter
+window, kalasag, book order, forms and the full moon, footwork and combos, racking
+and ricochet, the beat bonus, reflect speed and damage, parts → specials), ledges
+(grab, climb, jump, drop, getup attack, one per ledge, no fresh intangibility on a
+regrab), the tide (warning, push, the boats as refuge, hazards off), that no living
+person's real name is in the roster, stocks, respawns and placings, and that 4-CPU
+matches on both stages finish with ring-outs.
+
 ## Season pass
 
 A shallow prototype of a live-service loop, built to show the shape rather than to take
