@@ -82,7 +82,11 @@ const expose = `
   JACK_BINDS, keyFor, rebuildKeymap, readInputs, selectTick, modeTick, drawJackCard,
   keys, setScheme, saveSettings, netSendInputs, netRecv, NET_WINDOW, trails, ghosts, pushTrail, pushGhost, animFor,
   IN_UP, IN_DOWN, IN_LP, IN_HP, IN_LK, IN_HK, SF_METER, SF_MOVES, SF_KIT, sfStep, sfNewMatch, sfMotion, sfDir,
-  sfCpuInput, sfHurt, sfHitBox, sfAnimFor, drawMatchSF, drawHUDSF, setGame
+  sfCpuInput, sfHurt, sfHitBox, sfAnimFor, drawMatchSF, drawHUDSF, setGame,
+  BK_ROSTER, BK_STAGES, BK_PROJ, BK_PARTS, BK_ATK, BK_SPC, BK_SHD, BK_JMP, BK_BEAT, BK_AXIE, bkNewMatch, bkStep, bkHit, bkKnock,
+  bkSpawn, bkHurt, bkCpuInput, bkOnBeat, bkName, bkSpecial, bkStats, bkOpen, bkStart, bkRematch, bkSelTick, bkMatchTick,
+  bkDrawSel, bkDrawMatch, bkDrawTitle, bkDrawResults, bkPlayEv, drawGameSwitch, nextGame, gameName, pauseItems, menuBack, runScreenTick, KEYMAP: () => KEYMAP,
+  setBkIn: v => { bkIn = v; }
 };`;
 
 const ctxv = vm.createContext(win);

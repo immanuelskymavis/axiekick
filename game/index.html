@@ -2159,6 +2159,28 @@ let KEYMAP = {};
 function rebuildKeymap() {
   KEYMAP = {};
   const bind = (code, p, bit) => { if (code) KEYMAP[code] = [p, bit]; };
+  if (bkOn()) {
+    /* BAKBAKAN borrows the Fighter layout: the stick is WASD / the arrows, and
+       the four buttons are attack, special, shield and jump */
+    for (let p = 0; p < 2; p++) {
+      const j = JACK_BINDS[p], n = "p" + (p + 1);
+      bind(j.dive, p, IN_UP); bind(j.kick, p, IN_DOWN); bind(j.left, p, IN_LEFT); bind(j.right, p, IN_RIGHT);
+      bind(BINDS[n + "lp"], p, BK_ATK); bind(BINDS[n + "hp"], p, BK_SPC);
+      bind(BINDS[n + "lk"], p, BK_SHD); bind(BINDS[n + "hk"], p, BK_JMP);
+    }
+    if (!KEYMAP.Space) bind("Space", 0, BK_JMP);
+    const L = document.getElementById("legend-keys");
+    if (L) {
+      const leg = p => {
+        const n = "p" + (p + 1);
+        return "<kbd>" + (p ? "ARROWS" : "WASD") + "</kbd> move <kbd>" + keyName(BINDS[n + "lp"]) + "</kbd> attack <kbd>" +
+          keyName(BINDS[n + "hp"]) + "</kbd> special <kbd>" + keyName(BINDS[n + "lk"]) + "</kbd> shield <kbd>" +
+          keyName(BINDS[n + "hk"]) + "</kbd> jump";
+      };
+      L.innerHTML = "<b>P1</b> " + leg(0) + " &nbsp; <b>P2</b> " + leg(1);
+    }
+    return;
+  }
   if (sfOn()) {
     /* Fighter: the stick is fixed (WASD and the arrows), the buttons rebind */
     for (let p = 0; p < 2; p++) {
@@ -2217,7 +2239,7 @@ function keyName(code) {
 const SETTINGS = {
   master: 0.55, music: 0.24, sfx: 1, announcer: true, shake: true,
   scheme: ["dive", "dive"],       /* per player: "dive" | "jack" */
-  game: "kick",                   /* "kick" | "fighter": the switch on the title */
+  game: "kick",                   /* "kick" | "fighter" | "bakbakan": the switch on the title */
   moves: true                     /* AXIE FIGHTER's move list in the corner of a fight */
 };
 function loadSettings() {
@@ -2226,7 +2248,7 @@ function loadSettings() {
     if (raw.s) Object.assign(SETTINGS, raw.s);
     if (raw.b) Object.assign(BINDS, raw.b);
     if (!Array.isArray(SETTINGS.scheme)) SETTINGS.scheme = ["dive", "dive"];
-    if (SETTINGS.game !== "fighter") SETTINGS.game = "kick";
+    if (SETTINGS.game !== "fighter" && SETTINGS.game !== "bakbakan") SETTINGS.game = "kick";
   } catch (e) { }
   announcer = SETTINGS.announcer;
 }
@@ -2274,6 +2296,7 @@ nag.addEventListener("click", () => { window.focus(); nag.classList.remove("on")
 
 const padPrev = [0, 0];
 function readInputs() {
+  if (bkOn()) return bkReadInputs();
   const m = [0, 0];
   for (const code in KEYMAP) if (keys[code]) { const [p, bit] = KEYMAP[code]; m[p] |= bit; }
   const pads = navigator.getGamepads ? navigator.getGamepads() : [];
@@ -5065,6 +5088,14 @@ function drawMatchSF(s) {
 
 /* --- title --- */
 function drawTitle(t) {
+  if (bkOn()) {
+    bkDrawTitle(t);
+    drawGameSwitch(STAGE_W / 2, 296);
+    if ((t >> 5) % 2 === 0) txt("PRESS ANY BUTTON", STAGE_W / 2, 400, 18, "#E7E3FB", "center", FD, 8);
+    txt("SKY MAVIS INTERNAL GAMEJAM DEMO      ESC  MENU", STAGE_W / 2, STAGE_H - 16, 10,
+      rgba("#E7E3FB", 0.4), "center", FM, 4);
+    return;
+  }
   drawStage(null);
   ctx.fillStyle = rgba("#08070F", 0.32); ctx.fillRect(0, 0, STAGE_W, STAGE_H);
   const demo = CHARS.map((c, i) => ({
@@ -5102,11 +5133,17 @@ function setGame(g) {
   rebuildKeymap(); saveSettings();
   SFX.move();
 }
+const GAMES = [["kick", "AXIE KICK", "#F2D492"], ["fighter", "AXIE FIGHTER", "#FF8A5C"], ["bakbakan", "BAKBAKAN", "#FF6A3D"]];
+function gameName() { return (GAMES.find(g => g[0] === SETTINGS.game) || GAMES[0])[1]; }
+function nextGame(d) {
+  const i = GAMES.findIndex(g => g[0] === SETTINGS.game);
+  return GAMES[(i + (d || 1) + GAMES.length) % GAMES.length][0];
+}
 function drawGameSwitch(cx, y) {
-  const W = 190, H = 34, opts = [["kick", "AXIE KICK", "#F2D492"], ["fighter", "AXIE FIGHTER", "#FF8A5C"]];
-  for (let i = 0; i < 2; i++) {
+  const W = 190, H = 34, opts = GAMES, n = opts.length, x0 = cx - (n * W + (n - 1) * 12) / 2;
+  for (let i = 0; i < n; i++) {
     const [key, name, col] = opts[i];
-    const x = cx - W - 6 + i * (W + 12), on = SETTINGS.game === key, over = hovered(x, y, W, H);
+    const x = x0 + i * (W + 12), on = SETTINGS.game === key, over = hovered(x, y, W, H);
     ctx.fillStyle = rgba(on ? "#2A2150" : "#100C22", on ? 0.95 : 0.75);
     ctx.fillRect(x, y, W, H);
     ctx.strokeStyle = rgba(col, on ? 1 : over ? 0.7 : 0.3); ctx.lineWidth = on ? 2 : 1;
@@ -7203,11 +7240,11 @@ function rollArena() {
 function volLabel(v) { return Math.round(v * 100) + "%"; }
 
 function settingsRows() {
-  const inFight = app.screen === "match" || app.screen === "tutorial";
+  const inFight = app.screen === "match" || app.screen === "tutorial" || app.screen === "bkmatch" || app.screen === "bksel";
   return [
     {
-      label: "GAME", value: (sfOn() ? "AXIE FIGHTER" : "AXIE KICK") + (inFight ? " (AFTER THIS FIGHT)" : ""),
-      act: () => { if (!inFight) setGame(sfOn() ? "kick" : "fighter"); }
+      label: "GAME", value: gameName() + (inFight ? " (AFTER THIS FIGHT)" : ""),
+      act: () => { if (!inFight) setGame(nextGame(1)); }
     },
     { label: "MASTER VOLUME", value: volLabel(SETTINGS.master), act: () => bump("master") },
     { label: "MUSIC", value: volLabel(SETTINGS.music), act: () => bump("music") },
@@ -7348,6 +7385,7 @@ function pauseItems() {
      nothing), so restarting unilaterally is not on the table */
   if (net.on) return ["RESUME", "SETTINGS", "DISCONNECT"];
   if (run.on) return ["RESUME", "SETTINGS", "ABANDON STORY"];
+  if (app.screen === "bkmatch") return ["RESUME", "SETTINGS", "RESTART MATCH", "CHARACTER SELECT", "QUIT TO TITLE"];
   return app.screen === "match"
     ? ["RESUME", "SETTINGS", "RESTART MATCH", "QUIT TO TITLE"]
     : ["RESUME", "SETTINGS", "QUIT TO TITLE"];
@@ -7360,6 +7398,11 @@ function pauseItems() {
 function menuBack() {
   const a = app;
   if (a.screen === "mode") { a.screen = "title"; SFX.move(); return true; }
+  if (a.screen === "bksel") {
+    const sl = a.bk.slots[0];
+    if (sl.focus !== "grid") { sl.focus = "grid"; sl.lock = false; SFX.move(); return true; }
+    a.screen = "title"; SFX.move(); return true;
+  }
   if (a.screen === "setup") return setupBack();
   if (a.screen === "lobby") {
     if (a.lobby && a.lobby.at === "queue") { lobbyCancel(); return true; }
@@ -7427,6 +7470,8 @@ function pauseChoose(pick) {
   else if (pick === "SETTINGS") { app.pause.tab = "settings"; app.pause.cur = 0; }
   else if (pick === "DISCONNECT") { netQuit(); quitToTitle(); }
   else if (pick === "ABANDON STORY") { run.on = false; quitToTitle(); }
+  else if (pick === "CHARACTER SELECT") { closePause(); bkToSelect(); }
+  else if (pick === "RESTART MATCH" && app.screen === "bkmatch") { bkRematch(); closePause(); }
   else if (pick === "RESTART MATCH") {
     app.m = newMatch(app.m.p[0].ch, app.m.p[1].ch, app.cpu, app.t);
     trails[0].length = 0; trails[1].length = 0;
@@ -7488,6 +7533,2124 @@ function drawPause() {
     }, () => { if (!pz.bind) pz.cur = i; });
   }
 }
+
+/* <<BAKBAKAN>> */
+/* =========================== BAKBAKAN ===================================
+   The third game behind the title switch: a platform fighter. Damage is a
+   percentage, knockback grows with it, and a stock goes when you are knocked
+   past the edge of the screen. Up to four fighters in any mix of keyboard,
+   gamepad and CPU. The roster is Filipino - two heroes from the history books,
+   a creature from folklore, four modern icons - with a Beast-class Axie as the
+   guest, its moveset built from the parts it is wearing.
+
+   It is its own simulation (bkNewMatch / bkStep), deterministic and free of
+   anything the browser owns, so it can be tested in node and rolled back
+   later. It shares the canvas helpers, the audio, the pause menu and the input
+   reader with the other two games, and nothing else. */
+
+const BK_ATK = IN_LP, BK_SPC = IN_HP, BK_SHD = IN_LK, BK_JMP = IN_HK;
+const BK_MAX = 4;
+const BK_COLS = ["#FF5A5A", "#54C8FF", "#FFD45A", "#7CF0B4"];
+const BK_BEAT = 30, BK_BEAT_WIN = 5;     /* 120 bpm, and how forgiving "on the beat" is */
+const BK_KB = 0.13;                       /* knockback units -> launch speed, px/frame */
+const BK_KB_DECAY = 0.3;                  /* launch speed lost per frame */
+const BK_STUN = 0.42;                     /* hitstun frames per unit of knockback */
+const BK_TIME = 5 * 60 * 60;              /* a match still going after five minutes is scored */
+const BK_RESPAWN = 70, BK_RESPAWN_INV = 120;
+const BK_SHIELD = 60;
+const BK_INTRO = 150;                     /* three, two, one, go */
+const BK_LEVELS = ["EASY", "NORMAL", "HARD"];
+
+function bkOn() { return SETTINGS.game === "bakbakan"; }
+
+/* ---- who is allowed to be named ----------------------------------------
+   Historical figures and folklore always are. Living people's names and
+   likenesses are a right-of-publicity question rather than an IP one, so they
+   are fine on this machine and nowhere else: served from any other host, the
+   build shows an original stand-in instead. Every name, title and bio is in
+   the rows below, so replacing someone for good is one edit. */
+const BK_REAL = (() => {
+  try {
+    const h = location.hostname || "";
+    return location.protocol === "file:" || h === "localhost" || h === "127.0.0.1" || h === "[::1]";
+  } catch (e) { return false; }
+})();
+
+/* ---- moves ---------------------------------------------------------------
+   Frame data, forward-facing, relative to the fighter's feet (y up is
+   negative). s/a/r: startup, active, recovery frames. hb: hitbox rects
+   [x, y, w, h]. d: damage %. kb: base knockback. kg: knockback growth. ang:
+   launch angle in degrees, 0 = away from the attacker, 90 = straight up,
+   -90 = straight down. Optional:
+     vel  [[f0, f1, vx, vy]]   self-propelled for those frames
+     proj [[f, kind]]          spawns a projectile
+     inv  [f0, f1]             intangible
+     counter [f0, f1]          a hit in this window is answered instead of taken
+     reflect [f0, f1, mul, box] sends projectiles back, faster and harder
+     rehit n                   the hitbox may hit again every n frames
+     fin  {f, d, kb, kg, ang}  the last hits of a flurry are a different hit
+     away                      launches away from the attacker's centre
+     helpless                  no actions until landing (most up specials)
+     fn(s, i, p, f, ev)        anything the data cannot say */
+function bkMove(o) {
+  return Object.assign({ s: 5, a: 3, r: 10, hb: [], d: 0, kb: 0, kg: 0, ang: 40, pose: "jab" }, o);
+}
+
+/* the eight normals every fighter has, shaped by reach, power and speed */
+function bkNormals(reach, pow, spd, over) {
+  const r = reach, P = pow, f = n => Math.max(1, Math.round(n * spd));
+  const n = {
+    jab: { s: f(3), a: 3, r: f(9), hb: [[8, -52, 24 + r, 16]], d: 3 * P, kb: 16, kg: 26, ang: 45, pose: "jab" },
+    side: { s: f(9), a: 4, r: f(18), hb: [[6, -52, 38 + r, 20]], d: 11 * P, kb: 34, kg: 98, ang: 36, pose: "thrust" },
+    up: { s: f(7), a: 5, r: f(15), hb: [[-20, -106, 58, 58]], d: 8 * P, kb: 30, kg: 92, ang: 88, pose: "up" },
+    down: { s: f(5), a: 3, r: f(12), hb: [[4, -18, 36 + r, 16]], d: 6 * P, kb: 24, kg: 62, ang: 20, pose: "low" },
+    nair: { s: f(4), a: 8, r: f(11), hb: [[-28, -62, 56, 50]], d: 7 * P, kb: 22, kg: 72, ang: 42, pose: "spin" },
+    fair: { s: f(7), a: 4, r: f(15), hb: [[6, -60, 32 + r, 32]], d: 10 * P, kb: 28, kg: 90, ang: 40, pose: "thrust" },
+    bair: { s: f(7), a: 4, r: f(15), hb: [[-38 - r, -54, 36 + r, 26]], d: 11 * P, kb: 32, kg: 96, ang: 150, pose: "back" },
+    uair: { s: f(5), a: 5, r: f(13), hb: [[-22, -108, 44, 38]], d: 8 * P, kb: 26, kg: 86, ang: 84, pose: "up" },
+    dair: { s: f(10), a: 5, r: f(18), hb: [[-16, -16, 32, 32]], d: 10 * P, kb: 18, kg: 78, ang: -90, pose: "slam" }
+  };
+  for (const k in over || {}) n[k] = Object.assign({}, n[k], over[k]);
+  for (const k in n) n[k] = bkMove(n[k]);
+  return n;
+}
+
+/* ---- projectiles --------------------------------------------------------
+   grav: gravity. pass: ignores the stage entirely. bounce: ricochets this many
+   times off the stage before it settles. stun: extra frames the hit holds.
+   refl: can be reflected. */
+const BK_PROJ = {
+  noli: { w: 16, h: 18, vx: 4.2, vy: -6.6, grav: 0.3, life: 160, d: 6, kb: 14, kg: 20, ang: 70, stun: 42, refl: 1 },
+  fili: { w: 18, h: 10, vx: 11, vy: 0, grav: 0, life: 90, d: 7, kb: 22, kg: 56, ang: 22, refl: 1 },
+  pen: { w: 12, h: 5, vx: 10.5, vy: 0, grav: 0, life: 46, d: 3, kb: 10, kg: 30, ang: 30, refl: 1 },
+  tide: { w: 70, h: 46, vx: 7.5, vy: 0, grav: 0, life: 64, d: 12, kb: 56, kg: 104, ang: 16, pass: 1 },
+  roar: { w: 80, h: 76, vx: 1.6, vy: 0, grav: 0, life: 16, d: 8, kb: 30, kg: 72, ang: 40, pass: 1 },
+  sound: { w: 26, h: 36, vx: 7.4, vy: 0, grav: 0, life: 82, d: 6, kb: 22, kg: 60, ang: 30, pass: 1, refl: 1 },
+  serve: { w: 12, h: 12, vx: 12.5, vy: 0.7, grav: 0, life: 90, d: 8, kb: 24, kg: 62, ang: 25, refl: 1 },
+  ball: { w: 14, h: 14, vx: 2.4, vy: 0, grav: 0.3, life: 900, d: 8, kb: 26, kg: 72, ang: 40, refl: 1, ball: 1 }
+};
+
+/* ---- Axie parts ----------------------------------------------------------
+   The guest's specials are its body parts: horn is side, mouth is neutral,
+   back is up, tail is down. Swapping a part in character select changes the
+   move and what the Axie is wearing. */
+const BK_PARTS = {
+  horn: [
+    { id: "ram", name: "RAM HORN", line: "Charging gore", col: "#E8DCC0",
+      m: { s: 10, a: 10, r: 16, vel: [[10, 20, 8.2, 0]], hb: [[14, -50, 30, 36]], d: 12, kb: 40, kg: 92, ang: 36, pose: "thrust" } },
+    { id: "spike", name: "SPIKE HORN", line: "Drill flurry, big last hit", col: "#C9A0FF",
+      m: { s: 6, a: 14, r: 14, vel: [[6, 18, 6, 0]], rehit: 4, hb: [[14, -46, 30, 28]], d: 3, kb: 12, kg: 16, ang: 50,
+           fin: { f: 16, d: 6, kb: 38, kg: 90, ang: 40 }, pose: "thrust" } }
+  ],
+  mouth: [
+    { id: "fang", name: "FANG BITE", line: "Bite that heals you", col: "#FF8A7A",
+      m: { s: 8, a: 4, r: 16, hb: [[10, -46, 34, 28]], d: 10, kb: 30, kg: 80, ang: 40, heal: 4, pose: "jab" } },
+    { id: "roar", name: "BIG ROAR", line: "Short shockwave", col: "#FFD45A",
+      m: { s: 12, a: 1, r: 20, proj: [[12, "roar"]], pose: "cast" } }
+  ],
+  back: [
+    { id: "mane", name: "SPIKY MANE", line: "Rising spin that hits", col: "#FFB070",
+      m: { s: 4, a: 16, r: 12, vel: [[4, 20, 1.4, -10.2]], rehit: 5, hb: [[-30, -70, 60, 50]], d: 4, kb: 24, kg: 50, ang: 85, helpless: 1, pose: "spin" } },
+    { id: "wing", name: "WING BACK", line: "Higher, no hitbox", col: "#9FE6FF",
+      m: { s: 4, a: 8, r: 10, vel: [[4, 12, 1.8, -13.4]], pose: "up" } }
+  ],
+  tail: [
+    { id: "club", name: "CLUB TAIL", line: "Slam both sides", col: "#B88A5A",
+      m: { s: 10, a: 5, r: 18, hb: [[-38, -30, 76, 30]], d: 12, kb: 30, kg: 88, ang: 62, away: 1, pose: "slam" } },
+    { id: "whip", name: "WHIP TAIL", line: "Spinning sweep", col: "#7CF0B4",
+      m: { s: 6, a: 10, r: 12, rehit: 5, hb: [[-48, -36, 96, 26]], d: 5, kb: 26, kg: 60, ang: 40, away: 1, pose: "spin" } }
+  ]
+};
+const BK_PART_SLOTS = [["horn", "SIDE"], ["mouth", "NEUTRAL"], ["back", "UP"], ["tail", "DOWN"]];
+const BK_SLOT_OF = { s: "horn", n: "mouth", u: "back", d: "tail" };
+
+/* ---- roster ----------------------------------------------------------- */
+const BK_ROSTER = [
+  {
+    id: "lapulapu", name: "LAPU-LAPU", role: "SWORDFIGHTER", col: "#E0563B", kalasag: 1,
+    bio: "Datu of Mactan. In 1521 he met an invading fleet in the shallows and sent it home.",
+    sig: "MACTAN TIDE · counter, then a wave that clears the stage",
+    look: { skin: "#8A5A3A", hair: "#16100C", top: null, tat: "#28324F", low: "#B5302A", wrap: "#C8352B", weapon: "kampilan", shield: 1 },
+    W: 30, H: 70, weight: 108, walk: 3.9, air: 3.2, jump: 12.6, djump: 11.4, grav: 0.64, fall: 10, ffall: 15,
+    normals: [18, 1.12, 1.1, {}],
+    sp: {
+      n: { name: "KAMPILAN CLEAVE", s: 14, a: 4, r: 22, hb: [[4, -84, 72, 80]], d: 16, kb: 34, kg: 92, ang: 40, pose: "chop" },
+      s: { name: "KALASAG RUSH", s: 8, a: 14, r: 16, vel: [[8, 22, 8.5, 0]], hb: [[10, -64, 26, 62]], d: 8, kb: 40, kg: 70, ang: 30, wall: [8, 22], pose: "shield" },
+      u: { name: "RISING KAMPILAN", s: 5, a: 16, r: 16, vel: [[5, 20, 1.6, -10.6]], hb: [[-26, -92, 60, 92]], d: 10, kb: 46, kg: 70, ang: 80, helpless: 1, pose: "up" },
+      d: { name: "MACTAN TIDE", s: 4, a: 26, r: 20, counter: [4, 30], pose: "guard" }
+    }
+  },
+  {
+    id: "rizal", name: "JOSÉ RIZAL", role: "TACTICIAN", col: "#8FB3FF",
+    bio: "Novelist, doctor, and a fencer good enough to teach it. Fights from across the room.",
+    sig: "NOLI / FILI · books in turn: a slow arc that stuns, a fast straight shot",
+    look: { skin: "#C99A6E", hair: "#121014", top: "#1E1E26", low: "#24242C", collar: "#F2F2F2", stache: 1, part: 1, coat: 1, weapon: "foil" },
+    W: 28, H: 68, weight: 86, walk: 3.8, air: 3.6, jump: 12.8, djump: 12, grav: 0.6, fall: 9.4, ffall: 14,
+    normals: [26, 0.92, 0.95, { jab: { name: "PEN STAB", s: 2, a: 2, r: 7, d: 3.5, hb: [[8, -52, 32, 10]] } }],
+    sp: {
+      n: { name: "NOLI / FILI", s: 10, a: 1, r: 18, pose: "throw",
+           fn(s, i, p, f, ev) { if (f === 10) { bkSpawn(s, i, p.book ? "fili" : "noli"); p.book ^= 1; } } },
+      s: { name: "FENCING LUNGE", s: 7, a: 6, r: 16, vel: [[7, 12, 9, 0]], hb: [[10, -54, 46, 14]], d: 11, kb: 30, kg: 92, ang: 32, pose: "thrust" },
+      u: { name: "PAPER KITE", s: 4, a: 18, r: 10, vel: [[4, 24, 1.3, -9.8]], hb: [[-20, -90, 40, 30]], d: 4, kb: 30, kg: 40, ang: 90, helpless: 1, pose: "up" },
+      d: { name: "QUILL VOLLEY", s: 9, a: 1, r: 16, pose: "throw",
+           fn(s, i, p, f) { if (f === 9) for (const vy of [-2.6, 0, 2.6]) bkSpawn(s, i, "pen", { vy }); } }
+    }
+  },
+  {
+    id: "aswang", name: "ASWANG", role: "SHAPESHIFTER", col: "#C04A6A",
+    bio: "From the old stories told after dark. A neighbour by day; by night, something with claws.",
+    sig: "SHIFT · human is fast, beast is heavy and armoured. Land hits to fill the night meter",
+    look: { skin: "#A3AE9E", hair: "#0E0B12", top: "#3B2A3E", low: "#2A1E2E", eye: "#FF3B3B", longhair: 1, dress: 1, weapon: "claws" },
+    W: 30, H: 68, weight: 92, walk: 4.6, air: 3.8, jump: 13, djump: 12, grav: 0.66, fall: 10.5, ffall: 15.5,
+    beast: { W: 40, H: 70, weight: 118, walk: 3.2, air: 3, jump: 11.6, djump: 10.2, grav: 0.72, fall: 11, ffall: 16 },
+    normals: [6, 0.85, 0.85, {}],
+    beastNormals: [16, 1.25, 1.15, {}],
+    sp: {
+      n: { name: "CLAW LUNGE", s: 6, a: 6, r: 14, vel: [[6, 12, 7, 0]], hb: [[6, -58, 34, 30]], d: 7, kb: 26, kg: 70, ang: 40, pose: "thrust" },
+      s: { name: "POUNCE", s: 8, a: 14, r: 14, vel: [[8, 22, 8, -3.4]], hb: [[0, -62, 42, 52]], d: 9, kb: 32, kg: 84, ang: 45, pose: "thrust" },
+      u: { name: "NIGHT WINGS", s: 4, a: 20, r: 10, vel: [[4, 24, 0.9, -10.4]], rehit: 6, hb: [[-26, -82, 52, 40]], d: 5, kb: 20, kg: 50, ang: 85, helpless: 1, pose: "up" },
+      d: { name: "SHIFT", s: 4, a: 1, r: 16, pose: "guard",
+           fn(s, i, p, f, ev) { if (f === 4 && !p.moon) { p.form = p.form === "beast" ? "human" : "beast"; ev.push("shift:" + i); } } }
+    },
+    /* the beast's neutral special is a roar; with the night meter full it is the full moon */
+    beastSp: { n: { name: "NIGHT ROAR", s: 14, a: 1, r: 20, proj: [[14, "roar"]], pose: "cast" } },
+    moonSp: { name: "BILOG NA BUWAN", s: 20, a: 1, r: 12, pose: "cast",
+              fn(s, i, p, f, ev) { if (f === 20) { p.moon = 420; p.night = 0; p.form = "beast"; ev.push("moon:" + i); } } }
+  },
+  {
+    id: "pacquiao", name: "MANNY PACQUIAO", stand: "THE SOUTHPAW CHAMP", role: "RUSHDOWN",
+    living: 1, col: "#FF6A3D",
+    bio: "Southpaw from General Santos City. World titles in eight weight divisions.",
+    standBio: "A southpaw from the provinces with the fastest hands in the building.",
+    sig: "FOOTWORK · step out of any jab. Every hit in a combo hits harder",
+    look: { skin: "#B07850", hair: "#121010", top: null, low: "#2050C0", trim: "#F2F2F2", weapon: "gloves", glove: "#D42A2A" },
+    W: 28, H: 66, weight: 92, walk: 4.8, air: 3.8, jump: 13.2, djump: 12, grav: 0.7, fall: 11, ffall: 16,
+    normals: [0, 0.95, 0.62, {}],
+    sp: {
+      n: { name: "SOUTHPAW STRAIGHT", s: 7, a: 4, r: 16, hb: [[6, -56, 42, 18]], d: 13, kb: 30, kg: 96, ang: 34, pose: "thrust" },
+      s: { name: "BOB AND WEAVE", s: 10, a: 4, r: 10, vel: [[2, 12, 8, 0]], inv: [2, 10], hb: [[6, -56, 32, 24]], d: 7, kb: 30, kg: 70, ang: 45, pose: "jab" },
+      u: { name: "RISING UPPERCUT", s: 4, a: 10, r: 14, vel: [[4, 14, 1.4, -10.4]], hb: [[0, -84, 32, 64]], d: 11, kb: 40, kg: 80, ang: 82, helpless: 1, pose: "up" },
+      d: { name: "BODY FLURRY", s: 4, a: 20, r: 14, rehit: 4, hb: [[6, -52, 34, 26]], d: 2, kb: 8, kg: 8, ang: 60,
+           fin: { f: 20, d: 6, kb: 40, kg: 92, ang: 40 }, pose: "jab" }
+    }
+  },
+  {
+    id: "reyes", name: "EFREN \"BATA\" REYES", stand: "THE MAGICIAN OF THE CUE", role: "TRICKSTER",
+    living: 1, col: "#5FD08A",
+    bio: "Pool legend from Pampanga, famous for shots nobody else in the room could see.",
+    standBio: "A pool hall legend who sees angles nobody else in the room can.",
+    sig: "BANK SHOT · rack balls, then hit them with the cue. They ricochet",
+    look: { skin: "#A87652", hair: "#2A2626", top: "#EDEDED", low: "#1C1C22", weapon: "cue" },
+    W: 28, H: 68, weight: 90, walk: 3.7, air: 3.3, jump: 12.2, djump: 11.2, grav: 0.62, fall: 9.6, ffall: 14,
+    normals: [34, 0.95, 1, {}],
+    sp: {
+      n: { name: "RACK", s: 8, a: 1, r: 14, proj: [[8, "ball"]], pose: "throw" },
+      s: { name: "POWER BREAK", s: 9, a: 4, r: 16, hb: [[8, -48, 68, 12]], d: 9, kb: 34, kg: 88, ang: 30, cue: 15, pose: "thrust" },
+      u: { name: "MASSÉ HOP", s: 4, a: 16, r: 12, vel: [[4, 20, 2.5, -10.2]], hb: [[-16, -82, 32, 40]], d: 6, kb: 30, kg: 60, ang: 80, helpless: 1, pose: "up" },
+      d: { name: "BANK SHOT", s: 10, a: 1, r: 16, pose: "low",
+           fn(s, i, p, f) { if (f === 10) bkSpawn(s, i, "ball", { vx: 8, vy: 8, shot: 1 }); } }
+    }
+  },
+  {
+    id: "bruno", name: "BRUNO MARS", stand: "THE CROONER", role: "RHYTHM",
+    living: 1, col: "#FFC23D",
+    bio: "Singer and showman from Honolulu, with Filipino roots. Lands everything on the beat.",
+    standBio: "A showman who lands everything on the beat.",
+    sig: "ON THE BEAT · attacks that start on the pulse hit 40% harder",
+    look: { skin: "#C08A60", hair: "#1A1414", top: "#E8B34B", low: "#16161C", hat: "#22222A", band: "#E8B34B", open: 1, weapon: "mic" },
+    W: 28, H: 70, weight: 96, walk: 4.1, air: 3.5, jump: 12.8, djump: 11.8, grav: 0.64, fall: 10, ffall: 15,
+    normals: [10, 1, 1, {}],
+    sp: {
+      n: { name: "SOUND WAVE", s: 9, a: 1, r: 16, proj: [[9, "sound"]], pose: "cast" },
+      s: { name: "MIC SWING", s: 10, a: 5, r: 18, hb: [[8, -62, 72, 26]], d: 10, kb: 30, kg: 92, ang: 40, pose: "thrust" },
+      u: { name: "FALSETTO LIFT", s: 5, a: 14, r: 12, vel: [[5, 19, 1.2, -10.2]], rehit: 6, hb: [[-20, -110, 40, 42]], d: 7, kb: 28, kg: 60, ang: 88, helpless: 1, pose: "up" },
+      d: { name: "BASS DROP", s: 12, a: 6, r: 20, hb: [[-62, -26, 124, 26]], d: 12, kb: 36, kg: 86, ang: 70, away: 1, pose: "slam",
+           fn(s, i, p, f) { if (p.gr < 0 && f < 12) { p.vy = 13; p.vx *= 0.8; } } }
+    }
+  },
+  {
+    id: "eala", name: "ALEX EALA", stand: "THE RISING ACE", role: "REFLECTOR",
+    living: 1, col: "#6FD4FF",
+    bio: "Left-handed tennis pro from Manila. Serves from range and sends everything back faster.",
+    standBio: "A young tennis ace who serves from range and sends everything back faster.",
+    sig: "SERVE AND RETURN · the strongest reflector here: back it goes, faster and harder",
+    look: { skin: "#C8946A", hair: "#141012", top: "#F5F5F5", low: "#F5F5F5", trim: "#2A7BD8", visor: "#F5F5F5", pony: 1, skirt: 1, weapon: "racket" },
+    W: 26, H: 66, weight: 84, walk: 4.4, air: 3.7, jump: 13, djump: 12.2, grav: 0.64, fall: 10, ffall: 15,
+    normals: [24, 0.95, 0.9, {}],
+    sp: {
+      n: { name: "SERVE", s: 14, a: 1, r: 16, proj: [[14, "serve"]], pose: "throw" },
+      s: { name: "FOREHAND DRIVE", s: 7, a: 6, r: 16, hb: [[8, -60, 46, 34]], d: 9, kb: 30, kg: 88, ang: 38, reflect: [7, 13, 1.2, [8, -64, 50, 40]], pose: "thrust" },
+      u: { name: "LOB LEAP", s: 4, a: 14, r: 12, vel: [[4, 18, 1.6, -10.8]], hb: [[-20, -102, 40, 40]], d: 8, kb: 30, kg: 70, ang: 85, helpless: 1, pose: "up" },
+      d: { name: "BACKHAND RETURN", s: 3, a: 16, r: 14, hb: [[-10, -72, 54, 66]], d: 4, kb: 20, kg: 40, ang: 45, reflect: [3, 19, 1.5, [-16, -82, 64, 82]], pose: "back" }
+    }
+  },
+  {
+    id: "axie", name: "AXIE", role: "GUEST · BEAST", col: "#FF9A3C", axie: 1,
+    bio: "A Beast-class Axie from Lunacia. Its moves are whatever parts it walked in wearing.",
+    sig: "BODY PARTS · horn, mouth, back and tail are its four specials",
+    W: 50, H: 56, weight: 104, walk: 4, air: 3.4, jump: 12.4, djump: 11, grav: 0.66, fall: 10.2, ffall: 15,
+    normals: [8, 1.08, 1, {}],
+    sp: null
+  }
+];
+const BK_AXIE = BK_ROSTER.findIndex(c => c.id === "axie");
+
+function bkName(c) { return c.living && !BK_REAL ? c.stand : c.name; }
+function bkBio(c) { return c.living && !BK_REAL ? c.standBio : c.bio; }
+
+/* the finished kits, normals built once */
+for (const c of BK_ROSTER) {
+  c.N = bkNormals.apply(null, c.normals);
+  if (c.beastNormals) c.BN = bkNormals.apply(null, c.beastNormals);
+  if (c.sp) for (const k in c.sp) c.sp[k] = bkMove(c.sp[k]);
+  if (c.beastSp) for (const k in c.beastSp) c.beastSp[k] = bkMove(c.beastSp[k]);
+  if (c.moonSp) c.moonSp = bkMove(c.moonSp);
+}
+for (const slot in BK_PARTS) for (const o of BK_PARTS[slot]) o.m = bkMove(Object.assign({ name: o.name }, o.m));
+
+/* ---- stages --------------------------------------------------------------
+   One solid main stage and some one-way platforms. A platform may drift: dx
+   is its sideways swing and per its period in frames. Blast zones are where a
+   stock is lost. */
+const BK_STAGES = [
+  {
+    id: "mactan", name: "MACTAN SHORE", blurb: "Sand, surf and two bangka at anchor",
+    main: { x0: -320, x1: 320, y: 0, bot: 150 },
+    plats: [{ x: -175, y: -112, w: 128 }, { x: 175, y: -112, w: 128 }, { x: 0, y: -214, w: 136 }],
+    blast: { l: -780, r: 780, t: -640, b: 420 }
+  },
+  {
+    id: "grove", name: "LUNACIA GROVE", blurb: "A floating island; the side platforms drift",
+    main: { x0: -270, x1: 270, y: 0, bot: 120 },
+    plats: [{ x: -205, y: -120, w: 118, dx: 70, per: 360 }, { x: 205, y: -120, w: 118, dx: -70, per: 360 }, { x: 0, y: -236, w: 128 }],
+    blast: { l: -740, r: 740, t: -640, b: 420 }
+  }
+];
+
+function bkPlatX(pl, tick) { return pl.x + (pl.dx ? pl.dx * Math.sin((tick / pl.per) * Math.PI * 2) : 0); }
+
+/* ---- match ------------------------------------------------------------- */
+/* slots: [{ ch, cpu: null | level, parts: {horn, mouth, back, tail} }], up to four */
+function bkNewMatch(slots, opt) {
+  opt = opt || {};
+  const st = opt.stage || 0, stocks = opt.stocks || 3, n = slots.length;
+  const S = BK_STAGES[st];
+  const span = Math.min(S.main.x1 - S.main.x0 - 120, 150 * (n - 1));
+  const s = {
+    rules: "bakbakan", tick: 0, phase: "intro", pt: 0, stage: st, stocks,
+    time: BK_TIME, rng: (opt.seed || 1) * 2654435761 >>> 0, proj: [], winner: -1, order: [],
+    beat: slots.some(sl => BK_ROSTER[sl.ch].id === "bruno"),
+    p: slots.map((sl, i) => {
+      const x = n === 1 ? 0 : -span / 2 + (span * i) / (n - 1);
+      return bkFighter(sl, i, x, x <= 0 ? 1 : -1, stocks, opt.seed || 1);
+    })
+  };
+  return s;
+}
+
+function bkFighter(sl, i, x, face, stocks, seed) {
+  return {
+    i, ch: sl.ch, parts: Object.assign({ horn: 0, mouth: 0, back: 0, tail: 0 }, sl.parts || {}),
+    cpu: sl.cpu === null || sl.cpu === undefined ? null
+      : { lvl: sl.cpu, seed: ((seed + 1) * 40503 + i * 7919) & 0x7fffffff, think: 0, hold: 0, want: 0, prev: 0 },
+    x, y: 0, vx: 0, vy: 0, kbx: 0, kby: 0, face, gr: 0,
+    st: "idle", t: 0, mv: null, mk: null, mf: 0, hitIds: [], hitAt: 0,
+    dmg: 0, stocks, inv: 0, lag: 0, stun: 0, extraStun: 0, shield: BK_SHIELD, drop: 0,
+    jumps: 2, ff: false, upUsed: false, adUsed: false, prev: 0, jumpHeld: false,
+    lastBy: -1, lastAt: -9999, flash: 0,
+    /* the signature mechanics' state */
+    book: 0, form: "human", night: 0, moon: 0, combo: 0, comboAt: -999, onBeat: false,
+    ko: 0, falls: 0, dealt: 0, outAt: -1
+  };
+}
+
+function bkRand(s) { s.rng = (Math.imul(s.rng, 1103515245) + 12345) >>> 0; return (s.rng >>> 8) / 16777216; }
+
+function bkChar(p) { return BK_ROSTER[p.ch]; }
+/* body and movement stats, which for the Aswang depend on the form it is in */
+function bkStats(p) {
+  const c = bkChar(p);
+  if (c.beast && p.form === "beast") {
+    const b = Object.assign({}, c, c.beast);
+    if (p.moon) { b.walk = c.walk; b.air = c.air; b.jump = c.jump; b.djump = c.djump; }
+    return b;
+  }
+  return c;
+}
+function bkNormal(p, k) {
+  const c = bkChar(p);
+  return (c.BN && p.form === "beast" ? c.BN : c.N)[k];
+}
+function bkSpecial(p, k) {
+  const c = bkChar(p);
+  if (c.axie) { const slot = BK_SLOT_OF[k]; return BK_PARTS[slot][p.parts[slot]].m; }
+  if (k === "moon") return c.moonSp;
+  if (c.beastSp && p.form === "beast" && c.beastSp[k]) return c.beastSp[k];
+  return c.sp[k];
+}
+function bkCurMove(p) {
+  if (!p.mk) return null;
+  return p.mk[0] === "N" ? bkNormal(p, p.mk.slice(2)) : p.mk === "TIDE" ? BK_TIDE : bkSpecial(p, p.mk.slice(2));
+}
+/* the counter's answer: a wave along the ground */
+const BK_TIDE = bkMove({ name: "MACTAN TIDE", s: 4, a: 1, r: 22, inv: [0, 26], pose: "chop", keep: 1 });
+
+function bkOnBeat(tick) { const k = tick % BK_BEAT; return Math.min(k, BK_BEAT - k) <= BK_BEAT_WIN; }
+
+/* ---- geometry ---------------------------------------------------------- */
+function bkHurt(p) { const c = bkStats(p); return [p.x - c.W / 2, p.y - c.H, c.W, c.H]; }
+function bkBox(p, r) {
+  return p.face > 0 ? [p.x + r[0], p.y + r[1], r[2], r[3]] : [p.x - r[0] - r[2], p.y + r[1], r[2], r[3]];
+}
+function bkOverlap(a, b) { return a[0] < b[0] + b[2] && b[0] < a[0] + a[2] && a[1] < b[1] + b[3] && b[1] < a[1] + a[3]; }
+
+/* the surface under (x, y) within `tol` px, or -1. 0 is the main stage, k+1 platform k */
+function bkSurface(s, x, y, tol, noPlats) {
+  const S = BK_STAGES[s.stage];
+  if (x >= S.main.x0 && x <= S.main.x1 && Math.abs(y - S.main.y) <= tol) return 0;
+  if (noPlats) return -1;
+  for (let k = 0; k < S.plats.length; k++) {
+    const pl = S.plats[k], px = bkPlatX(pl, s.tick);
+    if (Math.abs(x - px) <= pl.w / 2 && Math.abs(y - pl.y) <= tol) return k + 1;
+  }
+  return -1;
+}
+function bkSurfaceY(s, g) { const S = BK_STAGES[s.stage]; return g === 0 ? S.main.y : S.plats[g - 1].y; }
+
+/* move a fighter by its velocity and settle it against the stage */
+function bkPhysics(s, p) {
+  const S = BK_STAGES[s.stage], c = bkStats(p), m = S.main;
+  /* a drifting platform carries whoever is standing on it */
+  if (p.gr > 0) {
+    const pl = S.plats[p.gr - 1];
+    if (pl.dx) p.x += bkPlatX(pl, s.tick) - bkPlatX(pl, s.tick - 1);
+  }
+  const ox = p.x, oy = p.y;
+  p.x += p.vx + p.kbx;
+  p.y += p.vy + p.kby;
+  /* launch speed decays along its own direction */
+  const kv = Math.hypot(p.kbx, p.kby);
+  if (kv > 0) {
+    const nv = Math.max(0, kv - BK_KB_DECAY);
+    p.kbx *= nv / kv; p.kby *= nv / kv;
+  }
+
+  if (p.gr >= 0) {
+    /* still standing on something? */
+    const g = bkSurface(s, p.x, bkSurfaceY(s, p.gr), 1, false);
+    if (g === p.gr || (g >= 0 && p.kby >= 0)) { p.gr = g; p.y = bkSurfaceY(s, g); p.vy = 0; if (p.kby > 0) p.kby = 0; }
+    else if (p.kby < 0 || p.vy < 0) p.gr = -1;
+    else { p.gr = -1; bkLeaveGround(p); }
+  }
+  if (p.gr < 0) {
+    const falling = p.vy + p.kby >= 0;
+    if (falling) {
+      if (oy <= m.y && p.y >= m.y && p.x >= m.x0 && p.x <= m.x1) bkLand(s, p, 0, m.y);
+      else if (!p.drop) {
+        for (let k = 0; k < S.plats.length; k++) {
+          const pl = S.plats[k], px = bkPlatX(pl, s.tick);
+          if (oy <= pl.y + 0.01 && p.y >= pl.y && Math.abs(p.x - px) <= pl.w / 2) { bkLand(s, p, k + 1, pl.y); break; }
+        }
+      }
+    }
+  }
+  /* the main stage is solid on every side, not just the top */
+  if (p.y > m.y + 0.5 && p.y - c.H < m.bot && p.x + c.W / 2 > m.x0 && p.x - c.W / 2 < m.x1) {
+    const pl = p.x + c.W / 2 - m.x0, pr = m.x1 - (p.x - c.W / 2), pb = m.bot - (p.y - c.H);
+    const lo = Math.min(pl, pr, pb);
+    if (lo === pb) { p.y = m.bot + c.H; if (p.vy < 0) p.vy = 0; if (p.kby < 0) p.kby = -p.kby * 0.4; }
+    else {
+      const side = lo === pl ? -1 : 1;
+      const toward = side < 0 ? p.vx + p.kbx > 0 : p.vx + p.kbx < 0;
+      /* a recovering fighter heading in just under the lip is pulled up onto
+         it: the forgiving stand-in for a ledge grab */
+      if (toward && p.y - m.y < 34 && p.stun <= 0 && p.st !== "hurt" && p.st !== "dizzy") {
+        p.x = side < 0 ? m.x0 + 4 : m.x1 - 4;
+        bkLand(s, p, 0, m.y);
+      } else {
+        p.x = side < 0 ? m.x0 - c.W / 2 : m.x1 + c.W / 2;
+        if (side < 0 ? p.vx > 0 : p.vx < 0) p.vx = 0;
+        if (side < 0 ? p.kbx > 0 : p.kbx < 0) p.kbx = -p.kbx * 0.5;
+      }
+    }
+  }
+  if (p.drop > 0) p.drop--;
+  return ox !== p.x || oy !== p.y;
+}
+
+function bkLeaveGround(p) {
+  if (p.jumps > 1) p.jumps = 1;
+  if (p.st === "idle" || p.st === "walk" || p.st === "land" || p.st === "shield") p.st = "air";
+}
+
+function bkLand(s, p, g, y) {
+  const wasHurt = p.st === "hurt";
+  /* a fighter launched into the floor bounces off it rather than landing */
+  if (wasHurt && p.kby > 5) { p.kby = -p.kby * 0.55; p.vy = 0; p.y = y; return; }
+  p.gr = g; p.y = y; p.vy = 0; if (p.kby > 0) p.kby = 0;
+  p.jumps = 2; p.ff = false; p.upUsed = false; p.adUsed = false;
+  if (p.st === "move") {
+    const m = bkCurMove(p);
+    if (m && !m.keep && !(p.mk[0] === "S" && p.mf < m.s + m.a && !m.helpless)) { p.st = "land"; p.t = 0; p.landLag = 9; p.mk = null; }
+  } else if (p.st === "helpless") { p.st = "land"; p.t = 0; p.landLag = 14; }
+  else if (p.st === "hurt") { p.st = "land"; p.t = 0; p.landLag = 12; p.stun = 0; }
+  else if (p.st === "airdodge") { p.st = "land"; p.t = 0; p.landLag = 8; }
+  else if (p.st === "air" || p.st === "spawn") { p.st = "land"; p.t = 0; p.landLag = 3; }
+}
+
+/* ---- projectiles ------------------------------------------------------ */
+function bkSpawn(s, i, kind, o) {
+  const p = s.p[i], K = BK_PROJ[kind], c = bkStats(p);
+  o = o || {};
+  const q = {
+    kind, owner: i, x: p.x + p.face * (c.W / 2 + 10), y: p.y - c.H * 0.62,
+    vx: (o.vx !== undefined ? o.vx : K.vx) * p.face, vy: o.vy !== undefined ? o.vy : K.vy,
+    w: K.w, h: K.h, life: K.life, t: 0, d: K.d, kb: K.kb, kg: K.kg, ang: K.ang,
+    bounces: 0, hit: [], refl: 0, shot: o.shot ? 1 : 0, beat: p.onBeat
+  };
+  if (kind === "tide") { q.y = p.y - K.h / 2; q.d = o.d || K.d; }
+  if (kind === "roar") { q.x = p.x + p.face * 40; }
+  if (kind === "ball") {
+    /* three balls on the table at most; the oldest is cleared */
+    const mine = s.proj.filter(z => z.kind === "ball" && z.owner === i);
+    if (mine.length >= 3) s.proj.splice(s.proj.indexOf(mine[0]), 1);
+    if (q.shot) q.life = 900;
+  }
+  s.proj.push(q);
+  return q;
+}
+
+function bkProjBox(q) { return [q.x - q.w / 2, q.y - q.h / 2, q.w, q.h]; }
+
+function bkStepProj(s, ev) {
+  const S = BK_STAGES[s.stage], m = S.main, B = S.blast;
+  for (let k = s.proj.length - 1; k >= 0; k--) {
+    const q = s.proj[k], K = BK_PROJ[q.kind];
+    q.t++;
+    if (q.kind === "sound") { q.w = Math.min(46, q.w + 0.3); q.h = Math.min(64, q.h + 0.4); }
+    const ox = q.x, oy = q.y;
+    if (K.ball && !q.shot) {
+      /* a racked ball hangs where it was placed, at cue height, and drifts to
+         a stop - a table nobody else can see */
+      q.x += q.vx; q.y += q.vy;
+      q.vx *= 0.88; q.vy *= 0.88;
+    } else {
+      q.vy += K.grav || 0;
+      q.x += q.vx; q.y += q.vy;
+    }
+    q.life--;
+    let dead = q.life <= 0 || q.x < B.l || q.x > B.r || q.y > B.b || q.y < B.t;
+    if (!dead && !K.pass && (q.shot || !K.ball)) {
+      /* the stage: balls bank off it, everything else breaks on it */
+      const inMain = q.x + q.w / 2 > m.x0 && q.x - q.w / 2 < m.x1 && q.y + q.h / 2 > m.y && q.y - q.h / 2 < m.bot;
+      let bx = 0, by = 0;
+      if (inMain) {
+        if (oy + q.h / 2 <= m.y) { by = 1; q.y = m.y - q.h / 2; }
+        else if (oy - q.h / 2 >= m.bot) { by = 1; q.y = m.bot + q.h / 2; }
+        else { bx = 1; q.x = ox; }
+      } else if (q.vy > 0) {
+        for (const pl of S.plats) {
+          const px = bkPlatX(pl, s.tick);
+          if (Math.abs(q.x - px) <= pl.w / 2 && oy + q.h / 2 <= pl.y && q.y + q.h / 2 >= pl.y) { by = 1; q.y = pl.y - q.h / 2; break; }
+        }
+      }
+      if (bx || by) {
+        if (K.ball && q.bounces < 4) {
+          if (bx) q.vx = -q.vx; if (by) q.vy = -q.vy;
+          q.bounces++; q.d = Math.min(18, q.d + 1.5); q.hit = [];
+          ev.push("bank:" + q.owner);
+        } else if (K.ball) { q.shot = 0; q.vx *= 0.3; q.vy = 0; }
+        else dead = true;
+      }
+      /* a shot ball that has slowed right down goes back on the table */
+      if (K.ball && q.shot && Math.hypot(q.vx, q.vy) < 2.5 && q.t > 20) q.shot = 0;
+    }
+    if (dead) { s.proj.splice(k, 1); continue; }
+    if (K.ball && !q.shot) continue;
+
+    const box = bkProjBox(q);
+    for (const t of s.p) {
+      if (t.i === q.owner || q.hit.includes(t.i) || !bkAlive(t) || t.inv > 0) continue;
+      if (!bkOverlap(box, bkHurt(t)) && !bkReflectHit(t, box)) continue;
+      const r = bkProjMeets(s, q, t, ev);
+      if (r === "gone") { s.proj.splice(k, 1); break; }
+      if (r === "reflected") break;
+    }
+  }
+}
+
+/* is this box inside the fighter's reflect window? */
+function bkReflectHit(t, box) {
+  if (t.st !== "move") return false;
+  const m = bkCurMove(t);
+  if (!m || !m.reflect || t.mf < m.reflect[0] || t.mf > m.reflect[1]) return false;
+  return bkOverlap(box, bkBox(t, m.reflect[3]));
+}
+
+function bkProjMeets(s, q, t, ev) {
+  const K = BK_PROJ[q.kind], dir = q.vx > 0 ? 1 : q.vx < 0 ? -1 : (q.x < t.x ? 1 : -1);
+  /* a reflector sends it back the other way, faster and harder */
+  if (K.refl && bkReflectHit(t, bkProjBox(q))) {
+    const m = bkCurMove(t), mul = m.reflect[2];
+    q.owner = t.i; q.hit = []; q.refl++; q.life = Math.max(q.life, 70);
+    q.vx = t.face * Math.max(Math.abs(q.vx), 4) * mul; q.vy = q.vy * mul * 0.5 - (K.grav ? 3 : 0);
+    q.d = Math.min(30, q.d * mul); q.kb *= Math.min(1.25, mul);
+    if (K.ball) q.shot = 1;
+    ev.push("reflect:" + t.i);
+    return "reflected";
+  }
+  /* Lapu-Lapu's kalasag stops anything that comes at his front while he is
+     on his feet, or charging behind it */
+  const c = bkChar(t);
+  if (c.kalasag && dir === -t.face) {
+    const rush = t.st === "move" && bkCurMove(t).wall && t.mf >= bkCurMove(t).wall[0] && t.mf <= bkCurMove(t).wall[1];
+    if (rush || (t.gr >= 0 && (t.st === "idle" || t.st === "walk"))) { ev.push("clang:" + t.i); return K.ball ? (q.shot = 0, q.vx = -q.vx * 0.3, "reflected") : "gone"; }
+  }
+  const r = bkHit(s, q.owner, t.i, { d: q.d, kb: q.kb, kg: q.kg, ang: q.ang, stun: K.stun, beat: q.beat, proj: q }, dir, ev);
+  q.hit.push(t.i);
+  if (r === "counter") return "gone";
+  if (K.ball) { q.vx = -q.vx * 0.4; q.vy = -4; q.shot = 0; return "hit"; }
+  return K.pass ? "hit" : "gone";
+}
+
+/* ---- hits -------------------------------------------------------------- */
+function bkKnock(pct, d, weight, kb, kg) {
+  return ((pct / 10 + (pct * d) / 20) * (200 / (weight + 100)) * 1.4 + 18) * (kg / 100) + kb;
+}
+
+function bkAlive(p) { return p.stocks > 0 && p.st !== "dead" && p.st !== "out"; }
+
+/* attacker ai (-1: nobody) lands h on target ti, launched toward dir */
+function bkHit(s, ai, ti, h, dir, ev) {
+  const t = s.p[ti], a = ai >= 0 ? s.p[ai] : null;
+  if (!bkAlive(t) || t.inv > 0 || t.st === "spawn") return "miss";
+
+  /* Mactan Tide: the hit is answered instead of taken */
+  if (t.st === "move" && t.mk === "S:d") {
+    const m = bkCurMove(t);
+    if (m.counter && t.mf >= m.counter[0] && t.mf <= m.counter[1]) {
+      t.face = a ? (a.x > t.x ? 1 : -1) : -dir;
+      t.mk = "TIDE"; t.mf = 0; t.hitIds = []; t.hitAt = -1; t.inv = 26;
+      t.tideD = Math.max(12, h.d * 1.5);
+      ev.push("counter:" + ti);
+      return "counter";
+    }
+  }
+
+  let d = h.d;
+  if (a) {
+    const ac = bkChar(a);
+    if (ac.beast && (a.form === "beast" || a.moon)) d *= a.moon ? 1.25 : 1;
+    if (ac.id === "bruno" && h.beat) { d *= 1.4; ev.push("beat:" + ai); }
+  }
+  d = Math.round(d * 10) / 10;
+
+  if (t.st === "shield") {
+    t.shield -= d * 1.15;
+    t.vx = dir * Math.min(6, 1.5 + d * 0.3);
+    if (a) a.lag = Math.max(a.lag, 3);
+    t.lag = Math.max(t.lag, 3);
+    if (t.shield <= 0) {
+      t.shield = 0; t.st = "dizzy"; t.t = 0; t.vy = -8; t.gr = -1;
+      ev.push("break:" + ti);
+    } else ev.push("block:" + ti);
+    return "block";
+  }
+
+  t.dmg = Math.min(999, t.dmg + d);
+  const tc = bkStats(t);
+  let kb = bkKnock(t.dmg, d, tc.weight, h.kb, h.kg);
+  if (a && bkChar(a).id === "pacquiao") kb *= 1 + 0.08 * Math.min(6, a.combo);
+  if (bkChar(t).beast && t.form === "beast") kb *= 0.88;
+  if (a) {
+    a.dealt += d;
+    if (bkChar(a).beast && !a.moon) a.night = Math.min(100, a.night + d * 3.2);
+    if (bkChar(a).id === "pacquiao") { a.combo = s.tick - a.comboAt < 50 ? a.combo + 1 : 1; a.comboAt = s.tick; }
+  }
+  t.lastBy = ai; t.lastAt = s.tick; t.flash = 6;
+
+  /* the beast shrugs off anything light while it is attacking */
+  const armored = bkChar(t).beast && (t.form === "beast" || t.moon) && t.st === "move" && kb < 72;
+  const lag = 3 + Math.floor(d / 3);
+  if (a) a.lag = Math.max(a.lag, lag);
+  t.lag = Math.max(t.lag, lag);
+  ev.push((kb > 120 ? "smash:" : "hit:") + ti + ":" + ai);
+  if (armored) { ev.push("armor:" + ti); return "armor"; }
+
+  const ang = (h.ang * Math.PI) / 180, v = kb * BK_KB;
+  t.kbx = Math.cos(ang) * v * dir;
+  t.kby = -Math.sin(ang) * v;
+  if (t.gr >= 0 && t.kby > 0) t.kby = -t.kby * 0.6;   /* spiked on the ground: bounce */
+  if (t.kby < 0) t.gr = -1;
+  t.vx = 0; t.vy = 0;
+  t.stun = Math.floor(kb * BK_STUN) + (h.stun || 0);
+  t.st = "hurt"; t.t = 0; t.mk = null; t.ff = false;
+  if (t.jumps < 1) t.jumps = 1;
+  t.upUsed = false;
+  return "hit";
+}
+
+/* every live hitbox in the match against every hurtbox */
+function bkResolveHits(s, ev) {
+  for (const a of s.p) {
+    if (a.st !== "move" || a.lag > 0) continue;
+    const m = bkCurMove(a);
+    if (!m || !m.hb.length) continue;
+    const f = a.mf, fin = m.fin && f >= m.fin.f;
+    if (f < m.s || f >= m.s + m.a) continue;
+    /* a multi-hit clears who it has hit once per frame it reaches, not once
+       per tick: hitlag holds the frame still, and must not re-open it */
+    if (a.hitAt !== f && ((m.rehit && f > m.s && (f - m.s) % m.rehit === 0) || (fin && f === m.fin.f))) a.hitIds = [];
+    a.hitAt = f;
+    const h = fin ? Object.assign({}, m, m.fin) : m;
+    const boxes = m.hb.map(r => bkBox(a, r));
+    /* Reyes' cue sends his racked balls flying */
+    if (bkChar(a).id === "reyes") {
+      for (const q of s.proj) {
+        if (q.kind !== "ball" || q.owner !== a.i || q.cueAt === s.tick) continue;
+        if (!boxes.some(b => bkOverlap(b, bkProjBox(q)))) continue;
+        const sp = m.cue || 12, ang = (h.ang * Math.PI) / 180;
+        q.vx = Math.cos(ang) * sp * a.face; q.vy = -Math.sin(ang) * sp;
+        if (h.ang === -90) { q.vx = 6 * a.face; q.vy = 9; }
+        q.shot = 1; q.bounces = 0; q.d = BK_PROJ.ball.d; q.hit = []; q.life = 900; q.cueAt = s.tick;
+        ev.push("cue:" + a.i);
+      }
+    }
+    for (const t of s.p) {
+      if (t === a || a.hitIds.includes(t.i) || !bkAlive(t) || t.inv > 0) continue;
+      if (!boxes.some(b => bkOverlap(b, bkHurt(t)))) continue;
+      const dir = h.away ? (t.x >= a.x ? 1 : -1) : a.face;
+      const r = bkHit(s, a.i, t.i, { d: h.d, kb: h.kb, kg: h.kg, ang: h.ang, beat: a.onBeat }, dir, ev);
+      a.hitIds.push(t.i);
+      if (r === "hit" && m.heal) a.dmg = Math.max(0, a.dmg - m.heal);
+    }
+  }
+}
+
+/* ---- one fighter, one tick ------------------------------------------- */
+function bkActionable(p) {
+  return p.st === "idle" || p.st === "walk" || p.st === "air" || (p.st === "land" && p.t >= (p.landLag || 0));
+}
+
+function bkStartMove(s, p, key, ev) {
+  p.st = "move"; p.mk = key; p.mf = 0; p.hitIds = []; p.hitAt = -1; p.ff = false;
+  const m = bkCurMove(p);
+  if (key[0] === "S") {
+    ev.push("spec:" + p.i);
+    if (key === "S:u") p.upUsed = true;
+  }
+  if (p.gr >= 0 && key[0] === "N") p.vx *= 0.3;
+  return m;
+}
+
+function bkStepFighter(s, p, inp, ev) {
+  const c = bkStats(p), ch = bkChar(p);
+  if (p.st === "out") return;
+  if (p.flash > 0) p.flash--;
+  if (p.lag > 0) { p.lag--; return; }
+  const prs = inp & ~p.prev;
+  p.prev = inp;
+  p.t++;
+  if (p.inv > 0) p.inv--;
+  if (p.moon > 0 && --p.moon === 0) ev.push("dawn:" + p.i);
+  if (p.st !== "shield" && p.shield < BK_SHIELD) p.shield = Math.min(BK_SHIELD, p.shield + 0.12);
+
+  if (p.st === "dead") {
+    if (p.t >= BK_RESPAWN) {
+      const S = BK_STAGES[s.stage];
+      p.st = "spawn"; p.t = 0; p.x = 0; p.y = S.main.y - 190; p.vx = p.vy = p.kbx = p.kby = 0;
+      p.dmg = 0; p.inv = BK_RESPAWN_INV; p.gr = -1; p.jumps = 2; p.night = 0; p.moon = 0; p.form = "human";
+      p.combo = 0; p.shield = BK_SHIELD; p.upUsed = false; p.adUsed = false;
+    }
+    return;
+  }
+  if (p.st === "spawn") {
+    /* a halo above the stage until you move or it times out */
+    p.vx = p.vy = 0;
+    if ((prs & (IN_LEFT | IN_RIGHT | IN_DOWN | BK_JMP | BK_ATK | BK_SPC)) || p.t > 150) { p.st = "air"; p.t = 0; p.inv = Math.max(p.inv, 60); }
+    else return;
+  }
+
+  const left = inp & IN_LEFT, right = inp & IN_RIGHT, up = inp & IN_UP, down = inp & IN_DOWN;
+  const hdir = right && !left ? 1 : left && !right ? -1 : 0;
+  const air = p.gr < 0;
+  const jumpPress = (prs & BK_JMP) || ((prs & IN_UP) && !(prs & (BK_ATK | BK_SPC)) && !(inp & BK_SHD));
+
+  /* ---- hitstun: no control ---- */
+  if (p.st === "hurt") {
+    if (p.stun > 0) p.stun--;
+    /* while the launch is still strong it carries the fighter; gravity takes
+       over as it fades, which is what makes a launch read as an arc */
+    p.vy = Math.hypot(p.kbx, p.kby) > 5 ? 0 : Math.min(c.fall, p.vy + c.grav);
+    if (p.stun <= 0 && Math.hypot(p.kbx, p.kby) < 4) { p.st = air ? "air" : "idle"; p.t = 0; }
+    bkPhysics(s, p);
+    return;
+  }
+  if (p.st === "dizzy") {
+    p.vx *= 0.85;
+    p.vy = air ? Math.min(c.fall, p.vy + c.grav) : 0;
+    if (p.t > 170) { p.st = air ? "air" : "idle"; p.shield = BK_SHIELD * 0.4; }
+    bkPhysics(s, p);
+    return;
+  }
+
+  /* ---- moves in progress ---- */
+  if (p.st === "move") {
+    let m = bkCurMove(p);
+    const f = p.mf;
+    if (m.inv && f >= m.inv[0] && f <= m.inv[1]) p.inv = Math.max(p.inv, 1);
+    let driven = false;
+    for (const v of m.vel || []) {
+      if (f >= v[0] && f <= v[1]) { p.vx = v[2] * p.face; if (v[3]) { p.vy = v[3]; if (v[3] < 0) p.gr = -1; } driven = true; }
+    }
+    for (const pr of m.proj || []) if (f === pr[0]) bkSpawn(s, p.i, pr[1]);
+    if (p.mk === "TIDE" && f === 4) bkSpawn(s, p.i, "tide", { d: p.tideD });
+    if (m.fn) m.fn(s, p.i, p, f, ev);
+    m = bkCurMove(p) || m;     /* a hook can change what the move is */
+
+    if (!driven) {
+      if (p.gr >= 0) p.vx *= 0.8;
+      else if (hdir) p.vx += (hdir * c.air - p.vx) * 0.08;
+    }
+    if (p.gr < 0 && !(m.vel || []).some(v => f >= v[0] && f <= v[1] && v[3])) {
+      if ((prs & IN_DOWN) && p.vy > -2) p.ff = true;
+      p.vy = Math.min(p.ff ? c.ffall : c.fall, p.vy + c.grav);
+    }
+
+    /* Pacquiao's footwork: step out of the recovery of any jab or tilt */
+    if (ch.id === "pacquiao" && p.mk[0] === "N" && f >= m.s + m.a && hdir && (prs & (IN_LEFT | IN_RIGHT)) && p.gr >= 0) {
+      p.st = "step"; p.t = 0; p.vx = hdir * 7.5; p.mk = null;
+      ev.push("step:" + p.i);
+      bkPhysics(s, p);
+      return;
+    }
+
+    p.mf++;
+    /* "on the beat" is judged on the tick the move's first active frame lands */
+    if (p.mf === m.s) p.onBeat = bkOnBeat(s.tick);
+    if (p.mf >= m.s + m.a + m.r) {
+      const helpless = m.helpless && p.gr < 0;
+      p.mk = null; p.t = 0;
+      p.st = helpless ? "helpless" : p.gr < 0 ? "air" : "idle";
+    }
+    bkPhysics(s, p);
+    return;
+  }
+
+  if (p.st === "step") {
+    p.vx *= 0.86;
+    if (p.t >= 11) { p.st = "idle"; p.t = 0; }
+    bkPhysics(s, p);
+    return;
+  }
+  if (p.st === "roll" || p.st === "dodge") {
+    const len = p.st === "roll" ? 24 : 22;
+    p.inv = p.t >= 3 && p.t <= 16 ? Math.max(p.inv, 1) : p.inv;
+    p.vx = p.st === "roll" ? (p.t < 18 ? p.rollDir * 5.6 : p.vx * 0.6) : 0;
+    if (p.t >= len) { p.st = "idle"; p.t = 0; }
+    bkPhysics(s, p);
+    return;
+  }
+  if (p.st === "airdodge") {
+    if (p.t >= 3 && p.t <= 20) p.inv = Math.max(p.inv, 1);
+    p.vx *= 0.92; p.vy = Math.min(c.fall, p.vy + c.grav * 0.6);
+    if (p.t >= 30) { p.st = "air"; p.t = 0; }
+    bkPhysics(s, p);
+    return;
+  }
+  if (p.st === "jsq") {
+    if (p.t >= 4) {
+      const full = p.jumpHeld && (inp & (BK_JMP | IN_UP));
+      p.vy = -c.jump * (full ? 1 : 0.7); p.gr = -1; p.st = "air"; p.t = 0; p.jumps = 1;
+      ev.push("jump:" + p.i);
+    }
+    if (!(inp & (BK_JMP | IN_UP))) p.jumpHeld = false;
+    p.vx *= 0.9;
+    bkPhysics(s, p);
+    return;
+  }
+  if (p.st === "shield") {
+    p.shield -= 0.16;
+    p.vx *= 0.7;
+    if (p.shield <= 0) { p.shield = 0; p.st = "dizzy"; p.t = 0; ev.push("break:" + p.i); bkPhysics(s, p); return; }
+    if (prs & (IN_LEFT | IN_RIGHT)) { p.st = "roll"; p.t = 0; p.rollDir = hdir || p.face; p.face = -p.rollDir; ev.push("roll:" + p.i); }
+    else if (prs & IN_DOWN) { p.st = "dodge"; p.t = 0; ev.push("roll:" + p.i); }
+    else if (jumpPress) { p.st = "jsq"; p.t = 0; p.jumpHeld = true; }
+    else if (!(inp & BK_SHD)) { p.st = "idle"; p.t = 0; }
+    bkPhysics(s, p);
+    return;
+  }
+  if (p.st === "helpless") {
+    if (hdir) p.vx += (hdir * c.air * 0.7 - p.vx) * 0.06;
+    if ((prs & IN_DOWN) && p.vy > -2) p.ff = true;
+    p.vy = Math.min(p.ff ? c.ffall : c.fall, p.vy + c.grav);
+    bkPhysics(s, p);
+    return;
+  }
+
+  /* ---- free to act ---- */
+  if (p.st === "land" && p.t < (p.landLag || 0)) { p.vx *= 0.75; bkPhysics(s, p); return; }
+  if (p.st === "land") { p.st = "idle"; p.t = 0; }
+
+  if (prs & BK_SPC) {
+    let k = "n";
+    if (up) k = "u"; else if (down) k = "d"; else if (hdir) { k = "s"; p.face = hdir; }
+    /* the Aswang's neutral special, with the night meter full, is the full moon */
+    if (k === "n" && ch.moonSp && p.night >= 100 && !p.moon) k = "moon";
+    if (k !== "u" || !p.upUsed) {
+      bkStartMove(s, p, "S:" + k, ev);
+      bkPhysics(s, p);
+      return;
+    }
+  }
+  if (prs & BK_ATK) {
+    let k;
+    if (!air) {
+      if (up) k = "up"; else if (down) k = "down"; else if (hdir) { k = "side"; p.face = hdir; } else k = "jab";
+    } else {
+      if (up) k = "uair"; else if (down) k = "dair"; else if (hdir) k = hdir === p.face ? "fair" : "bair"; else k = "nair";
+    }
+    bkStartMove(s, p, "N:" + k, ev);
+    bkPhysics(s, p);
+    return;
+  }
+  if (!air && (inp & BK_SHD)) { p.st = "shield"; p.t = 0; bkPhysics(s, p); return; }
+  if (air && (prs & BK_SHD) && !p.adUsed) { p.st = "airdodge"; p.t = 0; p.adUsed = true; p.vx = hdir * 4; p.vy = up ? -5 : down ? 5 : p.vy * 0.3; ev.push("roll:" + p.i); bkPhysics(s, p); return; }
+
+  if (jumpPress) {
+    if (!air) { p.st = "jsq"; p.t = 0; p.jumpHeld = true; bkPhysics(s, p); return; }
+    if (p.jumps > 0) {
+      p.jumps = 0; p.vy = -c.djump; p.ff = false; p.t = 0;
+      if (hdir) { p.vx = hdir * c.air; }
+      ev.push("jump2:" + p.i);
+    }
+  }
+
+  if (!air) {
+    if (p.gr > 0 && (prs & IN_DOWN)) {
+      /* drop through a one-way platform */
+      p.gr = -1; p.drop = 12; p.y += 2; p.st = "air"; p.t = 0; p.jumps = 1;
+    } else if (hdir) {
+      p.face = hdir; p.vx += (hdir * c.walk - p.vx) * 0.35;
+      if (p.st !== "walk") { p.st = "walk"; p.t = 0; }
+    } else {
+      p.vx *= 0.7;
+      if (p.st !== "idle") { p.st = "idle"; p.t = 0; }
+    }
+  } else {
+    if (hdir) p.vx += (hdir * c.air - p.vx) * 0.12;
+    else p.vx *= 0.98;
+    if ((prs & IN_DOWN) && p.vy > -2) p.ff = true;
+    p.vy = Math.min(p.ff ? c.ffall : c.fall, p.vy + c.grav);
+    if (p.st !== "air") { p.st = "air"; p.t = 0; }
+  }
+  bkPhysics(s, p);
+}
+
+/* ---- the match tick --------------------------------------------------- */
+/* inputs: one mask per fighter, CPU or not; bkStep fills in the CPUs */
+function bkStep(s, inputs) {
+  const ev = [];
+  s.tick++; s.pt++;
+  if (s.phase === "intro") {
+    if (s.pt === 1) ev.push("ready");
+    if (s.pt % 40 === 30 && s.pt < BK_INTRO) ev.push("count");
+    for (const p of s.p) bkStepFighter(s, p, 0, ev);
+    if (s.pt >= BK_INTRO) { s.phase = "fight"; s.pt = 0; ev.push("go"); }
+    return ev;
+  }
+  if (s.phase === "end") {
+    for (const p of s.p) if (p.st !== "out" && p.st !== "dead") bkStepFighter(s, p, 0, ev);
+    bkStepProj(s, ev);
+    return ev;
+  }
+
+  if (s.beat && s.tick % BK_BEAT === 0) ev.push("pulse");
+  const ins = s.p.map((p, i) => (p.cpu ? bkCpuInput(s, i) : (inputs && inputs[i]) || 0));
+  for (let i = 0; i < s.p.length; i++) bkStepFighter(s, s.p[i], ins[i], ev);
+  bkResolveHits(s, ev);
+  bkStepProj(s, ev);
+
+  /* blast zones */
+  const B = BK_STAGES[s.stage].blast;
+  for (const p of s.p) {
+    if (!bkAlive(p) && p.st !== "spawn") continue;
+    const out = p.x < B.l || p.x > B.r || p.y > B.b || (p.y < B.t && p.st === "hurt");
+    if (!out) continue;
+    p.stocks--; p.falls++;
+    if (p.lastBy >= 0 && p.lastBy !== p.i && s.tick - p.lastAt < 600) s.p[p.lastBy].ko++;
+    ev.push("ko:" + p.i + ":" + (p.x < B.l ? "l" : p.x > B.r ? "r" : p.y > B.b ? "b" : "t") + ":" + Math.round(Math.max(B.l, Math.min(B.r, p.x))) + ":" + Math.round(Math.max(B.t, Math.min(B.b, p.y))));
+    p.vx = p.vy = p.kbx = p.kby = 0; p.mk = null; p.stun = 0; p.lag = 0;
+    if (p.stocks <= 0) { p.st = "out"; p.outAt = s.tick; s.order.unshift(p.i); }
+    else { p.st = "dead"; p.t = 0; p.x = 0; p.y = -2000; }
+  }
+
+  s.time--;
+  const alive = s.p.filter(p => p.stocks > 0);
+  if (alive.length <= 1 || s.time <= 0) {
+    /* placings: anyone still in, by stocks then damage; then the eliminated,
+       last out first */
+    alive.sort((a, b) => b.stocks - a.stocks || a.dmg - b.dmg);
+    s.order = alive.map(p => p.i).concat(s.order.filter(i => !alive.some(p => p.i === i)));
+    s.winner = s.order[0];
+    s.phase = "end"; s.pt = 0;
+    ev.push(s.time <= 0 ? "timeup" : "game");
+  }
+  return ev;
+}
+
+/* =========================== BAKBAKAN CPU ===============================
+   Reads the match and answers with a button mask, like a player. Its dice
+   live in the fighter's own state so a match replays from its inputs. */
+const BK_AI = [
+  { react: 20, aggro: 0.35, shield: 0.04, recover: 0.6 },
+  { react: 11, aggro: 0.6, shield: 0.16, recover: 0.9 },
+  { react: 5, aggro: 0.85, shield: 0.32, recover: 1 }
+];
+
+function bkCpuRand(b) { b.seed = (Math.imul(b.seed, 1103515245) + 12345) & 0x7fffffff; return b.seed / 0x7fffffff; }
+
+function bkCpuInput(s, i) {
+  const p = s.p[i], b = p.cpu, L = BK_AI[b.lvl] || BK_AI[1];
+  if (!bkAlive(p) || p.st === "spawn" && p.t < 20) { b.prev = 0; return 0; }
+  const S = BK_STAGES[s.stage], m = S.main, c = bkStats(p);
+  const press = (bit) => (b.prev & bit ? 0 : bit);   /* buttons are edges: let go between presses */
+  let out = 0;
+
+  /* off the stage: get back */
+  const offX = p.x < m.x0 - 4 || p.x > m.x1 + 4, below = p.y > m.y + 4;
+  if (p.st === "spawn") { out = IN_DOWN; b.prev = out; return out; }
+  if ((offX || below) && p.st !== "hurt") {
+    const home = p.x < 0 ? IN_RIGHT : IN_LEFT;
+    out |= home;
+    const deep = p.y > m.y - 30 || (offX && p.y > m.y - 120 && p.vy > 0);
+    if (deep && bkCpuRand(b) < L.recover) {
+      if (p.jumps > 0 && p.gr < 0 && p.vy > -2) out |= press(BK_JMP);
+      else if (!p.upUsed && p.st === "air" && p.vy > 0) out |= press(BK_SPC) | IN_UP;
+    }
+    b.prev = out;
+    return out;
+  }
+
+  let tgt = null, best = 1e9;
+  for (const q of s.p) {
+    if (q === p || !bkAlive(q) || q.st === "spawn") continue;
+    const d = Math.abs(q.x - p.x) + Math.abs(q.y - p.y) * 0.7;
+    if (d < best) { best = d; tgt = q; }
+  }
+  if (!tgt) { b.prev = 0; return 0; }
+  const dx = tgt.x - p.x, dy = tgt.y - p.y, adx = Math.abs(dx);
+  const toward = dx > 0 ? IN_RIGHT : IN_LEFT;
+
+  /* shield when something is coming and we are close */
+  if (p.gr >= 0 && adx < 90 && tgt.st === "move" && tgt.mf < (bkCurMove(tgt) || { s: 0 }).s && bkCpuRand(b) < L.shield) {
+    b.hold = 10; b.want = BK_SHD;
+  }
+  if (b.hold > 0) {
+    b.hold--;
+    out = b.want & ~(b.prev & (BK_ATK | BK_SPC | BK_JMP));
+    b.prev = out;
+    return out;
+  }
+  if (--b.think > 0) { out = b.prev & (IN_LEFT | IN_RIGHT | IN_DOWN | BK_SHD); b.prev = out; return out; }
+  b.think = L.react + Math.floor(bkCpuRand(b) * L.react);
+
+  const ch = bkChar(p).id;
+  const zoner = ch === "rizal" || ch === "eala" || ch === "bruno";
+  const reach = 46 + c.W / 2;
+  const r = bkCpuRand(b);
+
+  if (zoner && adx > 170 && adx < 460 && Math.abs(dy) < 80 && r < L.aggro) {
+    out = (dx > 0 ? 1 : -1) === p.face ? press(BK_SPC) : toward;
+  } else if (ch === "reyes" && adx > 120 && r < L.aggro * 0.5) {
+    out = r < 0.25 ? press(BK_SPC) : press(BK_SPC) | IN_DOWN;
+  } else if (adx > reach || Math.abs(dy) > 90) {
+    out = toward;
+    /* follow upward with a jump */
+    if (dy < -70 && p.gr >= 0 && r < 0.5) out |= press(BK_JMP);
+    else if (dy < -70 && p.gr < 0 && p.jumps > 0 && r < 0.3) out |= press(BK_JMP);
+    /* don't walk off the edge after somebody */
+    if ((p.x < m.x0 + 30 && toward === IN_LEFT) || (p.x > m.x1 - 30 && toward === IN_RIGHT)) out &= ~toward;
+  } else if (r < L.aggro) {
+    const pick = bkCpuRand(b);
+    const facing = (dx > 0 ? 1 : -1) === p.face;
+    if (dy < -50) out = press(BK_ATK) | IN_UP;
+    else if (pick < 0.3) out = press(BK_ATK) | (facing ? 0 : toward);
+    else if (pick < 0.55) out = press(BK_ATK) | toward;
+    else if (pick < 0.7) out = press(BK_ATK) | IN_DOWN;
+    else if (pick < 0.85) out = press(BK_SPC) | (pick < 0.78 ? toward : 0);
+    else out = press(BK_SPC) | IN_DOWN;
+    b.hold = 2; b.want = out & (IN_UP | IN_DOWN | IN_LEFT | IN_RIGHT);
+  } else {
+    out = bkCpuRand(b) < 0.5 ? (dx > 0 ? IN_LEFT : IN_RIGHT) : 0;
+  }
+  b.prev = out;
+  return out;
+}
+
+
+/* =========================== BAKBAKAN: input ============================
+   Four slots. The keyboard drives slots 1 and 2 on the Fighter layout (WASD +
+   F G V B, arrows + K L , .), gamepads fill slots in the order they are
+   plugged in. readInputs hands the menus the usual pair, translated into
+   DIVE (move) and KICK (confirm). */
+let bkIn = [0, 0, 0, 0];
+const bkPadPrev = [0, 0, 0, 0];
+function bkReadInputs() {
+  const m = [0, 0, 0, 0];
+  for (const code in KEYMAP) if (keys[code]) { const [p, bit] = KEYMAP[code]; m[p] |= bit; }
+  const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+  let slot = 0;
+  for (let i = 0; i < pads.length && slot < BK_MAX; i++) {
+    const g = pads[i];
+    if (!g || !g.connected) continue;
+    const b = g.buttons, on = k => b[k] && b[k].pressed;
+    let v = 0;
+    /* standard layout: A or Y jump, X attack, B special, any shoulder shields */
+    if (on(0) || on(3)) v |= BK_JMP;
+    if (on(2)) v |= BK_ATK;
+    if (on(1)) v |= BK_SPC;
+    if (on(4) || on(5) || on(6) || on(7)) v |= BK_SHD;
+    const ax = g.axes && g.axes[0] || 0, ay = g.axes && g.axes[1] || 0;
+    if (on(12) || ay < -0.5) v |= IN_UP; if (on(13) || ay > 0.5) v |= IN_DOWN;
+    if (on(14) || ax < -0.5) v |= IN_LEFT; if (on(15) || ax > 0.5) v |= IN_RIGHT;
+    const btn = BK_JMP | BK_ATK | BK_SPC | BK_SHD;
+    if ((v & btn) && !(bkPadPrev[slot] & btn)) { anyPressEdge = true; audioWake(); }
+    bkPadPrev[slot] = v;
+    m[slot] |= v;
+    slot++;
+  }
+  bkIn = m;
+  const r = [m[0], m[1]];
+  for (let p = 0; p < 2; p++) {
+    if (r[p] & IN_DOWN) r[p] |= IN_DIVE;
+    if (r[p] & (BK_ATK | BK_JMP)) r[p] |= IN_KICK;
+  }
+  return r;
+}
+
+/* =========================== BAKBAKAN: pixel fighters ===================
+   Every human fighter is a paper doll drawn into a 64x64 canvas a pixel at a
+   time - limbs at angles, a head, clothes, a weapon - and then blown up with
+   smoothing off. Placeholder art, but it is all generated, so a pose for any
+   state of the sim is free. The Axie is the real Beast rig. */
+const BK_SPR = 64, BK_HIP = 46;
+const bkSprC = [];
+function bkSprCanvas(k) {
+  let c = bkSprC[k];
+  if (!c) { c = bkSprC[k] = document.createElement("canvas"); c.width = BK_SPR; c.height = BK_SPR; }
+  return c;
+}
+function bkShade(hex, k) {
+  const n = parseInt(hex.slice(1), 16);
+  const f = v => Math.max(0, Math.min(255, Math.round(v * k)));
+  return "rgb(" + f(n >> 16) + "," + f((n >> 8) & 255) + "," + f(n & 255) + ")";
+}
+function bkLimb(g, x, y, ang, len, th, col) {
+  const dx = Math.cos(ang), dy = Math.sin(ang), h = th / 2;
+  g.fillStyle = col;
+  for (let k = 0; k <= len; k += 0.6) g.fillRect(Math.round(x + dx * k - h), Math.round(y + dy * k - h), th, th);
+  return [x + dx * len, y + dy * len];
+}
+function bkDot(g, x, y, w, h, col) { g.fillStyle = col; g.fillRect(Math.round(x), Math.round(y), w, h); }
+
+/* a pose: absolute limb angles (0 forward, PI/2 down), plus lean, crouch and spin */
+function bkPose(p, c) {
+  const D = Math.PI / 2, t = p.t || 0;
+  const P = { lean: 0, crouch: 0, bob: 0, rot: 0, aB: D + 0.3, eB: D - 0.2, aF: D - 0.3, eF: D - 1.0,
+              lB: D + 0.12, kB: D + 0.12, lF: D - 0.12, kF: D - 0.12, hold: null };
+  const st = p.st;
+  if (st === "idle" || st === "spawn" || st === "land" && (p.landLag || 0) <= 3) {
+    P.bob = Math.sin(t * 0.08) > 0.3 ? 1 : 0;
+  } else if (st === "walk") {
+    const w = Math.sin(t * 0.32);
+    P.lF = D + w * 0.62; P.kF = P.lF + Math.max(0, -w) * 0.7;
+    P.lB = D - w * 0.62; P.kB = P.lB + Math.max(0, w) * 0.7;
+    P.aF = D - w * 0.5; P.eF = P.aF - 0.5; P.aB = D + w * 0.5; P.eB = P.aB - 0.4;
+    P.bob = Math.abs(w) > 0.7 ? 1 : 0;
+  } else if (st === "jsq" || st === "land") {
+    P.crouch = 4; P.lF = D - 0.7; P.kF = D + 0.6; P.lB = D - 0.4; P.kB = D + 0.8;
+  } else if (st === "air" || st === "airdodge" || st === "helpless") {
+    if (p.vy < 0) { P.lF = D - 1.0; P.kF = D + 0.5; P.lB = D + 0.1; P.kB = D + 0.6; P.aF = -0.7; P.eF = -1.0; P.aB = D + 1.0; P.eB = D + 1.4; }
+    else { P.lF = D - 0.25; P.kF = D + 0.1; P.lB = D + 0.3; P.kB = D + 0.4; P.aF = -0.1; P.eF = -0.3; P.aB = Math.PI - 0.4; P.eB = Math.PI - 0.2; }
+    if (st === "helpless") { P.aF = D + 0.4; P.eF = D + 0.6; P.aB = D + 0.5; P.eB = D + 0.7; P.lean = 0.25; }
+    if (st === "airdodge") { P.crouch = 3; P.lF = D - 1.2; P.kF = D + 0.8; P.lB = D - 1.0; P.kB = D + 1.0; }
+  } else if (st === "hurt") {
+    P.lean = -0.45; P.aF = -1.9 + Math.sin(t * 0.6) * 0.4; P.eF = P.aF - 0.4; P.aB = -1.2; P.eB = -1.6;
+    P.lF = D - 0.8; P.kF = D - 0.2; P.lB = D - 0.2; P.kB = D + 0.3;
+    if (Math.hypot(p.kbx, p.kby) > 9) P.rot = -t * 0.45;
+  } else if (st === "dizzy") {
+    P.lean = Math.sin(t * 0.12) * 0.25; P.aF = D + 0.4; P.eF = D + 0.6; P.aB = D + 0.4; P.eB = D + 0.6; P.crouch = 1;
+  } else if (st === "shield") {
+    P.crouch = 2; P.aF = -0.2; P.eF = -1.3; P.aB = 0.2; P.eB = -1.0;
+  } else if (st === "roll") {
+    P.crouch = 7; P.rot = (t / 24) * Math.PI * 2 * (p.rollDir === p.face ? 1 : -1);
+    P.lF = D - 1.3; P.kF = D + 0.9; P.lB = D - 1.1; P.kB = D + 1.1; P.aF = 0.4; P.eF = 1.4;
+  } else if (st === "dodge") {
+    P.crouch = 2; P.lean = -0.2;
+  } else if (st === "step") {
+    P.lean = 0.25; P.lF = D - 0.6; P.lB = D + 0.6; P.kF = D - 0.3; P.kB = D + 0.8;
+    P.aF = -0.3; P.eF = -1.2; P.aB = 0.1; P.eB = -1.0;
+  } else if (st === "move") {
+    const m = bkCurMove(p) || { s: 1, a: 1, pose: "jab" };
+    const f = p.mf, wind = f < m.s, act = f >= m.s && f < m.s + m.a;
+    const u = wind ? f / Math.max(1, m.s) : act ? (f - m.s) / Math.max(1, m.a) : 1;
+    const pose = m.pose;
+    if (pose === "jab") {
+      if (wind) { P.aF = D - 0.2; P.eF = -0.9; } else if (act) { P.aF = -0.05; P.eF = -0.05; P.lean = 0.12; } else { P.aF = 0.4; P.eF = -0.4; }
+    } else if (pose === "thrust") {
+      if (wind) { P.aF = Math.PI - 0.6; P.eF = Math.PI - 0.3; P.lean = -0.12; }
+      else { P.aF = 0; P.eF = 0; P.lean = 0.28; P.lF = D - 0.75; P.kF = D - 0.1; P.lB = D + 0.65; P.kB = D + 0.7; P.aB = Math.PI - 0.3; P.eB = Math.PI - 0.1; }
+    } else if (pose === "chop") {
+      if (wind) { P.aF = -2.3; P.eF = -2.5; P.lean = -0.12; } else { P.aF = 0.55; P.eF = 0.8; P.lean = 0.24; P.lF = D - 0.6; P.lB = D + 0.5; }
+    } else if (pose === "up") {
+      if (wind) { P.aF = D; P.eF = D - 0.5; P.crouch = 3; } else { P.aF = -D + 0.15; P.eF = -D; P.aB = -D - 0.4; P.eB = -D - 0.3; P.lean = -0.08; P.lF = D - 0.3; P.kF = D + 0.3; }
+    } else if (pose === "low") {
+      P.crouch = 6;
+      if (wind) { P.aF = D; P.eF = D - 0.4; } else { P.aF = 0.35; P.eF = 0.3; P.lF = 0.35; P.kF = 0.4; }
+    } else if (pose === "spin") {
+      if (act) P.rot = u * Math.PI * 2;
+      P.aF = 0; P.eF = 0; P.aB = Math.PI; P.eB = Math.PI; P.lF = D - 0.9; P.kF = D + 0.5; P.lB = D - 0.6; P.kB = D + 0.7;
+    } else if (pose === "back") {
+      P.lean = 0.2;
+      if (act || !wind) { P.aB = Math.PI - 0.15; P.eB = Math.PI; P.lB = Math.PI - 0.55; P.kB = Math.PI - 0.45; }
+    } else if (pose === "slam") {
+      if (wind) { P.aF = -2.0; P.eF = -2.2; P.aB = -1.3; P.eB = -1.6; } else { P.aF = D - 0.15; P.eF = D; P.aB = D + 0.3; P.eB = D; P.crouch = 4; }
+    } else if (pose === "guard") {
+      P.crouch = 2; P.aF = -0.35; P.eF = -1.45; P.aB = 0.15; P.eB = -0.9;
+    } else if (pose === "shield") {
+      P.lean = 0.3; P.aB = 0.05; P.eB = 0; P.aF = D + 0.6; P.eF = D + 0.8; P.lF = D - 0.65; P.lB = D + 0.6;
+    } else if (pose === "throw") {
+      if (wind) { P.aF = -2.4; P.eF = -2.7; P.hold = "item"; } else { P.aF = -0.15; P.eF = 0.05; P.lean = 0.15; }
+    } else if (pose === "cast") {
+      P.aF = -0.5; P.eF = -1.6; P.aB = -0.4; P.eB = -0.1; if (act || !wind) P.lean = -0.12;
+    }
+  }
+  if (c.beast && p.form === "beast") { P.lean += 0.45; P.crouch += 3; }
+  return P;
+}
+
+/* the doll itself, drawn facing right with its feet at (32, 62) */
+function bkDoll(g, c, P, p) {
+  const L = c.look, beast = c.beast && p.form === "beast";
+  const skin = beast ? "#2E2434" : L.skin, skinB = bkShade(skin, 0.78);
+  const top = beast ? "#2E2434" : L.top, low = beast ? "#221A28" : L.low;
+  const cx = 32, hy = BK_HIP + P.crouch + P.bob;
+  const armA = beast ? 9 : 7, armB = beast ? 9 : 7, armTh = beast ? 4 : 3;
+  g.save();
+  g.clearRect(0, 0, BK_SPR, BK_SPR);
+  g.translate(cx, hy - 10); g.rotate(P.rot); g.translate(-cx, -(hy - 10));
+  const shx = cx + Math.sin(P.lean) * 15, shy = hy - Math.cos(P.lean) * 15;
+  const legC = L.pantsLeg === false ? skin : low;
+
+  /* back leg, back arm */
+  let k = bkLimb(g, cx - 1, hy, P.lB, 8, 4, bkShade(L.skirt || L.dress ? skin : legC, 0.75));
+  k = bkLimb(g, k[0], k[1], P.kB, 8, 4, bkShade(L.skirt || L.dress || L.low === L.top && !L.coat ? skin : legC, 0.75));
+  bkDot(g, k[0] - 2, k[1] - 1, 5, 2, "#1A1414");
+  let e = bkLimb(g, shx - 1, shy + 2, P.aB, armA, armTh, bkShade(L.coat ? top : skin, 0.75));
+  let hB = bkLimb(g, e[0], e[1], P.eB, armB, armTh, skinB);
+  if (L.weapon === "gloves") bkDot(g, hB[0] - 2, hB[1] - 2, 5, 5, bkShade(L.glove, 0.8));
+  if (beast) bkClaws(g, hB, P.eB);
+  if (L.shield && !beast) bkShieldDraw(g, hB, P.eB);
+
+  /* body */
+  const torsoW = beast ? 14 : 10;
+  bkLimb(g, cx, hy - 1, -Math.PI / 2 + P.lean, 15, torsoW, top || skin);
+  if (!top || L.open) {
+    /* skin showing: a bare chest, or an open shirt */
+    const k2 = beast ? 0 : 1;
+    if (!top && L.tat) for (let j = 0; j < 4; j++) bkDot(g, shx - 3 + j * 2, shy + 4 + j % 2, 1, 3, L.tat);
+    if (L.open) bkLimb(g, cx + Math.sin(P.lean) * 6, hy - 6 - Math.cos(P.lean) * 6, -Math.PI / 2 + P.lean, 8, 3 + k2, skin);
+  }
+  if (L.coat) bkLimb(g, cx - 2, hy + 1, Math.PI / 2 + 0.25, 6, 6, top);       /* coat tails */
+  if (L.collar) bkDot(g, shx - 2, shy, 5, 2, L.collar);
+  if (L.trim) bkDot(g, cx - 5, hy - 2, 10, 2, L.trim);
+  if (L.dress || L.skirt) bkLimb(g, cx, hy - 2, Math.PI / 2, L.dress ? 9 : 5, L.dress ? 12 : 11, L.skirt ? L.low : low);
+  if (L.skirt && L.trim) bkDot(g, cx - 5, hy + 3, 11, 1, L.trim);
+  if (!L.dress && !L.skirt) bkDot(g, cx - 5, hy - 3, 10, 5, low);              /* hips */
+
+  /* head */
+  const hx = shx + 1 + (beast ? 4 : 0), hyy = shy - 11 + (beast ? 3 : 0);
+  if (L.longhair || beast) bkDot(g, hx - 6, hyy - 1, 7, beast ? 12 : 18, L.hair);   /* hair down the back */
+  if (L.pony) bkLimb(g, hx - 5, hyy + 2, Math.PI - 0.6 + Math.sin(p.t * 0.2) * 0.2, 6, 3, L.hair);
+  bkDot(g, hx - 5, hyy, 10, 10, skin);
+  bkDot(g, hx - 5, hyy - 1, 10, 3, L.hair);                                   /* hair cap */
+  if (L.part) bkDot(g, hx - 5, hyy + 2, 3, 3, L.hair);
+  else bkDot(g, hx - 5, hyy + 1, 2, 4, L.hair);
+  if (beast) { bkDot(g, hx - 6, hyy - 3, 3, 3, L.hair); bkDot(g, hx + 1, hyy - 3, 3, 3, L.hair); }
+  bkDot(g, hx + 2, hyy + 4, 1, 1, L.eye || "#141014");                       /* eye */
+  if (beast) bkDot(g, hx + 2, hyy + 4, 2, 1, "#FF3B3B");
+  if (L.stache) bkDot(g, hx + 1, hyy + 7, 4, 1, L.hair);
+  else bkDot(g, hx + 2, hyy + 8, 2, 1, bkShade(skin, 0.7));
+  if (L.wrap) { bkDot(g, hx - 5, hyy - 1, 10, 3, L.wrap); bkLimb(g, hx - 5, hyy, Math.PI - 0.4, 4, 2, L.wrap); }
+  if (L.hat) { bkDot(g, hx - 7, hyy - 1, 14, 1, L.hat); bkDot(g, hx - 4, hyy - 5, 8, 4, L.hat); bkDot(g, hx - 4, hyy - 2, 8, 1, L.band); }
+  if (L.visor) bkDot(g, hx - 4, hyy - 1, 11, 2, L.visor);
+
+  /* front leg, front arm, weapon */
+  k = bkLimb(g, cx + 1, hy, P.lF, 8, 4, L.skirt || L.dress ? skin : legC);
+  k = bkLimb(g, k[0], k[1], P.kF, 8, 4, L.skirt || L.dress ? skin : (L.pantsLeg === false ? skin : legC));
+  bkDot(g, k[0] - 2, k[1] - 1, 5, 2, "#241C1C");
+  e = bkLimb(g, shx + 1, shy + 2, P.aF, armA, armTh, L.coat || (top && !L.open && c.id !== "pacquiao" && c.id !== "lapulapu") ? (top || skin) : skin);
+  const hF = bkLimb(g, e[0], e[1], P.eF, armB, armTh, skin);
+  if (beast) bkClaws(g, hF, P.eF);
+  else bkWeapon(g, c, L, hF, P.eF, P);
+  g.restore();
+}
+function bkClaws(g, h, a) {
+  for (let j = -1; j <= 1; j++) bkLimb(g, h[0], h[1], a + j * 0.35, 4, 1, "#EDE4D0");
+}
+function bkShieldDraw(g, h, a) {
+  /* a kalasag: tall, narrow, wood with a red band */
+  bkDot(g, h[0] - 3, h[1] - 9, 7, 18, "#6E4220");
+  bkDot(g, h[0] - 2, h[1] - 8, 5, 16, "#8A5A2E");
+  bkDot(g, h[0] - 2, h[1] - 1, 5, 3, "#C8352B");
+}
+function bkWeapon(g, c, L, h, a, P) {
+  const w = L.weapon;
+  if (w === "kampilan") {
+    bkLimb(g, h[0], h[1], a + Math.PI, 3, 2, "#4A2C16");
+    const tip = bkLimb(g, h[0], h[1], a, 19, 2, "#D8DEE6");
+    bkLimb(g, tip[0], tip[1], a - 0.7, 3, 1, "#D8DEE6"); bkLimb(g, tip[0], tip[1], a + 0.7, 2, 1, "#D8DEE6");
+  } else if (w === "foil") {
+    bkDot(g, h[0] - 1, h[1] - 2, 3, 4, "#E8C060");
+    bkLimb(g, h[0], h[1], a, 22, 1, "#ECECF4");
+    if (P.hold) bkDot(g, h[0] - 3, h[1] - 6, 6, 5, "#7A2A2A");
+  } else if (w === "cue") {
+    bkLimb(g, h[0], h[1], a + Math.PI, 8, 2, "#2A1A12");
+    const tip = bkLimb(g, h[0], h[1], a, 26, 1, "#D9B87A");
+    bkDot(g, tip[0] - 1, tip[1] - 1, 2, 2, "#5AA0FF");
+    if (P.hold) { bkDot(g, h[0] - 3, h[1] - 6, 6, 6, "#F2F2F2"); bkDot(g, h[0] - 1, h[1] - 4, 2, 2, "#D42A2A"); }
+  } else if (w === "racket") {
+    const end = bkLimb(g, h[0], h[1], a, 6, 2, "#222228");
+    const rx = end[0] + Math.cos(a) * 5, ry = end[1] + Math.sin(a) * 5;
+    for (let j = 0; j < 16; j++) {
+      const t = (j / 16) * Math.PI * 2;
+      bkDot(g, rx + Math.cos(t) * 4.5, ry + Math.sin(t) * 5.5, 1, 1, L.trim);
+    }
+    bkDot(g, rx - 2, ry - 3, 4, 6, "rgba(255,255,255,0.35)");
+    if (P.hold) bkDot(g, h[0] - 2, h[1] - 6, 4, 4, "#E6F25A");
+  } else if (w === "mic") {
+    bkLimb(g, h[0], h[1], a, 4, 2, "#2A2A30");
+    const e = [h[0] + Math.cos(a) * 5, h[1] + Math.sin(a) * 5];
+    bkDot(g, e[0] - 2, e[1] - 2, 4, 4, "#C8C8D4");
+  } else if (w === "gloves") {
+    bkDot(g, h[0] - 3, h[1] - 3, 6, 6, L.glove);
+    bkDot(g, h[0] - 2, h[1] - 2, 2, 2, bkShade(L.glove, 1.3));
+  } else if (w === "claws") {
+    bkClaws(g, h, a);
+  }
+}
+
+/* one fighter, anywhere: (x, y) are its feet in the current transform,
+   `h` its height there in px */
+function bkDrawFighter(p, x, y, h, opt) {
+  opt = opt || {};
+  const c = bkChar(p);
+  if (c.axie) return bkDrawAxie(p, x, y, h, opt);
+  const cv = bkSprCanvas(opt.slot === undefined ? p.i : opt.slot);
+  const g = cv.getContext("2d");
+  bkDoll(g, c, bkPose(p, c), p);
+  const S = h / 44;
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  if (opt.alpha !== undefined) ctx.globalAlpha = opt.alpha;
+  if (opt.flash) ctx.filter = "brightness(2.2)";
+  else if (opt.dim) ctx.filter = "saturate(0.3) brightness(0.8)";
+  ctx.translate(x, y);
+  ctx.scale((p.face || 1) * S, S);
+  ctx.drawImage(cv, -32, -(BK_SPR - 2));
+  ctx.restore();
+}
+
+/* the guest: Buba's Beast rig, wearing the parts that make its moves */
+function bkDrawAxie(p, x, y, h, opt) {
+  const c = CHARS.find(k => k.id === "buba");
+  let anim = c.anim.idle, at = (p.t || 0) / 60;
+  if (p.st === "walk") anim = c.anim.air;
+  else if (p.st === "air" || p.st === "jsq" || p.st === "helpless" || p.st === "airdodge") anim = c.anim.air;
+  else if (p.st === "hurt" || p.st === "dizzy") anim = c.anim.kb;
+  else if (p.st === "move") { anim = c.anim.kick; at = Math.min(0.5, p.mf / 40); }
+  else if (p.st === "land") anim = c.anim.land;
+  const fake = { facing: p.face || 1, st: "", t: p.t || 0, inflate: 0, tint: false, cos: null, x, y: 0, dead: false };
+  ctx.save();
+  if (opt.alpha !== undefined) ctx.globalAlpha = opt.alpha;
+  if (opt.flash) ctx.filter = "brightness(2)";
+  else if (opt.dim) ctx.filter = "saturate(0.3) brightness(0.8)";
+  const sp = spineFor(c);
+  if (sp && sp.ready) drawAxie(fake, c, { anim, animT: at, px: x, py: y, portrait: true, scale: h / (c.artH * c.hurtR) * 1.2 });
+  else { ctx.fillStyle = c.col; ctx.beginPath(); ctx.ellipse(x, y - h * 0.45, h * 0.55, h * 0.45, 0, 0, 7); ctx.fill(); }
+  ctx.restore();
+  bkDrawParts(p, x, y, h, p.face || 1, opt);
+}
+function bkDrawParts(p, x, y, h, face, opt) {
+  const k = h / 56, P = p.parts || {};
+  ctx.save();
+  if (opt.alpha !== undefined) ctx.globalAlpha = opt.alpha;
+  ctx.translate(x, y); ctx.scale(face * k, k);
+  ctx.lineCap = "round";
+  /* horn */
+  if (P.horn === 0) { ctx.strokeStyle = "#E8DCC0"; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(22, -58, 8, Math.PI * 1.1, Math.PI * 2.1); ctx.stroke(); }
+  else { ctx.fillStyle = "#C9A0FF"; ctx.beginPath(); ctx.moveTo(16, -58); ctx.lineTo(30, -82); ctx.lineTo(26, -56); ctx.fill(); }
+  /* back */
+  if (P.back === 0) { ctx.fillStyle = "#FFB070"; for (let j = 0; j < 4; j++) { ctx.beginPath(); ctx.moveTo(-14 + j * 8, -60); ctx.lineTo(-10 + j * 8, -74); ctx.lineTo(-6 + j * 8, -60); ctx.fill(); } }
+  else { ctx.fillStyle = rgba("#9FE6FF", 0.9); ctx.beginPath(); ctx.ellipse(-8, -70, 16, 7, -0.5, 0, 7); ctx.fill(); }
+  /* tail */
+  if (P.tail === 0) { ctx.strokeStyle = "#8A6A44"; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(-26, -30); ctx.lineTo(-38, -40); ctx.stroke(); ctx.fillStyle = "#B88A5A"; ctx.beginPath(); ctx.arc(-40, -42, 7, 0, 7); ctx.fill(); }
+  else { ctx.strokeStyle = "#7CF0B4"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-26, -30); ctx.quadraticCurveTo(-50, -34, -44, -54); ctx.stroke(); }
+  /* mouth */
+  if (P.mouth === 0) { ctx.fillStyle = "#FFFFFF"; ctx.fillRect(26, -34, 2, 5); ctx.fillRect(31, -34, 2, 5); }
+  ctx.restore();
+}
+
+/* =========================== BAKBAKAN: stages ========================== */
+const bkCam = { x: 0, y: -80, z: 1 };
+let bkShake = 0;
+const BK_VIEW_Y = 250;          /* screen y of the camera centre */
+
+function bkCamera(s, snap) {
+  const S = BK_STAGES[s.stage];
+  let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9, any = false;
+  for (const p of s.p) {
+    if (p.st === "dead" || p.st === "out") continue;
+    any = true;
+    x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); y0 = Math.min(y0, p.y - 70); y1 = Math.max(y1, p.y);
+  }
+  if (!any) { x0 = S.main.x0; x1 = S.main.x1; y0 = -200; y1 = 0; }
+  x0 = Math.min(x0, S.main.x0 + 60); x1 = Math.max(x1, S.main.x1 - 60);
+  const w = x1 - x0 + 260, h = y1 - y0 + 220;
+  const z = clamp(Math.min(STAGE_W / w, (STAGE_H - 110) / h), 0.55, 1.2);
+  const tx = clamp((x0 + x1) / 2, S.blast.l + STAGE_W / 2 / z, S.blast.r - STAGE_W / 2 / z);
+  const ty = clamp((y0 + y1) / 2 - 10, S.blast.t + 260 / z, 120);
+  const k = snap ? 1 : 0.085;
+  bkCam.x += (tx - bkCam.x) * k; bkCam.y += (ty - bkCam.y) * k; bkCam.z += (z - bkCam.z) * k;
+}
+function bkSX(x) { return (x - bkCam.x) * bkCam.z + STAGE_W / 2; }
+function bkSY(y) { return (y - bkCam.y) * bkCam.z + BK_VIEW_Y; }
+
+function bkDrawBackdrop(stage, t) {
+  const px = bkCam.x, py = bkCam.y;
+  if (stage === 0) {
+    /* Mactan at sunrise: the sun over the water, islands, palms */
+    const hz = 300 - py * 0.06;
+    const g = ctx.createLinearGradient(0, 0, 0, hz);
+    g.addColorStop(0, "#1A2552"); g.addColorStop(0.55, "#B8607A"); g.addColorStop(1, "#F7B96E");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, STAGE_W, hz + 1);
+    const sx = STAGE_W * 0.7 - px * 0.04;
+    const sg = ctx.createRadialGradient(sx, hz - 30, 10, sx, hz - 30, 140);
+    sg.addColorStop(0, rgba("#FFE8A8", 0.9)); sg.addColorStop(0.3, rgba("#FFC26E", 0.35)); sg.addColorStop(1, rgba("#FFC26E", 0));
+    ctx.fillStyle = sg; ctx.fillRect(0, 0, STAGE_W, hz);
+    ctx.fillStyle = "#FFE3A0"; ctx.beginPath(); ctx.arc(sx, hz - 30, 34, 0, 7); ctx.fill();
+    ctx.fillStyle = "#5A3A5E";
+    const isl = (cx, w, hh) => { ctx.beginPath(); ctx.moveTo(cx - w, hz); ctx.quadraticCurveTo(cx - w * 0.3, hz - hh, cx, hz - hh * 0.9); ctx.quadraticCurveTo(cx + w * 0.4, hz - hh, cx + w, hz); ctx.fill(); };
+    isl(160 - px * 0.08, 150, 34); isl(420 - px * 0.08, 90, 20); isl(880 - px * 0.08, 170, 40);
+    const sg2 = ctx.createLinearGradient(0, hz, 0, STAGE_H);
+    sg2.addColorStop(0, "#3E7C9A"); sg2.addColorStop(1, "#0F2A40");
+    ctx.fillStyle = sg2; ctx.fillRect(0, hz, STAGE_W, STAGE_H - hz);
+    ctx.fillStyle = rgba("#FFE3A0", 0.35);
+    for (let j = 0; j < 14; j++) {
+      const yy = hz + 6 + j * j * 1.6, w = 30 + j * 6, xx = sx + Math.sin(t * 0.02 + j) * 12 - w / 2;
+      ctx.fillRect(xx, yy, w, 2);
+    }
+    /* palms, nearer, so they move more */
+    for (const [bx, sc] of [[-60, 1.1], [1080, 1.25], [930, 0.8]]) bkPalm(bx - px * 0.25, hz + 60, sc, t);
+  } else {
+    /* Lunacia: the plant clearing, pushed back */
+    const im = bgReady(7);
+    if (im) {
+      const h = STAGE_H * 1.25, w = h * (im.naturalWidth / im.naturalHeight);
+      ctx.drawImage(im, (STAGE_W - w) / 2 - px * 0.1, -40 - py * 0.05, w, h);
+    } else {
+      const g = ctx.createLinearGradient(0, 0, 0, STAGE_H);
+      g.addColorStop(0, "#1D2B4A"); g.addColorStop(1, "#2E5A3A");
+      ctx.fillStyle = g; ctx.fillRect(0, 0, STAGE_W, STAGE_H);
+    }
+    ctx.fillStyle = rgba("#0B1020", 0.42); ctx.fillRect(0, 0, STAGE_W, STAGE_H);
+    for (let j = 0; j < 26; j++) {
+      const xx = (j * 137 - px * 0.15 + t * 0.2 * (j % 3)) % (STAGE_W + 40), yy = (j * 89 + Math.sin(t * 0.02 + j) * 20) % STAGE_H;
+      ctx.fillStyle = rgba("#D7FF9A", 0.25 + 0.25 * Math.sin(t * 0.05 + j));
+      ctx.fillRect((xx + STAGE_W + 40) % (STAGE_W + 40) - 20, yy, 2, 2);
+    }
+  }
+}
+function bkPalm(x, y, sc, t) {
+  ctx.save(); ctx.translate(x, y); ctx.scale(sc, sc);
+  ctx.strokeStyle = "#2A1A2E"; ctx.lineWidth = 9; ctx.lineCap = "round";
+  ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(30, -120, 10, -230); ctx.stroke();
+  ctx.fillStyle = "#2A1A2E";
+  for (let j = 0; j < 7; j++) {
+    const a = -Math.PI / 2 + (j - 3) * 0.5 + Math.sin(t * 0.02 + j) * 0.04;
+    ctx.save(); ctx.translate(10, -230); ctx.rotate(a);
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(50, -14, 100, 18); ctx.quadraticCurveTo(50, 0, 0, 6); ctx.fill();
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+/* the stage itself, in world units under the camera transform */
+function bkDrawStage(s, t) {
+  const S = BK_STAGES[s.stage], m = S.main;
+  if (s.stage === 0) {
+    /* the shore: sand on rock, the sea lapping at it */
+    ctx.fillStyle = "#6E5038";
+    ctx.beginPath(); ctx.moveTo(m.x0, m.y); ctx.lineTo(m.x1, m.y); ctx.lineTo(m.x1 - 30, m.bot); ctx.lineTo(m.x0 + 30, m.bot); ctx.fill();
+    ctx.fillStyle = "#5A402C";
+    for (let j = 0; j < 5; j++) ctx.fillRect(m.x0 + 20 + j * 8, 26 + j * 22, m.x1 - m.x0 - 40 - j * 16, 6);
+    ctx.fillStyle = "#EBD29A"; ctx.fillRect(m.x0, m.y, m.x1 - m.x0, 12);
+    ctx.fillStyle = "#D9BC80"; for (let x = m.x0 + 6; x < m.x1; x += 22) ctx.fillRect(x, m.y + 4, 6, 2);
+    /* water in front of the rock */
+    ctx.fillStyle = rgba("#2E6C8A", 0.72);
+    ctx.fillRect(m.x0 - 900, 70 + Math.sin(t * 0.04) * 3, m.x1 - m.x0 + 1800, 400);
+    ctx.fillStyle = rgba("#E8F6FF", 0.5);
+    for (let x = m.x0 - 880; x < m.x1 + 880; x += 60) ctx.fillRect(x + Math.sin(t * 0.05 + x) * 8, 70 + Math.sin(t * 0.04) * 3, 26, 3);
+    for (let k = 0; k < S.plats.length; k++) bkBangka(S.plats[k], bkPlatX(S.plats[k], s.tick), k === 2);
+  } else {
+    /* the floating island */
+    ctx.fillStyle = "#5A3E26";
+    ctx.beginPath(); ctx.moveTo(m.x0, m.y); ctx.lineTo(m.x1, m.y); ctx.lineTo(m.x1 - 60, m.bot); ctx.lineTo(60, m.bot + 70); ctx.lineTo(-40, m.bot + 110); ctx.lineTo(m.x0 + 80, m.bot + 40); ctx.fill();
+    ctx.strokeStyle = "#3D6E2E"; ctx.lineWidth = 3;
+    for (let j = 0; j < 7; j++) { const x = m.x0 + 60 + j * 70; ctx.beginPath(); ctx.moveTo(x, 10); ctx.quadraticCurveTo(x + 10, 60 + j * 6, x - 4, 90 + j * 10 + Math.sin(t * 0.03 + j) * 4); ctx.stroke(); }
+    ctx.fillStyle = "#79C25A"; ctx.fillRect(m.x0, m.y, m.x1 - m.x0, 10);
+    ctx.fillStyle = "#9BE07A"; for (let x = m.x0 + 4; x < m.x1; x += 14) ctx.fillRect(x, m.y - 3, 4, 4);
+    for (let k = 0; k < S.plats.length; k++) bkLeafPlat(S.plats[k], bkPlatX(S.plats[k], s.tick), t);
+  }
+}
+function bkBangka(pl, x, raft) {
+  const x0 = x - pl.w / 2, x1 = x + pl.w / 2, y = pl.y;
+  if (raft) {
+    /* a bamboo raft for the top */
+    ctx.fillStyle = "#C9A55E"; ctx.fillRect(x0, y, pl.w, 8);
+    ctx.fillStyle = "#9C7C3E"; for (let xx = x0 + 10; xx < x1; xx += 14) ctx.fillRect(xx, y, 2, 8);
+    ctx.fillStyle = "#7A5C2E"; ctx.fillRect(x0 + 8, y + 8, 3, 12); ctx.fillRect(x1 - 11, y + 8, 3, 12);
+    return;
+  }
+  /* a bangka: hull with turned-up ends, painted band, bamboo outriggers */
+  ctx.fillStyle = "#3C2A1E";
+  ctx.beginPath(); ctx.moveTo(x0 - 10, y - 8); ctx.lineTo(x1 + 10, y - 8); ctx.quadraticCurveTo(x1, y + 22, x1 - 22, y + 24);
+  ctx.lineTo(x0 + 22, y + 24); ctx.quadraticCurveTo(x0, y + 22, x0 - 10, y - 8); ctx.fill();
+  ctx.fillStyle = "#E8E2D2"; ctx.fillRect(x0 + 2, y + 4, pl.w - 4, 4);
+  ctx.fillStyle = "#C8352B"; ctx.fillRect(x0 + 6, y + 9, pl.w - 12, 3);
+  ctx.fillStyle = "#8A6A44"; ctx.fillRect(x0, y, pl.w, 3);
+  ctx.strokeStyle = "#C9A55E"; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(x0 - 40, y + 14); ctx.lineTo(x1 + 40, y + 14); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x - 20, y + 2); ctx.lineTo(x - 30, y + 14); ctx.moveTo(x + 20, y + 2); ctx.lineTo(x + 30, y + 14); ctx.stroke();
+  ctx.fillStyle = "#B08A4E"; ctx.fillRect(x0 - 48, y + 12, 14, 5); ctx.fillRect(x1 + 34, y + 12, 14, 5);
+}
+function bkLeafPlat(pl, x, t) {
+  const x0 = x - pl.w / 2, y = pl.y;
+  ctx.fillStyle = "#7A5A36"; ctx.fillRect(x0, y, pl.w, 9);
+  ctx.fillStyle = "#5E4428"; for (let xx = x0 + 8; xx < x0 + pl.w; xx += 18) ctx.fillRect(xx, y + 2, 2, 7);
+  ctx.fillStyle = "#79C25A";
+  for (let j = 0; j < 4; j++) { ctx.beginPath(); ctx.ellipse(x0 + 10 + j * (pl.w - 20) / 3, y - 1, 9, 4, Math.sin(t * 0.03 + j) * 0.2, 0, 7); ctx.fill(); }
+  ctx.strokeStyle = "#3D6E2E"; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(x0 + 14, y + 9); ctx.quadraticCurveTo(x0 + 18, y + 30, x0 + 10, y + 40 + Math.sin(t * 0.04) * 3); ctx.stroke();
+}
+
+/* =========================== BAKBAKAN: match drawing =================== */
+const bkFx = [];          /* render-only: sparks, rings, words that pop */
+function bkPop(x, y, text, col, size) { bkFx.push({ k: "txt", x, y, text, col, size: size || 18, t: 0, life: 50 }); }
+function bkSpark(x, y, n, col, big) {
+  for (let j = 0; j < n; j++) {
+    const a = (j / n) * Math.PI * 2 + j;
+    const v = (big ? 7 : 4) * (0.5 + ((j * 37) % 10) / 10);
+    bkFx.push({ k: "spark", x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, col, t: 0, life: big ? 26 : 16 });
+  }
+  bkFx.push({ k: "ring", x, y, col, t: 0, life: big ? 22 : 12, r: big ? 70 : 34 });
+}
+
+/* sounds and effects for the sim's events */
+function bkPlayEv(s, e) {
+  const b = e.split(":"), k = b[0], p = b.length > 1 ? s.p[+b[1]] : null;
+  const at = q => [q.x, q.y - bkStats(q).H * 0.55];
+  if (k === "count") SFX.move();
+  else if (k === "go") { say("fight", 2); SFX.fight(); }
+  else if (k === "hit" || k === "smash") {
+    const [x, y] = at(p), big = k === "smash";
+    bkSpark(x, y, big ? 14 : 7, big ? "#FFE08A" : "#FFFFFF", big);
+    if (big) { SFX.sfhvy(); bkShake = Math.max(bkShake, 12); } else SFX.sfhit();
+  }
+  else if (k === "block" || k === "clang" || k === "armor") { SFX.sfblk(); if (k === "clang") bkPop(p.x, p.y - 90, "KALASAG", "#E8DCC0", 13); }
+  else if (k === "break") { SFX.trade(); bkPop(p.x, p.y - 100, "SHIELD BREAK", "#FF6E7F", 18); bkShake = 10; }
+  else if (k === "counter") { SFX.lock(); bkPop(p.x, p.y - 100, "MACTAN TIDE!", "#7CD4FF", 22); bkShake = 8; }
+  else if (k === "reflect") { SFX.kb(); bkPop(p.x, p.y - 96, "RETURN!", "#6FD4FF", 18); }
+  else if (k === "beat") bkPop(p.x, p.y - 96, "ON BEAT", "#FFC23D", 16);
+  else if (k === "pulse") tone(1320, 1320, 0.035, "sine", 0.035);
+  else if (k === "bank") tone(900, 1200, 0.05, "square", 0.06);
+  else if (k === "cue") { tone(1400, 600, 0.06, "square", 0.08); }
+  else if (k === "shift") { SFX.float(); bkPop(p.x, p.y - 96, p.form === "beast" ? "BEAST" : "HUMAN", "#C04A6A", 14); }
+  else if (k === "moon") { SFX.sfspec(); bkPop(p.x, p.y - 110, "BILOG NA BUWAN", "#F2E6B0", 22); bkShake = 10; }
+  else if (k === "spec") SFX.whiff();
+  else if (k === "jump" || k === "jump2") SFX.dive();
+  else if (k === "roll" || k === "step") SFX.whiff();
+  else if (k === "ko") {
+    SFX.hit(); bkShake = 22;
+    const x = +b[3], y = +b[4];
+    bkFx.push({ k: "blast", x, y, side: b[2], col: BK_COLS[+b[1]], t: 0, life: 40 });
+  }
+  else if (k === "game") { SFX.time(); say("winner", 3); }
+  else if (k === "timeup") { SFX.time(); say("time", 3); }
+}
+
+function bkStepFx() {
+  for (let j = bkFx.length - 1; j >= 0; j--) {
+    const f = bkFx[j];
+    f.t++;
+    if (f.k === "spark") { f.x += f.vx; f.y += f.vy; f.vx *= 0.88; f.vy = f.vy * 0.88 + 0.2; }
+    if (f.k === "txt") f.y -= 0.8;
+    if (f.t >= f.life) bkFx.splice(j, 1);
+  }
+  if (bkShake > 0) bkShake--;
+}
+
+function bkDrawFxWorld() {
+  for (const f of bkFx) {
+    const a = 1 - f.t / f.life;
+    if (f.k === "spark") { ctx.fillStyle = rgba(f.col, a); ctx.fillRect(f.x - 2, f.y - 2, 4, 4); }
+    else if (f.k === "ring") {
+      ctx.strokeStyle = rgba(f.col, a * 0.8); ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(f.x, f.y, f.r * (1 - a * 0.7), 0, 7); ctx.stroke();
+    } else if (f.k === "txt") {
+      txt(f.text, f.x, f.y, f.size, rgba(f.col, Math.min(1, a * 2)), "center", FD, 3);
+    } else if (f.k === "blast") {
+      /* a column of light from where they left the screen */
+      const ang = f.side === "l" ? 0 : f.side === "r" ? Math.PI : f.side === "b" ? -Math.PI / 2 : Math.PI / 2;
+      ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(ang);
+      const g = ctx.createLinearGradient(0, 0, 700, 0);
+      g.addColorStop(0, rgba("#FFFFFF", a)); g.addColorStop(0.2, rgba(f.col, a * 0.8)); g.addColorStop(1, rgba(f.col, 0));
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.moveTo(0, -10 - (1 - a) * 30); ctx.lineTo(700, -90); ctx.lineTo(700, 90); ctx.lineTo(0, 10 + (1 - a) * 30); ctx.fill();
+      ctx.restore();
+    }
+  }
+}
+
+function bkDrawProj(s, t) {
+  for (const q of s.proj) {
+    const col = BK_COLS[q.owner];
+    ctx.save(); ctx.translate(q.x, q.y);
+    if (q.kind === "noli" || q.kind === "fili") {
+      ctx.rotate(q.kind === "noli" ? q.t * 0.25 : 0);
+      ctx.fillStyle = q.kind === "noli" ? "#7A2A2A" : "#23415E"; ctx.fillRect(-q.w / 2, -q.h / 2, q.w, q.h);
+      ctx.fillStyle = "#F2E8D0"; ctx.fillRect(-q.w / 2 + 2, -q.h / 2 + 2, q.w - 5, q.h - 4);
+      ctx.fillStyle = q.kind === "noli" ? "#7A2A2A" : "#23415E"; ctx.fillRect(-q.w / 2, -q.h / 2, 3, q.h);
+    } else if (q.kind === "pen") {
+      ctx.rotate(Math.atan2(q.vy, q.vx)); ctx.fillStyle = "#1A1A22"; ctx.fillRect(-6, -1.5, 10, 3); ctx.fillStyle = "#E8C060"; ctx.fillRect(4, -1, 3, 2);
+    } else if (q.kind === "tide") {
+      const a = Math.min(1, q.life / 20);
+      ctx.fillStyle = rgba("#5FB8E8", 0.75 * a);
+      ctx.beginPath(); ctx.moveTo(-q.w / 2, q.h / 2); ctx.quadraticCurveTo(0, -q.h * 0.9, q.w / 2 * Math.sign(q.vx || 1), q.h / 2); ctx.fill();
+      ctx.fillStyle = rgba("#E8F6FF", 0.8 * a);
+      for (let j = 0; j < 5; j++) ctx.fillRect(-q.w / 2 + j * 14, -q.h * 0.3 + Math.sin(t * 0.3 + j) * 4, 8, 3);
+    } else if (q.kind === "roar") {
+      ctx.strokeStyle = rgba("#FFD45A", 1 - q.t / 16); ctx.lineWidth = 4;
+      for (let j = 0; j < 3; j++) { ctx.beginPath(); ctx.arc(0, 0, 14 + q.t * 2.4 + j * 10, -1, 1); ctx.stroke(); }
+    } else if (q.kind === "sound") {
+      ctx.scale(Math.sign(q.vx || 1), 1);
+      ctx.strokeStyle = rgba("#FFC23D", 0.85); ctx.lineWidth = 3;
+      for (let j = 0; j < 3; j++) { ctx.beginPath(); ctx.arc(-j * 9, 0, q.h / 2 - j * 4, -1.1, 1.1); ctx.stroke(); }
+      if (q.beat) { ctx.fillStyle = rgba("#FFF2C0", 0.5); ctx.beginPath(); ctx.arc(0, 0, 6, 0, 7); ctx.fill(); }
+    } else if (q.kind === "serve") {
+      ctx.fillStyle = "#E6F25A"; ctx.beginPath(); ctx.arc(0, 0, 6, 0, 7); ctx.fill();
+      ctx.strokeStyle = "#FFFFFF"; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(-3, 0, 5, -1, 1); ctx.stroke();
+      if (q.refl) { ctx.strokeStyle = rgba("#6FD4FF", 0.6); ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-q.vx * 2, -q.vy * 2); ctx.lineTo(0, 0); ctx.stroke(); }
+    } else if (q.kind === "ball") {
+      ctx.fillStyle = "#F4F0E4"; ctx.beginPath(); ctx.arc(0, 0, 7, 0, 7); ctx.fill();
+      ctx.fillStyle = ["#E8C020", "#2A5AD8", "#D42A2A"][q.owner % 3 === 0 ? 0 : q.t % 3 === 9 ? 1 : (q.owner + 1) % 3];
+      ctx.beginPath(); ctx.arc(0, 0, 4, 0, 7); ctx.fill();
+      if (q.shot) { ctx.strokeStyle = rgba(col, 0.7); ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-q.vx * 2.5, -q.vy * 2.5); ctx.lineTo(0, 0); ctx.stroke(); }
+    }
+    ctx.restore();
+  }
+}
+
+function bkDrawMatch(s) {
+  const t = app.t;
+  bkCamera(s, s.tick < 2);
+  ctx.save();
+  if (bkShake > 0 && SETTINGS.shake) ctx.translate(Math.sin(t * 2.7) * bkShake * 0.5, Math.cos(t * 3.1) * bkShake * 0.35);
+  bkDrawBackdrop(s.stage, t);
+  ctx.save();
+  ctx.translate(STAGE_W / 2, BK_VIEW_Y); ctx.scale(bkCam.z, bkCam.z); ctx.translate(-bkCam.x, -bkCam.y);
+  bkDrawStage(s, t);
+  /* the respawn halo */
+  for (const p of s.p) {
+    if (p.st !== "spawn") continue;
+    ctx.fillStyle = rgba(BK_COLS[p.i], 0.6); ctx.fillRect(p.x - 40, p.y + 2, 80, 5);
+    ctx.fillStyle = rgba("#FFFFFF", 0.7); ctx.fillRect(p.x - 34, p.y + 2, 68, 2);
+  }
+  for (const p of s.p) {
+    if (p.st === "dead" || p.st === "out") continue;
+    const c = bkStats(p);
+    const blink = p.inv > 0 && p.st !== "move" && p.st !== "roll" && p.st !== "dodge" && p.st !== "airdodge" && (t >> 2) % 2 === 0;
+    if (p.moon) {
+      const g = ctx.createRadialGradient(p.x, p.y - c.H / 2, 8, p.x, p.y - c.H / 2, 70);
+      g.addColorStop(0, rgba("#F2E6B0", 0.35)); g.addColorStop(1, rgba("#F2E6B0", 0));
+      ctx.fillStyle = g; ctx.fillRect(p.x - 70, p.y - c.H / 2 - 70, 140, 140);
+    }
+    bkDrawFighter(p, p.x, p.y, c.H, { alpha: blink ? 0.45 : p.st === "dodge" || p.st === "airdodge" && p.t < 21 ? 0.55 : 1, flash: p.flash > 3, dim: p.st === "helpless" });
+    if (p.st === "shield") {
+      const r = 18 + 22 * (p.shield / BK_SHIELD);
+      ctx.fillStyle = rgba(BK_COLS[p.i], 0.28); ctx.strokeStyle = rgba(BK_COLS[p.i], 0.8); ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(p.x, p.y - c.H / 2, r, 0, 7); ctx.fill(); ctx.stroke();
+    }
+    if (p.st === "dizzy") for (let j = 0; j < 3; j++) txt("✦", p.x + Math.cos(t * 0.15 + j * 2.1) * 16, p.y - c.H - 6 + Math.sin(t * 0.15 + j * 2.1) * 4, 12, "#FFE08A", "center");
+    if (p.st === "move" && p.mk === "S:d" && bkChar(p).id === "lapulapu" && p.mf >= 4 && p.mf <= 30 && (t >> 1) % 2) {
+      ctx.strokeStyle = rgba("#7CD4FF", 0.8); ctx.lineWidth = 2; ctx.strokeRect(p.x - 22, p.y - c.H - 6, 44, c.H + 8);
+    }
+    const m = p.st === "move" ? bkCurMove(p) : null;
+    if (m && m.reflect && p.mf >= m.reflect[0] && p.mf <= m.reflect[1]) {
+      const r = bkBox(p, m.reflect[3]);
+      ctx.strokeStyle = rgba("#6FD4FF", 0.5 + 0.4 * Math.sin(t * 0.8)); ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.ellipse(r[0] + r[2] / 2, r[1] + r[3] / 2, r[2] / 2, r[3] / 2, 0, 0, 7); ctx.stroke();
+    }
+    /* who is who */
+    const tag = p.cpu ? "CPU" : "P" + (p.i + 1);
+    txt(tag, p.x, p.y - c.H - 14, 11, BK_COLS[p.i], "center", FD, 2);
+    ctx.fillStyle = BK_COLS[p.i];
+    ctx.beginPath(); ctx.moveTo(p.x - 4, p.y - c.H - 10); ctx.lineTo(p.x + 4, p.y - c.H - 10); ctx.lineTo(p.x, p.y - c.H - 5); ctx.fill();
+  }
+  bkDrawProj(s, t);
+  bkDrawFxWorld();
+  if (showBoxes) bkDrawBoxes(s);
+  ctx.restore();
+  ctx.restore();
+  bkDrawOffscreen(s);
+  if (!(s.phase === "end" && s.pt >= BK_END)) bkDrawHUD(s, t);
+  bkDrawBanners(s, t);
+}
+
+/* F1: every hurtbox, live hitbox and projectile box */
+function bkDrawBoxes(s) {
+  ctx.lineWidth = 1.5;
+  for (const p of s.p) {
+    if (p.st === "dead" || p.st === "out") continue;
+    const h = bkHurt(p);
+    ctx.strokeStyle = p.inv > 0 ? rgba("#7CF0B4", 0.9) : rgba("#54C8FF", 0.9);
+    ctx.strokeRect(h[0], h[1], h[2], h[3]);
+    const m = p.st === "move" ? bkCurMove(p) : null;
+    if (m && p.mf >= m.s && p.mf < m.s + m.a) for (const r of m.hb) { const b = bkBox(p, r); ctx.fillStyle = rgba("#FF4A4A", 0.4); ctx.fillRect(b[0], b[1], b[2], b[3]); }
+  }
+  for (const q of s.proj) { const b = bkProjBox(q); ctx.strokeStyle = rgba("#FFD45A", 0.9); ctx.strokeRect(b[0], b[1], b[2], b[3]); }
+  const S = BK_STAGES[s.stage];
+  ctx.strokeStyle = rgba("#FF4A4A", 0.5); ctx.setLineDash([8, 6]);
+  ctx.strokeRect(S.blast.l, S.blast.t, S.blast.r - S.blast.l, S.blast.b - S.blast.t);
+  ctx.setLineDash([]);
+  txt("tick " + s.tick, bkCam.x - STAGE_W / 2 / bkCam.z + 10, bkCam.y - BK_VIEW_Y / bkCam.z + 20, 12, "#7CF0B4", "left", FM);
+}
+
+/* a bubble at the screen edge for anyone the camera cannot see */
+function bkDrawOffscreen(s) {
+  for (const p of s.p) {
+    if (p.st === "dead" || p.st === "out") continue;
+    const x = bkSX(p.x), y = bkSY(p.y - 30);
+    if (x > 0 && x < STAGE_W && y > 0 && y < STAGE_H - 96) continue;
+    const bx = clamp(x, 34, STAGE_W - 34), by = clamp(y, 34, STAGE_H - 130);
+    ctx.fillStyle = rgba("#08070F", 0.8); ctx.strokeStyle = BK_COLS[p.i]; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(bx, by, 24, 0, 7); ctx.fill(); ctx.stroke();
+    ctx.save(); ctx.beginPath(); ctx.arc(bx, by, 22, 0, 7); ctx.clip();
+    bkDrawFighter(p, bx, by + 18, 36, {});
+    ctx.restore();
+    const a = Math.atan2(y - by, x - bx);
+    ctx.fillStyle = BK_COLS[p.i];
+    ctx.beginPath(); ctx.moveTo(bx + Math.cos(a) * 34, by + Math.sin(a) * 34);
+    ctx.lineTo(bx + Math.cos(a + 0.4) * 25, by + Math.sin(a + 0.4) * 25); ctx.lineTo(bx + Math.cos(a - 0.4) * 25, by + Math.sin(a - 0.4) * 25); ctx.fill();
+  }
+}
+
+function bkPctCol(d) {
+  const k = Math.min(1, d / 150);
+  const r = 255, g = Math.round(255 - 170 * k), b = Math.round(255 - 215 * k);
+  return "rgb(" + r + "," + g + "," + b + ")";
+}
+
+function bkDrawHUD(s, t) {
+  const n = s.p.length, W = 214, G = 12, x0 = (STAGE_W - (n * W + (n - 1) * G)) / 2, y = STAGE_H - 92;
+  for (const p of s.p) {
+    const c = bkChar(p), x = x0 + p.i * (W + G), out = p.st === "out";
+    ctx.save();
+    if (out) ctx.globalAlpha = 0.45;
+    ctx.fillStyle = rgba("#0E0A20", 0.86); ctx.fillRect(x, y, W, 80);
+    ctx.fillStyle = BK_COLS[p.i]; ctx.fillRect(x, y, 4, 80);
+    /* portrait */
+    ctx.save(); ctx.beginPath(); ctx.rect(x + 8, y + 8, 64, 64); ctx.clip();
+    ctx.fillStyle = rgba(c.col, 0.22); ctx.fillRect(x + 8, y + 8, 64, 64);
+    bkDrawFighter({ ch: p.ch, st: "idle", t: 0, face: 1, form: p.form, parts: p.parts, i: p.i }, x + 40, y + 108, c.axie ? 70 : 96, { slot: 4 + p.i });
+    ctx.restore();
+    fitTxt(bkName(c), x + 80, y + 22, W - 88, 13, "#E7E3FB", "left", FD, 1.5);
+    if (p.cpu) txt("CPU", x + 80, y + 35, -8.5, rgba(BK_COLS[p.i], 0.8), "left", FM, 2);
+    const pct = Math.floor(p.dmg);
+    const shake = p.flash > 0 ? (p.flash % 2 ? 2 : -2) : 0;
+    txt(out ? "OUT" : pct + "%", x + 80 + shake, y + 62, 30, out ? "#7E78A8" : bkPctCol(p.dmg), "left", FD, 1);
+    /* stocks */
+    for (let j = 0; j < s.stocks; j++) {
+      ctx.fillStyle = j < p.stocks ? BK_COLS[p.i] : rgba("#E7E3FB", 0.15);
+      ctx.beginPath(); ctx.arc(x + W - 12 - j * 12, y + 34, 4, 0, 7); ctx.fill();
+    }
+    /* the signature mechanic's state, where it has one */
+    let meter = null;
+    if (c.beast) meter = p.moon ? ["FULL MOON", p.moon / 420, "#F2E6B0"] : [p.form === "beast" ? "BEAST · NIGHT" : "HUMAN · NIGHT", p.night / 100, "#C04A6A"];
+    else if (c.id === "pacquiao" && p.combo > 1 && s.tick - p.comboAt < 50) meter = ["COMBO ×" + p.combo, Math.min(1, p.combo / 6), "#FF6A3D"];
+    else if (c.id === "rizal") meter = [p.book ? "NEXT: FILI · FAST" : "NEXT: NOLI · STUNS", 1, p.book ? "#8FB3FF" : "#E07A6A"];
+    else if (c.id === "reyes") { const nb = s.proj.filter(q => q.kind === "ball" && q.owner === p.i).length; meter = ["BALLS " + nb + "/3", nb / 3, "#5FD08A"]; }
+    else if (c.id === "lapulapu") meter = [p.shield < BK_SHIELD ? "SHIELD" : "KALASAG UP", p.shield / BK_SHIELD, "#E0563B"];
+    if (meter) {
+      txt(meter[0], x + 80, y + 73, -8.5, rgba(meter[2], 0.95), "left", FM, 1.5);
+      ctx.fillStyle = rgba("#E7E3FB", 0.12); ctx.fillRect(x + 80, y + 75, 70, 2);
+      ctx.fillStyle = meter[2]; ctx.fillRect(x + 80, y + 75, 70 * clamp(meter[1], 0, 1), 2);
+    }
+    ctx.restore();
+  }
+  /* the clock, and Bruno's pulse when he is in the match */
+  const sec = Math.max(0, Math.ceil(s.time / 60));
+  txt(Math.floor(sec / 60) + ":" + String(sec % 60).padStart(2, "0"), STAGE_W / 2, 30, 20, rgba("#E7E3FB", 0.85), "center", FM, 2);
+  if (s.beat) {
+    const ph = (s.tick % BK_BEAT) / BK_BEAT, on = bkOnBeat(s.tick);
+    const r = 10 + 8 * (1 - ph);
+    ctx.strokeStyle = rgba("#FFC23D", on ? 0.95 : 0.35); ctx.lineWidth = on ? 3 : 2;
+    ctx.beginPath(); ctx.arc(STAGE_W / 2 + 70, 23, r, 0, 7); ctx.stroke();
+    ctx.fillStyle = rgba("#FFC23D", on ? 0.9 : 0.25); ctx.beginPath(); ctx.arc(STAGE_W / 2 + 70, 23, 5, 0, 7); ctx.fill();
+    txt("BEAT", STAGE_W / 2 + 92, 27, -9, rgba("#FFC23D", 0.6), "left", FM, 2);
+  }
+}
+
+function bkDrawBanners(s, t) {
+  if (s.phase === "intro") {
+    const k = Math.floor(s.pt / 40);
+    const word = s.pt < 30 ? "" : ["3", "3", "2", "1"][Math.min(3, k)] || "1";
+    if (s.pt < 30) {
+      txt(BK_STAGES[s.stage].name, STAGE_W / 2, 200, 30, rgba("#E7E3FB", Math.min(1, s.pt / 12)), "center", FD, 8);
+      txt(BK_STAGES[s.stage].blurb.toUpperCase(), STAGE_W / 2, 228, -12, rgba("#E7E3FB", 0.6), "center", FM, 3);
+    } else {
+      const u = ((s.pt - 30) % 40) / 40;
+      txt(word, STAGE_W / 2, 230, 110 - u * 30, rgba("#FFFFFF", 1 - u * 0.6), "center", FD, 4);
+    }
+  } else if (s.phase === "fight" && s.pt < 40) {
+    txt("BAKBAKAN!", STAGE_W / 2, 230, 76, rgba("#FF8A5C", 1 - s.pt / 40), "center", FD, 8);
+  } else if (s.phase === "end" && s.pt < BK_END) {
+    txt(s.time <= 0 ? "TIME!" : "GAME!", STAGE_W / 2, 230, 92, rgba("#FFFFFF", Math.min(1, s.pt / 10)), "center", FD, 10);
+  } else if (s.phase === "end") bkDrawResults(s, t);
+}
+const BK_END = 110;
+
+/* =========================== BAKBAKAN: results ========================= */
+function bkDrawResults(s, t) {
+  ctx.fillStyle = rgba("#08070F", 0.72); ctx.fillRect(0, 0, STAGE_W, STAGE_H);
+  const w = s.p[s.winner];
+  const wc = bkChar(w);
+  txt(s.time <= 0 ? "TIME · MOST STOCKS WINS" : "WINNER", STAGE_W / 2, 64, -12, rgba("#E7E3FB", 0.6), "center", FM, 5);
+  txt(bkName(wc), STAGE_W / 2, 104, 38, BK_COLS[w.i], "center", FD, 6);
+  ctx.fillStyle = rgba(wc.col, 0.16); ctx.fillRect(40, 150, 250, 250);
+  ctx.save(); ctx.beginPath(); ctx.rect(40, 150, 250, 250); ctx.clip();
+  bkDrawFighter({ ch: w.ch, st: "idle", t, face: 1, form: w.form, parts: w.parts, i: w.i }, 165, 380, wc.axie ? 120 : 160, { slot: 8 });
+  ctx.restore();
+  const cols = [["", 0], ["FIGHTER", 46], ["KOs", 260], ["FALLS", 330], ["DAMAGE DEALT", 410]];
+  const x0 = 330, y0 = 160;
+  for (const [h, dx] of cols) txt(h, x0 + dx, y0, -10, rgba("#E7E3FB", 0.5), "left", FM, 2);
+  s.order.forEach((i, r) => {
+    const p = s.p[i], c = bkChar(p), y = y0 + 22 + r * 50;
+    ctx.fillStyle = rgba(r === 0 ? "#2A2150" : "#120E28", 0.9); ctx.fillRect(x0 - 10, y, 560, 42);
+    ctx.fillStyle = BK_COLS[i]; ctx.fillRect(x0 - 10, y, 4, 42);
+    txt(String(r + 1), x0 + 6, y + 30, 24, r === 0 ? "#FFD98A" : "#E7E3FB", "left", FD);
+    fitTxt(bkName(c), x0 + 46, y + 20, 200, 15, "#E7E3FB", "left", FD, 1.5);
+    txt(p.cpu ? "CPU · " + BK_LEVELS[p.cpu.lvl] : "PLAYER " + (i + 1), x0 + 46, y + 35, -9, rgba(BK_COLS[i], 0.85), "left", FM, 2);
+    txt(String(p.ko), x0 + 260, y + 28, 18, "#E7E3FB", "left", FD);
+    txt(String(p.falls), x0 + 330, y + 28, 18, "#E7E3FB", "left", FD);
+    txt(Math.round(p.dealt) + "%", x0 + 410, y + 28, 18, "#E7E3FB", "left", FD);
+  });
+  if (s.pt > BK_END + 30) {
+    woodButton(STAGE_W / 2 - 230, STAGE_H - 84, 210, 40, "REMATCH", "#FFD98A", () => bkRematch());
+    woodButton(STAGE_W / 2 + 20, STAGE_H - 84, 210, 40, "CHARACTER SELECT", "#E7E3FB", () => bkToSelect());
+    txt(keyName(BINDS.p1lp) + " REMATCH      " + keyName(BINDS.p1hp) + " CHARACTER SELECT", STAGE_W / 2, STAGE_H - 22, -10, rgba("#E7E3FB", 0.45), "center", FM, 3);
+  }
+}
+
+/* =========================== BAKBAKAN: screens ========================= */
+/* app.bk holds the select screen's state and the match; it survives a
+   rematch so the same picks come back */
+function bkSlotsDefault() {
+  return [
+    { kind: "human", ch: 0, lock: false, parts: { horn: 0, mouth: 0, back: 0, tail: 0 }, focus: "grid", row: 0 },
+    { kind: "cpu", ch: 1, lock: true, parts: { horn: 1, mouth: 1, back: 0, tail: 1 }, focus: "grid", row: 0 },
+    { kind: "off", ch: 2, lock: true, parts: { horn: 0, mouth: 1, back: 1, tail: 0 }, focus: "grid", row: 0 },
+    { kind: "off", ch: BK_AXIE, lock: true, parts: { horn: 1, mouth: 0, back: 1, tail: 1 }, focus: "grid", row: 0 }
+  ];
+}
+function bkOpen() {
+  if (!app.bk) app.bk = { slots: bkSlotsDefault(), stage: 0, stocks: 3, lvl: 1, row: 0, prev: [0, 0, 0, 0], t: 0, m: null };
+  const b = app.bk;
+  for (const sl of b.slots) if (sl.kind === "human") { sl.lock = false; sl.focus = "grid"; }
+  b.prev = bkIn.slice(); b.t = 0;
+  app.screen = "bksel";
+}
+function bkToSelect() { SFX.move(); bkOpen(); }
+
+const BK_RULE_ROWS = ["STAGE", "STOCKS", "CPU LEVEL", "P2", "P3", "P4", "FIGHT"];
+function bkRuleValue(b, r) {
+  if (r === 0) return BK_STAGES[b.stage].name;
+  if (r === 1) return b.stocks + (b.stocks === 1 ? " STOCK" : " STOCKS");
+  if (r === 2) return BK_LEVELS[b.lvl];
+  if (r >= 3 && r <= 5) {
+    const sl = b.slots[r - 2];
+    return sl.kind === "human" ? "PLAYER" : sl.kind === "off" ? "OFF" : "CPU · " + bkName(BK_ROSTER[sl.ch]);
+  }
+  return "";
+}
+/* left/right on a rules row */
+function bkRuleBump(b, r, d) {
+  if (r === 0) b.stage = (b.stage + d + BK_STAGES.length) % BK_STAGES.length;
+  else if (r === 1) b.stocks = clamp(b.stocks + d, 1, 5);
+  else if (r === 2) b.lvl = clamp(b.lvl + d, 0, BK_LEVELS.length - 1);
+  else if (r >= 3 && r <= 5) {
+    /* OFF -> CPU with each fighter in turn -> OFF */
+    const sl = b.slots[r - 2], n = BK_ROSTER.length;
+    if (sl.kind === "human") { sl.kind = "cpu"; sl.lock = true; }
+    else if (sl.kind === "off") { sl.kind = "cpu"; sl.ch = d > 0 ? 0 : n - 1; sl.lock = true; }
+    else if ((d > 0 && sl.ch === n - 1) || (d < 0 && sl.ch === 0)) sl.kind = "off";
+    else sl.ch += d;
+  } else return;
+  SFX.move();
+}
+function bkCanStart(b) {
+  const on = b.slots.filter(sl => sl.kind !== "off");
+  return on.length >= 2 && b.slots.every(sl => sl.kind !== "human" || (sl.lock && sl.focus !== "parts"));
+}
+function bkStart() {
+  const b = app.bk;
+  if (!bkCanStart(b)) { SFX.whiff(); return; }
+  const slots = [];
+  for (const sl of b.slots) {
+    if (sl.kind === "off") continue;
+    slots.push({ ch: sl.ch, cpu: sl.kind === "cpu" ? b.lvl : null, parts: Object.assign({}, sl.parts), src: b.slots.indexOf(sl) });
+  }
+  b.map = slots.map(sl => sl.src);      /* match fighter -> input slot */
+  b.m = bkNewMatch(slots, { stage: b.stage, stocks: b.stocks, seed: (app.t % 9973) + 1 });
+  bkFx.length = 0; bkShake = 0;
+  bkCamera(b.m, true);
+  SFX.lock();
+  app.screen = "bkmatch";
+}
+function bkRematch() {
+  const b = app.bk, s = b.m;
+  b.m = bkNewMatch(s.p.map(p => ({ ch: p.ch, cpu: p.cpu ? p.cpu.lvl : null, parts: p.parts })), { stage: s.stage, stocks: s.stocks, seed: (app.t % 9973) + 1 });
+  bkFx.length = 0; bkShake = 0;
+  bkCamera(b.m, true);
+  SFX.lock();
+}
+
+function bkSelTick() {
+  const b = app.bk;
+  b.t++;
+  for (let i = 0; i < BK_MAX; i++) {
+    const inp = bkIn[i], prs = inp & ~b.prev[i];
+    b.prev[i] = inp;
+    const sl = b.slots[i];
+    if (sl.kind !== "human") {
+      /* any button on a pad or keyboard half that is not playing joins in */
+      if (prs & (BK_ATK | BK_JMP)) { sl.kind = "human"; sl.lock = false; sl.focus = "grid"; SFX.lock(); }
+      continue;
+    }
+    const L = prs & IN_LEFT, R = prs & IN_RIGHT, U = prs & IN_UP, D = prs & IN_DOWN, A = prs & (BK_ATK | BK_JMP), B = prs & BK_SPC;
+    const n = BK_ROSTER.length;
+    if (sl.focus === "grid") {
+      if (!sl.lock) {
+        if (L) { sl.ch = (sl.ch + n - 1) % n; SFX.move(); }
+        if (R) { sl.ch = (sl.ch + 1) % n; SFX.move(); }
+        if (U || D) { sl.ch = (sl.ch + 4) % n; SFX.move(); }
+        if (A) {
+          sl.lock = true; SFX.lock();
+          if (BK_ROSTER[sl.ch].axie) { sl.focus = "parts"; sl.row = 0; }
+          else if (i === 0) { sl.focus = "rules"; }
+        }
+        if (B) {
+          if (i === 0) { quitToTitle(); return; }
+          sl.kind = "cpu"; sl.lock = true; SFX.move();
+        }
+      } else {
+        if (B) { sl.lock = false; SFX.move(); }
+        if (A && i === 0) { sl.focus = "rules"; SFX.move(); }
+      }
+    } else if (sl.focus === "parts") {
+      const rows = BK_PART_SLOTS.length + 1;
+      if (U) { sl.row = (sl.row + rows - 1) % rows; SFX.move(); }
+      if (D) { sl.row = (sl.row + 1) % rows; SFX.move(); }
+      if ((L || R) && sl.row < BK_PART_SLOTS.length) {
+        const key = BK_PART_SLOTS[sl.row][0], opts = BK_PARTS[key].length;
+        sl.parts[key] = (sl.parts[key] + (R ? 1 : opts - 1)) % opts; SFX.move();
+      }
+      if (A) {
+        if (sl.row < BK_PART_SLOTS.length) { sl.row++; SFX.move(); }
+        else { sl.focus = i === 0 ? "rules" : "grid"; SFX.lock(); }
+      }
+      if (B) { sl.focus = "grid"; sl.lock = false; SFX.move(); }
+    } else if (sl.focus === "rules") {
+      if (U) { b.row = (b.row + BK_RULE_ROWS.length - 1) % BK_RULE_ROWS.length; SFX.move(); }
+      if (D) { b.row = (b.row + 1) % BK_RULE_ROWS.length; SFX.move(); }
+      if (L) bkRuleBump(b, b.row, -1);
+      if (R) bkRuleBump(b, b.row, 1);
+      if (A) { if (b.row === BK_RULE_ROWS.length - 1) { bkStart(); return; } bkRuleBump(b, b.row, 1); }
+      if (B) { sl.focus = "grid"; sl.lock = false; SFX.move(); }
+    }
+  }
+}
+
+function bkMatchTick() {
+  const b = app.bk, s = b.m;
+  if (s.phase === "end" && s.pt > BK_END + 30) {
+    /* results: P1 or anyone else answers */
+    for (let i = 0; i < BK_MAX; i++) {
+      const prs = bkIn[i] & ~b.prev[i];
+      b.prev[i] = bkIn[i];
+      if (prs & (BK_ATK | BK_JMP)) { bkRematch(); return; }
+      if (prs & BK_SPC) { bkToSelect(); return; }
+    }
+    s.pt++;
+    return;
+  }
+  for (let i = 0; i < BK_MAX; i++) b.prev[i] = bkIn[i];
+  const ins = s.p.map((p, k) => bkIn[b.map ? b.map[k] : k] || 0);
+  for (const e of bkStep(s, ins)) bkPlayEv(s, e);
+  bkStepFx();
+}
+
+/* the select screen */
+function bkDrawSel(t) {
+  const b = app.bk;
+  bkDrawBackdrop(b.stage, t);
+  ctx.fillStyle = rgba("#08070F", 0.6); ctx.fillRect(0, 0, STAGE_W, STAGE_H);
+  txt("BAKBAKAN", 24, 44, 30, "#FF8A5C", "left", FD, 6);
+  txt("CHOOSE YOUR FIGHTER", 26, 64, -11, rgba("#E7E3FB", 0.6), "left", FM, 4);
+
+  /* the grid */
+  const TW = 112, TH = 120, GX = 230, GY = 84, GG = 8;
+  BK_ROSTER.forEach((c, k) => {
+    const col = k % 4, row = (k / 4) | 0, x = GX + col * (TW + GG), y = GY + row * (TH + GG);
+    const cursors = b.slots.map((sl, i) => sl.kind === "human" && sl.ch === k ? i : -1).filter(i => i >= 0);
+    const over = hovered(x, y, TW, TH);
+    ctx.fillStyle = rgba(cursors.length ? "#2A2150" : "#120E28", 0.92); ctx.fillRect(x, y, TW, TH);
+    ctx.fillStyle = rgba(c.col, 0.18); ctx.fillRect(x, y, TW, TH);
+    ctx.save(); ctx.beginPath(); ctx.rect(x, y, TW, TH); ctx.clip();
+    bkDrawFighter({ ch: k, st: "idle", t: t + k * 13, face: 1, form: "human", parts: { horn: 0, mouth: 0, back: 0, tail: 0 }, i: 0 }, x + TW / 2, y + TH - 22, c.axie ? 62 : 80, { slot: 12 + k });
+    ctx.restore();
+    ctx.fillStyle = rgba("#08070F", 0.75); ctx.fillRect(x, y + TH - 22, TW, 22);
+    fitTxt(bkName(c), x + TW / 2, y + TH - 7, TW - 8, 11, "#E7E3FB", "center", FD, 1);
+    cursors.forEach((i, j) => {
+      ctx.strokeStyle = BK_COLS[i]; ctx.lineWidth = 3;
+      ctx.strokeRect(x + 1.5 + j * 3, y + 1.5 + j * 3, TW - 3 - j * 6, TH - 3 - j * 6);
+      ctx.fillStyle = BK_COLS[i]; ctx.fillRect(x + 4 + j * 26, y + 4, 24, 14);
+      txt("P" + (i + 1), x + 16 + j * 26, y + 15, 10, "#08070F", "center", FD);
+    });
+    if (over && !cursors.length) { ctx.strokeStyle = rgba("#E7E3FB", 0.5); ctx.lineWidth = 1; ctx.strokeRect(x + 0.5, y + 0.5, TW - 1, TH - 1); }
+    hot(x, y, TW, TH, () => {
+      const sl = b.slots[0];
+      sl.ch = k; sl.lock = true; SFX.lock();
+      sl.focus = c.axie ? "parts" : "rules"; sl.row = 0;
+    });
+  });
+
+  /* about the fighter player one is on */
+  const me = BK_ROSTER[b.slots[0].ch];
+  ctx.fillStyle = rgba("#120E28", 0.9); ctx.fillRect(14, 84, 204, 248);
+  ctx.fillStyle = me.col; ctx.fillRect(14, 84, 204, 3);
+  fitTxt(bkName(me), 24, 110, 186, 17, "#E7E3FB", "left", FD, 1.5);
+  txt(me.role, 24, 128, -10, rgba(me.col, 0.95), "left", FM, 3);
+  let yy = 150;
+  for (const ln of wrapText(bkBio(me), 184, 12, FD)) { txt(ln, 24, yy, -12, rgba("#E7E3FB", 0.82), "left", FD); yy += 16; }
+  yy += 8;
+  for (const ln of wrapText(me.sig, 184, 11, FM)) { txt(ln, 24, yy, -10.5, "#FFD98A", "left", FM); yy += 14; }
+  if (me.living && BK_REAL) txt("LIVING PERSON · INTERNAL BUILD ONLY", 24, 322, -8.5, rgba("#FF8A5C", 0.75), "left", FM, 1.5);
+
+  /* rules */
+  const RX = 732, RY = 84, RW = 254;
+  ctx.fillStyle = rgba("#120E28", 0.9); ctx.fillRect(RX, RY, RW, 248);
+  const p1rules = b.slots[0].focus === "rules";
+  BK_RULE_ROWS.forEach((label, r) => {
+    const y = RY + 10 + r * 33, cur = p1rules && b.row === r;
+    if (label === "FIGHT") {
+      const ok = bkCanStart(b);
+      const bx = RX + 10, bw = RW - 20;
+      ctx.fillStyle = rgba(ok ? "#3A2E16" : "#1A1436", 0.96); ctx.fillRect(bx, y + 2, bw, 30);
+      ctx.strokeStyle = rgba("#FFD98A", cur ? 1 : ok ? 0.6 : 0.2); ctx.lineWidth = cur ? 2 : 1; ctx.strokeRect(bx + 0.5, y + 2.5, bw - 1, 29);
+      const why = b.slots.filter(sl => sl.kind !== "off").length < 2 ? "ADD A FIGHTER" : "LOCK IN FIRST";
+      txt(ok ? "FIGHT!" : why, bx + bw / 2, y + 23, 15, ok ? "#FFD98A" : rgba("#E7E3FB", 0.4), "center", FD, 3);
+      hot(bx, y + 2, bw, 30, () => { b.row = r; bkStart(); });
+      return;
+    }
+    if (cur) { ctx.fillStyle = rgba("#FFD98A", 0.1); ctx.fillRect(RX + 4, y, RW - 8, 30); ctx.fillStyle = "#FFD98A"; ctx.fillRect(RX + 4, y, 3, 30); }
+    txt(label, RX + 14, y + 20, -10, rgba("#E7E3FB", 0.55), "left", FM, 2);
+    fitTxt(bkRuleValue(b, r), RX + RW - 34, y + 20, 140, 12, cur ? "#FFD98A" : "#E7E3FB", "right", FD, 1);
+    txt("◀", RX + RW - 154 - 10, y + 20, 11, rgba("#E7E3FB", 0.35), "center");
+    txt("▶", RX + RW - 18, y + 20, 11, rgba("#E7E3FB", 0.35), "center");
+    hot(RX + RW - 176, y, 24, 30, () => { b.row = r; bkRuleBump(b, r, -1); });
+    hot(RX + RW - 30, y, 28, 30, () => { b.row = r; bkRuleBump(b, r, 1); });
+  });
+
+  /* the four slots */
+  const SW = 236, SG = 8, SX = (STAGE_W - (4 * SW + 3 * SG)) / 2, SY = 344, SH = 170;
+  b.slots.forEach((sl, i) => {
+    const x = SX + i * (SW + SG), c = BK_ROSTER[sl.ch];
+    ctx.fillStyle = rgba("#120E28", sl.kind === "off" ? 0.6 : 0.92); ctx.fillRect(x, SY, SW, SH);
+    ctx.fillStyle = BK_COLS[i]; ctx.fillRect(x, SY, SW, 3);
+    txt("P" + (i + 1), x + 10, SY + 22, 14, BK_COLS[i], "left", FD, 2);
+    const who = sl.kind === "human" ? (i < 2 ? (i === 0 ? "KEYS · WASD" : "KEYS · ARROWS") : "PAD") : sl.kind === "cpu" ? "CPU · " + BK_LEVELS[b.lvl] : "OFF";
+    txt(who, x + SW - 10, SY + 21, -9.5, rgba("#E7E3FB", 0.55), "right", FM, 2);
+    if (sl.kind === "off") {
+      txt(i < 2 ? "PRESS " + keyName(BINDS["p" + (i + 1) + "lp"]) + " TO JOIN" : "PRESS A ON A PAD TO JOIN", x + SW / 2, SY + 92, -10, rgba("#E7E3FB", 0.45), "center", FM, 2);
+      txt("OR CLICK FOR A CPU", x + SW / 2, SY + 110, -10, rgba("#E7E3FB", 0.3), "center", FM, 2);
+      hot(x, SY, SW, SH, () => { if (i > 0) bkRuleBump(b, i + 2, 1); });
+      return;
+    }
+    if (i > 0) hot(x, SY + SH - 26, SW, 26, () => bkRuleBump(b, i + 2, 1));
+    if (sl.focus === "parts" && sl.kind === "human") {
+      bkDrawPartPicker(sl, x, SY + 30, SW, t, i);
+      return;
+    }
+    ctx.save(); ctx.beginPath(); ctx.rect(x, SY + 28, SW, SH - 56); ctx.clip();
+    bkDrawFighter({ ch: sl.ch, st: "idle", t: t + i * 20, face: 1, form: "human", parts: sl.parts, i }, x + 62, SY + SH - 30, c.axie ? 70 : 104, { slot: 20 + i });
+    ctx.restore();
+    fitTxt(bkName(c), x + 120, SY + 58, SW - 128, 15, "#E7E3FB", "left", FD, 1);
+    txt(c.role, x + 120, SY + 74, -9, rgba(c.col, 0.9), "left", FM, 2);
+    if (c.axie) BK_PART_SLOTS.forEach(([key, lab], r) => txt(lab + " · " + BK_PARTS[key][sl.parts[key]].name, x + 120, SY + 94 + r * 13, -8.5, rgba("#E7E3FB", 0.7), "left", FM, 1));
+    const ready = sl.kind === "cpu" || sl.lock;
+    ctx.fillStyle = rgba(ready ? BK_COLS[i] : "#E7E3FB", ready ? 0.2 : 0.06); ctx.fillRect(x, SY + SH - 26, SW, 26);
+    const hint = sl.kind === "cpu" ? "CLICK OR ◀ ▶ IN RULES" : sl.lock ? "READY" : keyName(BINDS["p" + (i + 1) + "lp"] || "") + " TO LOCK";
+    txt(i >= 2 && sl.kind === "human" ? (sl.lock ? "READY" : "A TO LOCK") : hint, x + SW / 2, SY + SH - 8, -10, ready ? BK_COLS[i] : rgba("#E7E3FB", 0.5), "center", FM, 2);
+  });
+
+  const k1 = [BINDS.p1lp, BINDS.p1hp].map(keyName);
+  txt("WASD / ARROWS MOVE   " + k1[0] + " / " + keyName(BINDS.p2lp) + " CHOOSE   " + k1[1] + " / " + keyName(BINDS.p2hp) + " BACK   PADS: A CHOOSE, B BACK   ESC TITLE",
+    STAGE_W / 2, STAGE_H - 18, -9.5, rgba("#E7E3FB", 0.42), "center", FM, 2);
+}
+
+function bkDrawPartPicker(sl, x, y, w, t, i) {
+  txt("BUILD YOUR AXIE", x + 12, y + 14, -10, rgba("#FF9A3C", 0.9), "left", FM, 3);
+  BK_PART_SLOTS.forEach(([key, lab], r) => {
+    const yy = y + 22 + r * 24, cur = sl.row === r, o = BK_PARTS[key][sl.parts[key]];
+    if (cur) { ctx.fillStyle = rgba("#FFD98A", 0.1); ctx.fillRect(x + 4, yy, w - 8, 22); ctx.fillStyle = "#FFD98A"; ctx.fillRect(x + 4, yy, 3, 22); }
+    txt(key.toUpperCase(), x + 14, yy + 15, -9, rgba("#E7E3FB", 0.5), "left", FM, 1.5);
+    txt("◀ " + o.name + " ▶", x + 66, yy + 15, 11, cur ? "#FFD98A" : o.col, "left", FD, 1);
+    hot(x, yy, w, 22, () => { sl.row = r; sl.parts[key] = (sl.parts[key] + 1) % BK_PARTS[key].length; SFX.move(); });
+  });
+  const r = Math.min(sl.row, BK_PART_SLOTS.length - 1), key = BK_PART_SLOTS[r][0];
+  txt(BK_PART_SLOTS[r][1] + " SPECIAL: " + BK_PARTS[key][sl.parts[key]].line, x + 12, y + 122, -8.5, rgba("#E7E3FB", 0.6), "left", FM, 1);
+  const done = sl.row === BK_PART_SLOTS.length;
+  txt(done ? "▶ DONE" : "DONE ↓", x + w - 14, y + 14, -10, done ? "#FFD98A" : rgba("#E7E3FB", 0.4), "right", FM, 2);
+  hot(x + w - 70, y, 70, 20, () => { sl.focus = i === 0 ? "rules" : "grid"; SFX.lock(); });
+}
+
+/* the title, when the switch is on BAKBAKAN */
+function bkDrawTitle(t) {
+  bkCam.x = Math.sin(t * 0.004) * 60; bkCam.y = -80; bkCam.z = 1;
+  bkDrawBackdrop(0, t);
+  ctx.fillStyle = rgba("#08070F", 0.35); ctx.fillRect(0, 0, STAGE_W, STAGE_H);
+  BK_ROSTER.forEach((c, k) => {
+    const x = 96 + k * 115, y = FLOOR_Y + 26 - Math.max(0, Math.sin(t * 0.05 + k * 1.3) * 10);
+    bkDrawFighter({ ch: k, st: "idle", t: t + k * 9, face: k < 4 ? 1 : -1, form: k === 2 && (t >> 7) % 2 ? "beast" : "human", parts: { horn: k % 2, mouth: 0, back: 0, tail: 1 }, i: k }, x, y, c.axie ? 70 : 96, { slot: 30 + k });
+  });
+  const glow = 0.5 + 0.5 * Math.sin(t * 0.05);
+  txt("BAKBAKAN", STAGE_W / 2, 214, 104, rgba("#FF8A5C", 0.78 + glow * 0.22), "center", FD, 10);
+  txt("UP TO FOUR · PERCENT DAMAGE · OFF THE EDGE AND YOU'RE OUT", STAGE_W / 2, 250, 13, rgba("#E7E3FB", 0.6), "center", FM, 4);
+}
+
+/* <</BAKBAKAN>> */
 
 /* =========================== APP LOOP =================================== */
 const app = {
@@ -7618,13 +9781,19 @@ function runScreenTick(inp) {
   if (app.screen === "title") {
     const lr = (inp[0] | inp[1]) & (IN_LEFT | IN_RIGHT);
     if (lr && !(app.titlePrev & (IN_LEFT | IN_RIGHT))) {
-      setGame(sfOn() ? "kick" : "fighter");
+      setGame(nextGame(lr & IN_LEFT ? -1 : 1));
       anyPressEdge = false;
     }
     app.titlePrev = inp[0] | inp[1];
     if (anyPressEdge) {
-      anyPressEdge = false; app.screen = "mode"; app.mode.prev = inp.slice(); SFX.lock();
+      anyPressEdge = false; SFX.lock();
+      if (bkOn()) bkOpen();
+      else { app.screen = "mode"; app.mode.prev = inp.slice(); }
     }
+  } else if (app.screen === "bksel") {
+    bkSelTick();
+  } else if (app.screen === "bkmatch") {
+    bkMatchTick();
   } else if (app.screen === "mode") {
     modeTick(inp);
   } else if (app.screen === "select") {
@@ -7708,7 +9877,7 @@ function frame(now) {
     if (app.pause) pauseTick(inp);
     else runScreenTick(inp);
 
-    music(app.screen === "match" ? "battle" : "menu");
+    music(app.screen === "match" || app.screen === "bkmatch" ? "battle" : "menu");
     anyPressEdge = false;
   }
   simMs = performance.now() - t0;
@@ -7731,6 +9900,8 @@ function frame(now) {
   else if (app.screen === "lobby") drawLobby(app.t);
   else if (app.screen === "setup") drawSetup(app.t);
   else if (app.screen === "runend") drawRunEnd(app.t);
+  else if (app.screen === "bksel") bkDrawSel(app.t);
+  else if (app.screen === "bkmatch") bkDrawMatch(app.bk.m);
   else drawMatch(app.m);
 
   drawNetHUD();
